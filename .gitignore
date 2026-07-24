@@ -1,0 +1,58 @@
+# Original or modified optical-disc images and subchannel data
+*.ccd
+*.cue
+*.img
+*.iso
+*.chd
+*.mdf
+*.mds
+*.sub
+
+# Extracted raw tracks, program payloads, BIOS images, and audio
+*.bin
+*.rom
+*.pce
+*.bios
+*.wav
+*.flac
+
+# Known generated analysis artifacts
+/track02_mode1_2048.bin
+/dialogue.tsv
+/auxiliary_text.tsv
+/translation_inventory*.tsv
+/text_slots.tsv
+/text_regions.tsv
+/scan/
+/renders/
+/validation/
+/renders_contact.png
+
+# Local packaging and scratch output
+*.zip
+/dist/
+/build/
+/scratch/
+/tmp/
+
+# Python environments and caches
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+.coverage
+htmlcov/
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
