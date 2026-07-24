@@ -22,6 +22,7 @@ import hashlib
 import pathlib
 import tempfile
 
+from cdrom_mode1 import MODE1_SYNC
 from game_layout import (
     MODE1_USER_DATA_OFFSET,
     RAW_SECTOR_SIZE,
@@ -29,10 +30,6 @@ from game_layout import (
     TRACK2_SECTOR_COUNT,
     TRACK2_START_LBA,
 )
-
-
-MODE1_SYNC = b"\x00" + (b"\xFF" * 10) + b"\x00"
-
 
 def extract_mode1_payload(
     image_path: pathlib.Path,

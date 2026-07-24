@@ -37,8 +37,12 @@ or repackaged asset.
 
 Users provide their own legally obtained CloneCD image and run the documented
 extractors and scanners locally. Generated TSVs and renders stay outside source
-control. A future translation release should distribute a patch against a
-hash-identified source, not a modified disc image.
+control. The human-test builder also produces a complete modified CloneCD set;
+that build directory must remain local and excluded from source control.
+
+A future translation release should distribute a patch against a hash-identified
+source, not a modified disc image. `build_manifest.json` may be shared after
+reviewing it for local paths, but it does not replace that patch format.
 
 ## Reporting issues
 

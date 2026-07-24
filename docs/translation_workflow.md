@@ -101,19 +101,37 @@ understood.
 
 ## Phase 4: same-size insertion proof
 
+Implementation status: the `mission0-v7` build now completes the static and
+raw-sector portions of this phase for 111 visible runs. They cover startup
+text, mission-title subtitles, the opening Mission 0 bartender exchange, the
+complete ten-page opening narration, and all three Media Mix merchandise
+pages. The builder authenticates the source, uses same-size fullwidth
+Shift-JIS, preserves all narration and dialogue controls, uses lowercase
+Mission 0 glyphs, pads narration to word boundaries at the code-confirmed
+11-cell limit, extends hanging punctuation to English comma/period, and
+reflows the Media Mix pages by changing only their row operands. It rebuilds
+Mode 1 EDC/ECC and proves that only 18 reviewed absolute LBAs differ.
+
+The earlier build has an informal user report that it mostly works. Exact
+emulator, BIOS, save/load, audio, and failure details have not yet been recorded
+in the project evidence, so they remain the human gate for v0.6. v0.5's
+13-cell wrapping specifically failed runtime review and is retained only as
+historical evidence. The Media Mix additions in v0.7 require their own
+screenshots because they use a different row-addressed text path.
+
 Before building a new renderer:
 
-1. Choose one short, confirmed-visible line.
+1. Choose short, confirmed-visible lines.
 2. Use same-size fullwidth Shift-JIS English or another representation already
    accepted by the original renderer.
 3. Modify a disposable payload/image copy.
 4. Rebuild the affected raw sector's EDC/ECC.
 5. Verify all track boundaries and source-unmodified sectors.
-6. Boot and display the line.
+6. Boot and display the lines.
 7. Confirm save/load and the next track transition still work.
 
-This proves the address-to-disc rebuild path independently of the English font
-project.
+The automated builder proves the address-to-disc rebuild path independently of
+the English font project. Human testing must now prove runtime behavior.
 
 ## Phase 5: English renderer design
 
@@ -130,6 +148,19 @@ A release-quality path should satisfy:
 
 Prefer a minimal extension around the existing parser. Replacing the complete
 text engine increases risk to unrelated Japanese logic and resource loading.
+
+The v0.7 profile retains the v0.6 word-wrap formatter; it is not the compact-
+renderer milestone. It pads
+fullwidth spaces until the existing 11-cell cursor wraps naturally. Its small
+renderer hook only extends the original hanging-punctuation rule to fullwidth
+English comma and period. Increasing visible letters per line still requires
+a compact glyph path and cannot be achieved by changing capitalization or
+Shift-JIS wording alone.
+
+The Media Mix fix does not change that conclusion. Those pages already carry
+explicit tile-row operands, so their overlap can be corrected by reassigning
+records to rows two tiles apart. Dialogue lacks that same per-line layout
+structure.
 
 ### Font questions
 
@@ -236,10 +267,12 @@ text together rather than assuming IDs are permanent across extraction changes.
 
 ### Insertion-proof milestone
 
-- one visible line patched;
+- immediately visible startup text patched;
 - raw-sector integrity rebuilt;
 - unmodified sectors verified;
-- emulator boot/display confirmed.
+- emulator boot/display confirmed;
+- new game reaches controllable Mission 0; and
+- save/load and CD audio paths pass their first smoke test.
 
 ### Renderer milestone
 

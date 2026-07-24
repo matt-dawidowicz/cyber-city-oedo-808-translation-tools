@@ -6,7 +6,7 @@ The analyzed release is a CloneCD set:
 
 | File | Role | SHA-256 |
 |---|---|---|
-| `.ccd` | table of contents and track metadata | `716e509edaeedddc1b12c827ada3579b15c612a5f16400b72dabd2c6bcfece1b` |
+| `.ccd` | table of contents and track metadata | `716e509edaeeddc1b12c827ada3579b15c612a5f16400b72dabad2c6bcfece1b` |
 | `.img` | interleaved 2352-byte raw sectors for all tracks | `815a8dda33ba2bb046fcbde773ad3a80fc6f89a96ef07e9c06bcc1c2e5fddece` |
 | `.sub` | 96-byte-per-sector subchannel data | `ae8f54a4cd83e5e985d975f29654f8aa2f384cb4f7dcbd16a39b05b3263db411` |
 
@@ -111,7 +111,13 @@ LBAs without changing:
 - audio sector contents; or
 - `.sub` sector alignment.
 
-The current toolkit intentionally stops before this operation.
+`cdrom_mode1.py` now implements this operation for guarded same-size payload
+patches. `build_human_test_disc.py` uses it only on an authenticated copy,
+rebuilds the two changed startup sectors, compares the complete source/output
+images, and preserves the CCD and SUB byte-for-byte.
+
+This does not authorize general reinsertion. The current profile does not
+relocate data, update pointers, or alter dialogue controls.
 
 ## PCE-CD boot header observations
 
