@@ -11,8 +11,12 @@ The checks focus on accidental spreadsheet damage and analysis-key drift:
 * one source string has not been split across canonical IDs.
 
 Different non-empty translations for one canonical ID are reported as warnings,
-not errors.  A translator may intentionally vary wording by context, but the
+not errors. A translator may intentionally vary wording by context, but the
 warning makes that decision visible.
+
+Input is the translator-facing UTF-8 TSV. The command is read-only, prints
+machine-readable counts to standard output, prints bounded diagnostics to
+standard error, and uses exit status 1 for content-validation failures.
 """
 
 from __future__ import annotations
@@ -27,7 +31,12 @@ from build_translation_inventory import OUTPUT_FIELDS
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line interface."""
+    """Build the command-line argument parser.
+
+    Returns:
+        A parser describing the read-only validation operation. The inventory
+        path and translation-completeness option are added by ``main``.
+    """
 
     return argparse.ArgumentParser(
         description=(
@@ -39,8 +48,40 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Validate inventory structure, identifiers, ordering, and translations.
+
+    Inputs:
+        Parses an inventory TSV path and optional translation-completeness
+        requirement from command-line arguments.
+
+    Outputs:
+        Prints row, canonical-ID, translation, warning, and error counts to
+        standard output. Prints at most 50 warnings and 50 errors to standard
+        error, followed by suppression counts when necessary.
+
+    Side Effects:
+        Opens and reads the inventory only. The function does not create,
+        rewrite, rename, or delete files.
+
+    Failure Conditions:
+        ``argparse`` exits with status 2 when required columns are missing.
+        File-system and CSV errors propagate. Content-validation errors raise
+        ``SystemExit(1)`` after all rows and group invariants are checked.
+
+    Design Decisions:
+        Conflicting English translations for one canonical ID are warnings
+        because context may justify variation. Duplicate occurrence IDs,
+        canonical/source drift, invalid coordinates, and non-positive source
+        lengths are errors because they can break reinsertion or migration.
+        Diagnostic output is capped to keep damaged spreadsheets manageable.
+    """
+
     parser = build_parser()
-    parser.add_argument("inventory", type=pathlib.Path, help="translation TSV to check")
+    parser.add_argument(
+        "inventory",
+        type=pathlib.Path,
+        help="translation TSV to check",
+    )
     parser.add_argument(
         "--require-translations",
         action="store_true",
@@ -53,16 +94,26 @@ def main() -> None:
     with args.inventory.open("r", encoding="utf-8-sig", newline="") as source:
         reader = csv.DictReader(source, delimiter="\t")
         actual_fields = tuple(reader.fieldnames or ())
-        missing_fields = [field for field in OUTPUT_FIELDS if field not in actual_fields]
+        missing_fields = [
+            field
+            for field in OUTPUT_FIELDS
+            if field not in actual_fields
+        ]
         if missing_fields:
-            parser.error("missing required columns: " + ", ".join(missing_fields))
+            parser.error(
+                "missing required columns: "
+                + ", ".join(missing_fields)
+            )
         rows = list(reader)
 
     entry_ids: set[str] = set()
     previous_offset = -1
     source_by_canonical: dict[str, set[str]] = collections.defaultdict(set)
     canonical_by_source: dict[str, set[str]] = collections.defaultdict(set)
-    translations_by_canonical: dict[str, set[str]] = collections.defaultdict(set)
+    translations_by_canonical: dict[
+        str,
+        set[str],
+    ] = collections.defaultdict(set)
 
     for row_number, row in enumerate(rows, start=2):
         entry_id = row["entry_id"]
@@ -88,7 +139,10 @@ def main() -> None:
         try:
             offset = int(row["offset"], 16)
         except ValueError:
-            errors.append(f"row {row_number}: invalid hexadecimal offset {row['offset']!r}")
+            errors.append(
+                f"row {row_number}: invalid hexadecimal offset "
+                f"{row['offset']!r}"
+            )
         else:
             if offset < previous_offset:
                 errors.append(
@@ -100,16 +154,20 @@ def main() -> None:
             source_bytes = int(row["source_bytes"])
         except ValueError:
             errors.append(
-                f"row {row_number}: invalid source_bytes {row['source_bytes']!r}"
+                f"row {row_number}: invalid source_bytes "
+                f"{row['source_bytes']!r}"
             )
         else:
             if source_bytes <= 0:
-                errors.append(f"row {row_number}: source_bytes must be positive")
+                errors.append(
+                    f"row {row_number}: source_bytes must be positive"
+                )
 
     for canonical_id, source_texts in source_by_canonical.items():
         if len(source_texts) > 1:
             errors.append(
-                f"{canonical_id}: refers to {len(source_texts)} different source strings"
+                f"{canonical_id}: refers to {len(source_texts)} "
+                "different source strings"
             )
     for source_text, canonical_ids in canonical_by_source.items():
         if len(canonical_ids) > 1:
@@ -121,11 +179,18 @@ def main() -> None:
     for canonical_id, translations in translations_by_canonical.items():
         if len(translations) > 1:
             warnings.append(
-                f"{canonical_id}: has {len(translations)} different English translations"
+                f"{canonical_id}: has {len(translations)} "
+                "different English translations"
             )
 
-    translated_rows = sum(bool(row["english_translation"].strip()) for row in rows)
-    translated_canonical = sum(bool(values) for values in translations_by_canonical.values())
+    translated_rows = sum(
+        bool(row["english_translation"].strip())
+        for row in rows
+    )
+    translated_canonical = sum(
+        bool(values)
+        for values in translations_by_canonical.values()
+    )
     print(f"rows={len(rows)}")
     print(f"canonical_ids={len(source_by_canonical)}")
     print(f"translated_rows={translated_rows}")
@@ -143,7 +208,10 @@ def main() -> None:
     for error in errors[:50]:
         print(f"ERROR: {error}", file=sys.stderr)
     if len(errors) > 50:
-        print(f"ERROR: {len(errors) - 50} additional errors suppressed", file=sys.stderr)
+        print(
+            f"ERROR: {len(errors) - 50} additional errors suppressed",
+            file=sys.stderr,
+        )
     if errors:
         raise SystemExit(1)
 

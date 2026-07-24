@@ -38,7 +38,7 @@ python -m unittest discover -s .\tests -v
 Result:
 
 ```text
-Ran 8 tests
+Ran 13 tests
 OK
 ```
 
@@ -48,10 +48,15 @@ Covered behavior:
 - payload/LBA coordinate helpers;
 - Shift-JIS plus opaque control tokenization;
 - unterminated-record rejection;
+- invalid dialogue-parser bound rejection;
 - overlap/adjacency interval merging;
 - resource-name versus fill filtering;
 - PCE 4bpp plane order; and
-- structurally valid Mode 1 user-data extraction.
+- structurally valid Mode 1 user-data extraction;
+- docstrings on every module, class, and function;
+- PEP 257 summary shape;
+- PEP 8's 79-character Python line limit; and
+- conventional explanatory-comment prefixes.
 
 ## Script loading and CLI documentation
 

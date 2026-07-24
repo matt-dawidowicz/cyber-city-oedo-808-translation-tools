@@ -15,6 +15,12 @@ and ``40`` occur as dialogue bytecode.  Their precise meanings remain unknown.
 ``likely_text`` and ``review`` are extraction-confidence labels, not statements
 about whether a record is visible or safe to patch.  The scanner can find
 unreachable, duplicate, or developer-only material.
+
+Input is the flat 2048-byte-sector payload produced by
+``extract_track2_mode1.py``. Output is a UTF-8-with-BOM, tab-separated
+inventory whose addresses use payload coordinates. The command reads the
+complete payload into memory, creates the output directory, replaces the
+requested TSV, and prints summary counts. File-system errors are not hidden.
 """
 
 from __future__ import annotations
@@ -51,11 +57,22 @@ OUTPUT_FIELDS = (
 
 @dataclass(frozen=True, slots=True)
 class ParsedRecord:
-    """Decoded contents between the marker and null terminator.
+    """Store a decoded candidate body and its source-position metadata.
 
-    ``end_offset`` points at the terminating ``00``.  ``tokens`` contains both
+    ``end_offset`` points at the terminating ``00``. ``tokens`` contains both
     decoded glyphs and control tags, while ``text_only`` omits controls for
     translation deduplication and Japanese-text heuristics.
+
+    Attributes:
+        end_offset: Absolute payload offset of the null terminator.
+        tokens: Decoded glyphs plus opaque control tags in source order.
+        text_only: Decoded glyphs with all controls removed.
+        controls: One-byte control values in source order.
+        sjis_characters: Number of decoded fullwidth or halfwidth glyphs.
+
+    Notes:
+        The marker itself is not represented in ``tokens``. The caller retains
+        the marker offset and uses ``end_offset`` to recover exact raw bytes.
     """
 
     end_offset: int
@@ -66,25 +83,74 @@ class ParsedRecord:
 
 
 def is_shift_jis_lead(value: int) -> bool:
-    """Return whether *value* can begin a two-byte Shift-JIS character."""
+    """Return whether a byte can begin a two-byte Shift-JIS character.
+
+    Args:
+        value: Integer byte value to classify.
+
+    Returns:
+        ``True`` for standard lead-byte ranges ``81-9F`` and ``E0-EF``.
+
+    Notes:
+        Values outside ``0`` through ``255`` simply return ``False``. The
+        function does not validate the corresponding trail byte.
+    """
 
     return 0x81 <= value <= 0x9F or 0xE0 <= value <= 0xEF
 
 
 def is_shift_jis_trail(value: int) -> bool:
-    """Return whether *value* can be the second byte of Shift-JIS."""
+    """Return whether a byte can trail a two-byte Shift-JIS character.
+
+    Args:
+        value: Integer byte value to classify.
+
+    Returns:
+        ``True`` for ``40-7E`` or ``80-FC`` and ``False`` otherwise.
+
+    Notes:
+        The excluded ``7F`` value is not a valid Shift-JIS trail byte.
+    """
 
     return 0x40 <= value <= 0x7E or 0x80 <= value <= 0xFC
 
 
-def parse_record(data: bytes, start: int, limit: int = 1024) -> ParsedRecord | None:
+def parse_record(
+    data: bytes,
+    start: int,
+    limit: int = 1024,
+) -> ParsedRecord | None:
     """Parse one candidate record beginning immediately after its marker.
 
-    Parsing stops successfully only at a null terminator.  Invalid Shift-JIS,
+    Parsing stops successfully only at a null terminator. Invalid Shift-JIS,
     an unsupported high byte, end-of-file, or a record longer than ``limit``
-    rejects the candidate.  The conservative 1024-byte limit keeps a false
+    rejects the candidate. The conservative 1024-byte limit keeps a false
     marker from consuming an arbitrary binary region.
+
+    Args:
+        data: Complete or partial binary payload containing the candidate.
+        start: Byte offset immediately after the two-byte record marker.
+        limit: Maximum number of body bytes examined before rejection.
+
+    Returns:
+        A ``ParsedRecord`` when a null-terminated sequence contains only
+        supported Shift-JIS glyphs and one-byte controls. Returns ``None`` for
+        malformed, unterminated, truncated, or over-limit candidates.
+
+    Raises:
+        ValueError: If ``start`` is negative or ``limit`` is not positive.
+
+    Design Decisions:
+        Printable ASCII-range bytes are not decoded as text. Every byte below
+        ``80`` is emitted as ``<$XX>`` because those values are commands in
+        the observed record format. Malformed candidates return ``None``
+        instead of raising so a forensic scan can continue at the next marker.
     """
+
+    if start < 0:
+        raise ValueError("start must be non-negative")
+    if limit <= 0:
+        raise ValueError("limit must be positive")
 
     position = start
     tokens: list[str] = []
@@ -136,7 +202,20 @@ def parse_record(data: bytes, start: int, limit: int = 1024) -> ParsedRecord | N
 
 
 def japanese_character_count(text: str) -> int:
-    """Count Hiragana, Katakana, CJK punctuation, and common CJK ideographs."""
+    """Count characters used as evidence of Japanese-language text.
+
+    Args:
+        text: Decoded Unicode candidate.
+
+    Returns:
+        The number of characters in CJK punctuation, Hiragana, Katakana, CJK
+        Extension A, or common unified-ideograph ranges.
+
+    Notes:
+        The heuristic intentionally omits Latin, fullwidth Latin, and
+        halfwidth Katakana. It is a false-positive filter, not a linguistic
+        classifier.
+    """
 
     return sum(
         0x3000 <= ord(character) <= 0x30FF
@@ -149,8 +228,21 @@ def classify_record(text: str, controls: tuple[int, ...]) -> str:
     """Assign a conservative extraction-confidence label.
 
     Halfwidth Katakana and uncommon controls are retained but flagged for
-    manual review because they have a higher false-positive rate.  This is not
+    manual review because they have a higher false-positive rate. This is not
     a translation-quality or reachability judgment.
+
+    Args:
+        text: Visible glyph text with control bytes removed.
+        controls: Opaque one-byte controls in encounter order.
+
+    Returns:
+        ``"likely_text"`` when the candidate contains at least three Japanese
+        characters, no halfwidth Katakana, and no controls outside the common
+        observed set. Returns ``"review"`` otherwise.
+
+    Design Decisions:
+        Unknown controls do not cause data loss. They lower confidence so a
+        developer can inspect them manually and potentially improve the model.
     """
 
     japanese_count = japanese_character_count(text)
@@ -168,7 +260,12 @@ def classify_record(text: str, controls: tuple[int, ...]) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line interface."""
+    """Build the command-line argument parser.
+
+    Returns:
+        A parser containing user-facing context about record markers and
+        payload-relative coordinates. Positional paths are added by ``main``.
+    """
 
     return argparse.ArgumentParser(
         description=(
@@ -183,9 +280,42 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Extract dialogue candidates and write a tab-separated inventory.
+
+    Inputs:
+        Parses an extracted Track 2 payload path and destination TSV path from
+        the command line.
+
+    Outputs:
+        Writes all accepted candidates using ``OUTPUT_FIELDS`` and prints
+        aggregate record, quality, character, and bank counts.
+
+    Side Effects:
+        Reads the entire input file into memory, creates the output parent
+        directory, and replaces the destination TSV. The source is read-only.
+
+    Failure Conditions:
+        ``argparse`` exits for invalid CLI syntax. File-system errors and
+        unexpected CSV errors propagate. A payload containing no candidates
+        still produces a valid header-only TSV.
+
+    Notes:
+        Marker search advances one byte after each match. This deliberately
+        permits overlapping forensic candidates instead of assuming markers
+        cannot occur inside rejected binary data.
+    """
+
     parser = build_parser()
-    parser.add_argument("input", type=pathlib.Path, help="Track 2 payload .bin")
-    parser.add_argument("output", type=pathlib.Path, help="destination dialogue TSV")
+    parser.add_argument(
+        "input",
+        type=pathlib.Path,
+        help="Track 2 payload .bin",
+    )
+    parser.add_argument(
+        "output",
+        type=pathlib.Path,
+        help="destination dialogue TSV",
+    )
     args = parser.parse_args()
 
     data = args.input.read_bytes()
@@ -196,8 +326,8 @@ def main() -> None:
         if marker_offset < 0:
             break
         parsed = parse_record(data, marker_offset + len(DIALOGUE_MARKER))
-        # Advance by one byte so adjacent or overlapping candidates are not
-        # accidentally skipped during forensic scanning.
+        # Advancing by one byte preserves adjacent or overlapping forensic
+        # candidates instead of assuming the current marker owns the region.
         search_at = marker_offset + 1
         if parsed is None:
             continue
@@ -220,13 +350,19 @@ def main() -> None:
                 ),
                 "tagged_text": "".join(parsed.tokens),
                 "text": text,
-                "raw_hex": data[marker_offset : parsed.end_offset + 1].hex(" "),
+                "raw_hex": data[
+                    marker_offset : parsed.end_offset + 1
+                ].hex(" "),
             }
         )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8-sig", newline="") as output:
-        writer = csv.DictWriter(output, fieldnames=OUTPUT_FIELDS, delimiter="\t")
+        writer = csv.DictWriter(
+            output,
+            fieldnames=OUTPUT_FIELDS,
+            delimiter="\t",
+        )
         writer.writeheader()
         writer.writerows(rows)
 

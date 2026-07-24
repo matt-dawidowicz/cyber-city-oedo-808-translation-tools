@@ -2,13 +2,18 @@
 """Exploratory scanner for byte-reversed two-byte Shift-JIS candidates.
 
 This utility tested an early hypothesis that glyph codes might be stored as
-little-endian 16-bit values (trail byte followed by lead byte).  The game's
+little-endian 16-bit values (trail byte followed by lead byte). The game's
 canonical text was subsequently confirmed to use normal byte-order Shift-JIS,
 so this command is *not* part of the translation extraction pipeline.
 
-Keep it only as a diagnostic for unidentified binary tables.  Its output has a
+Keep it only as a diagnostic for unidentified binary tables. Its output has a
 high false-positive rate and must never be fed directly to the translation
 inventory or treated as evidence of a patchable text format.
+
+Input is an arbitrary binary payload. Output is a UTF-8-with-BOM TSV containing
+payload-relative candidate addresses and decoded text. The command reads the
+input into memory, creates the destination directory, replaces the requested
+TSV, and prints a candidate count.
 """
 
 from __future__ import annotations
@@ -21,8 +26,22 @@ from collections.abc import Iterator
 
 from game_layout import SECTOR_SIZE
 
+
 def decode_reversed_pair(low: int, high: int) -> str | None:
-    """Decode ``low, high`` after reversing them into Shift-JIS byte order."""
+    """Decode one hypothesized trail-byte/lead-byte pair.
+
+    Args:
+        low: Byte stored first and interpreted as the Shift-JIS trail byte.
+        high: Byte stored second and interpreted as the Shift-JIS lead byte.
+
+    Returns:
+        The decoded Unicode character when both ranges and the codec accept the
+        reversed pair; otherwise ``None``.
+
+    Notes:
+        Integers outside byte range naturally fail the range checks. Codec
+        errors are converted to ``None`` so exploratory scans can continue.
+    """
 
     if not (
         (0x81 <= high <= 0x9F or 0xE0 <= high <= 0xEF)
@@ -36,7 +55,22 @@ def decode_reversed_pair(low: int, high: int) -> str | None:
 
 
 def is_plausible_japanese(character: str) -> bool:
-    """Retain broad Japanese glyph and punctuation ranges for exploration."""
+    """Classify a decoded character for exploratory run building.
+
+    Args:
+        character: Exactly one Unicode character.
+
+    Returns:
+        ``True`` for CJK punctuation, Kana, CJK Extension A, common
+        ideographs, fullwidth forms, or any Unicode punctuation category.
+
+    Raises:
+        TypeError: If ``character`` does not contain exactly one character.
+
+    Notes:
+        The broad punctuation rule increases recall and false positives. This
+        is appropriate only for testing an unconfirmed storage hypothesis.
+    """
 
     code = ord(character)
     return (
@@ -53,6 +87,21 @@ def scan(data: bytes, minimum: int) -> Iterator[tuple[int, str]]:
 
     Both even and odd byte alignments are searched because an unidentified
     table need not begin at an even payload offset.
+
+    Args:
+        data: Binary payload to inspect.
+        minimum: Minimum number of consecutive decoded pairs in a result.
+
+    Yields:
+        Tuples containing the run's payload offset and decoded Unicode text.
+
+    Raises:
+        ValueError: If ``minimum`` is not positive.
+
+    Design Decisions:
+        Each alignment advances in two-byte steps. After a failed or emitted
+        run, the cursor advances at least one pair from its start, guaranteeing
+        progress without mixing even and odd alignments.
     """
 
     if minimum <= 0:
@@ -63,7 +112,10 @@ def scan(data: bytes, minimum: int) -> Iterator[tuple[int, str]]:
             start = offset
             characters: list[str] = []
             while offset + 1 < len(data):
-                character = decode_reversed_pair(data[offset], data[offset + 1])
+                character = decode_reversed_pair(
+                    data[offset],
+                    data[offset + 1],
+                )
                 if character is None or not is_plausible_japanese(character):
                     break
                 characters.append(character)
@@ -74,12 +126,17 @@ def scan(data: bytes, minimum: int) -> Iterator[tuple[int, str]]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line interface."""
+    """Build the command-line argument parser.
+
+    Returns:
+        A parser that prominently identifies the scanner as experimental and
+        non-canonical. Paths and thresholds are added by ``main``.
+    """
 
     return argparse.ArgumentParser(
         description=(
-            "EXPERIMENTAL: scan for two-byte Shift-JIS pairs stored in reverse "
-            "byte order."
+            "EXPERIMENTAL: scan for two-byte Shift-JIS pairs stored in "
+            "reverse byte order."
         ),
         epilog=(
             "Do not use this output for the canonical translation inventory; "
@@ -89,8 +146,35 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Run the exploratory reversed-pair scan.
+
+    Inputs:
+        Parses an input payload path, destination TSV, and minimum run length
+        from command-line arguments.
+
+    Outputs:
+        Writes candidate offsets, sector coordinates, character counts, and
+        decoded text. Prints the retained candidate count.
+
+    Side Effects:
+        Reads the complete input into memory, creates the output parent
+        directory, and replaces the destination TSV.
+
+    Failure Conditions:
+        ``argparse`` exits for a non-positive minimum. File-system and CSV
+        errors propagate.
+
+    Notes:
+        ``list(scan(...))`` materializes candidates before output so argument
+        validation completes before any destination file is created.
+    """
+
     parser = build_parser()
-    parser.add_argument("input", type=pathlib.Path, help="binary payload to inspect")
+    parser.add_argument(
+        "input",
+        type=pathlib.Path,
+        help="binary payload to inspect",
+    )
     parser.add_argument("output", type=pathlib.Path, help="destination TSV")
     parser.add_argument(
         "--minimum",
@@ -122,7 +206,13 @@ def main() -> None:
     with args.output.open("w", encoding="utf-8-sig", newline="") as output:
         writer = csv.DictWriter(
             output,
-            fieldnames=("offset", "sector", "within_sector", "characters", "text"),
+            fieldnames=(
+                "offset",
+                "sector",
+                "within_sector",
+                "characters",
+                "text",
+            ),
             delimiter="\t",
         )
         writer.writeheader()

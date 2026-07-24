@@ -18,6 +18,11 @@ assigned to the closest preceding header, and the bytes after the last record
 are summarized.  This is still a heuristic: a constant-fill tail is useful
 relocation evidence, but it is never proof that bytes are unreferenced or safe
 to overwrite.  Pointer/length analysis and runtime validation remain required.
+
+Inputs are the extracted payload, structured dialogue TSV, and ASCII scan TSV.
+Output is a heuristic region-summary TSV. The command reads the payload into
+memory, creates the destination directory, replaces the requested output, and
+prints aggregate diagnostics. It never modifies source files.
 """
 
 from __future__ import annotations
@@ -53,30 +58,84 @@ OUTPUT_FIELDS = (
 
 @dataclass(frozen=True, slots=True)
 class ResourceHeader:
-    """A candidate named resource beginning at a payload-sector boundary."""
+    """Represent a candidate named resource at a sector boundary.
+
+    Attributes:
+        sector: Relative 2048-byte payload sector containing the name at byte
+            offset zero.
+        name: Uppercase ASCII candidate retained by the header heuristic.
+
+    Notes:
+        A ``ResourceHeader`` records discovery evidence only. It does not prove
+        that the name begins a complete, independently relocatable resource.
+    """
 
     sector: int
     name: str
 
 
 def parse_hex(value: str) -> int:
-    """Parse a scanner-style ``0x...`` byte offset."""
+    """Parse a hexadecimal payload offset from an upstream TSV.
+
+    Args:
+        value: String accepted by ``int(value, 16)``, normally ``0x...``.
+
+    Returns:
+        The corresponding integer payload offset.
+
+    Raises:
+        ValueError: If ``value`` is not valid hexadecimal.
+        TypeError: If ``value`` is not a string-like value accepted by
+            ``int``.
+    """
 
     return int(value, 16)
 
 
 def looks_like_resource_name(text: str) -> bool:
-    """Return whether an ASCII run is a useful candidate resource name."""
+    """Return whether an ASCII run resembles a resource name.
+
+    Args:
+        text: Decoded ASCII run beginning at a sector boundary.
+
+    Returns:
+        ``True`` for a 2-16 character uppercase name containing letters,
+        digits, or underscores, unless a name of four or more characters
+        repeats only one fill character.
+
+    Design Decisions:
+        Short names such as ``AF01`` and mixed names such as ``GATE1`` are
+        retained. Long runs such as ``UUUUUUUU`` are rejected because they
+        commonly represent fill rather than identifiers.
+    """
 
     if RESOURCE_NAME.fullmatch(text) is None:
         return False
-    # Reject obvious sector fill such as UUUUUUUUUUUUUU while retaining short
-    # legitimate names such as AF01, INIT, and GATE1.
+    # Repeated long runs usually represent sector fill. Short legitimate names
+    # and identifiers containing more than one distinct character are kept.
     return len(text) < 4 or len(set(text)) > 1
 
 
 def read_resource_headers(ascii_scan: pathlib.Path) -> list[ResourceHeader]:
-    """Read and validate sector-aligned names from ``scan_track.py`` output."""
+    """Read sector-aligned resource-name candidates from an ASCII scan.
+
+    Args:
+        ascii_scan: ``ascii_strings.tsv`` produced by ``scan_track.py``.
+
+    Returns:
+        Candidate headers sorted by relative payload sector.
+
+    Raises:
+        OSError: If the TSV cannot be opened or read.
+        csv.Error: If quoted TSV data is malformed.
+        KeyError: If required columns are absent.
+        ValueError: If a retained ``sector`` value is not an integer.
+
+    Design Decisions:
+        Only rows at ``within_sector == "0x000"`` are considered. If multiple
+        candidates claim one sector, the final row wins; the normal upstream
+        scanner emits at most one contiguous ASCII run from that byte offset.
+    """
 
     by_sector: dict[int, str] = {}
     with ascii_scan.open("r", encoding="utf-8-sig", newline="") as source:
@@ -93,7 +152,12 @@ def read_resource_headers(ascii_scan: pathlib.Path) -> list[ResourceHeader]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line interface."""
+    """Build the command-line argument parser.
+
+    Returns:
+        A parser describing heuristic region analysis and its safety boundary.
+        Input, output, and threshold arguments are added by ``main``.
+    """
 
     return argparse.ArgumentParser(
         description=(
@@ -102,14 +166,46 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "A 'yes' padding result is evidence for follow-up only. Never "
-            "overwrite or relocate into a tail until its references are mapped."
+            "overwrite or relocate into a tail until its references are "
+            "mapped."
         ),
     )
 
 
 def main() -> None:
+    """Analyze dialogue tails within candidate named-resource regions.
+
+    Inputs:
+        Parses payload, dialogue TSV, ASCII-scan TSV, output TSV, confidence
+        inclusion, and maximum region-gap arguments from the command line.
+
+    Outputs:
+        Writes one summary row per discovered region containing selected
+        dialogue records. Prints header, region, boundary, crossing, and
+        candidate-padding statistics.
+
+    Side Effects:
+        Reads the full payload and both TSV inputs, creates the output parent
+        directory, and replaces the output TSV.
+
+    Failure Conditions:
+        ``argparse`` exits for a non-positive maximum gap, a payload not
+        aligned to 2048-byte sectors, or no candidate headers. File-system,
+        CSV, missing-column, and malformed-number errors otherwise propagate.
+
+    Design Decisions:
+        The next sector-aligned name bounds a candidate region. Gaps larger
+        than the configured threshold are labeled ``wide_header_gap`` and
+        cannot be reported as likely padding. Dominant fill still provides
+        evidence, but no output row grants permission to overwrite bytes.
+    """
+
     parser = build_parser()
-    parser.add_argument("track", type=pathlib.Path, help="Track 2 payload .bin")
+    parser.add_argument(
+        "track",
+        type=pathlib.Path,
+        help="Track 2 payload .bin",
+    )
     parser.add_argument(
         "dialogue",
         type=pathlib.Path,
@@ -120,7 +216,11 @@ def main() -> None:
         type=pathlib.Path,
         help="ascii_strings.tsv produced by scan_track.py",
     )
-    parser.add_argument("output", type=pathlib.Path, help="destination analysis TSV")
+    parser.add_argument(
+        "output",
+        type=pathlib.Path,
+        help="destination analysis TSV",
+    )
     parser.add_argument(
         "--include-review",
         action="store_true",
@@ -228,13 +328,19 @@ def main() -> None:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8-sig", newline="") as output:
-        writer = csv.DictWriter(output, fieldnames=OUTPUT_FIELDS, delimiter="\t")
+        writer = csv.DictWriter(
+            output,
+            fieldnames=OUTPUT_FIELDS,
+            delimiter="\t",
+        )
         writer.writeheader()
         writer.writerows(rows)
 
     padded = [row for row in rows if row["tail_is_likely_padding"] == "yes"]
     bounded_rows = [
-        row for row in rows if row["boundary_quality"] == "adjacent_named_headers"
+        row
+        for row in rows
+        if row["boundary_quality"] == "adjacent_named_headers"
     ]
     tail_sizes = sorted(int(row["tail_bytes"]) for row in bounded_rows)
     print(f"resource_headers={len(headers)}")

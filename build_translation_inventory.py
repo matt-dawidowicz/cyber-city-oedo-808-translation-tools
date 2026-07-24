@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Merge extracted text into the translator-facing occurrence inventory.
 
-The output deliberately keeps one row per binary occurrence.  ``entry_id`` is
+The output deliberately keeps one row per binary occurrence. ``entry_id`` is
 therefore unique for each location, while ``canonical_id`` groups rows with the
-same visible ``source_text`` so a translator can reuse wording.  Canonical IDs
+same visible ``source_text`` so a translator can reuse wording. Canonical IDs
 do *not* imply byte-identical records: two occurrences can share visible text
 but have different control tags or byte lengths.
 
 Only ``english_translation`` and ``translator_notes`` are intended for routine
-manual editing.  Offsets, source bytes, controls, IDs, and source text form the
+manual editing. Offsets, source bytes, controls, IDs, and source text form the
 analysis key and should be regenerated rather than hand-edited.
+
+Inputs are the dialogue and auxiliary TSVs produced by the extraction pipeline.
+Output is a UTF-8-with-BOM TSV suitable for spreadsheet editing. The command
+creates the destination directory, replaces the requested inventory, and
+prints summary counts; it does not modify either source TSV.
 """
 
 from __future__ import annotations
@@ -41,21 +46,59 @@ OUTPUT_FIELDS = (
 
 
 def read_tsv(path: pathlib.Path) -> Iterator[dict[str, str]]:
-    """Yield rows from a UTF-8 TSV, accepting an optional byte-order mark."""
+    """Yield dictionaries from a UTF-8 tab-separated file.
+
+    Args:
+        path: TSV file to read. An optional UTF-8 byte-order mark is accepted.
+
+    Yields:
+        One dictionary per data row, keyed by the file's header names.
+
+    Raises:
+        OSError: If the file cannot be opened or read.
+        csv.Error: If the CSV parser encounters malformed quoted data.
+
+    Side Effects:
+        Opens the source file when iteration begins and closes it when the
+        generator is exhausted or closed.
+    """
 
     with path.open("r", encoding="utf-8-sig", newline="") as source:
         yield from csv.DictReader(source, delimiter="\t")
 
 
 def auxiliary_quality(text: str) -> str:
-    """Flag auxiliary strings with shapes that produced more false positives."""
+    """Assign an extraction-confidence label to auxiliary text.
 
-    has_halfwidth = any(0xFF61 <= ord(character) <= 0xFF9F for character in text)
-    return "review" if has_halfwidth or text.startswith(("`", "'")) else "likely_text"
+    Args:
+        text: Decoded auxiliary candidate from ``scan_likely_sjis.py``.
+
+    Returns:
+        ``"review"`` for text containing halfwidth Katakana or beginning with
+        a backtick or apostrophe; otherwise ``"likely_text"``.
+
+    Design Decisions:
+        The heuristic retains suspicious text instead of discarding it.
+        Punctuation-prefixed and halfwidth candidates produced more binary
+        false positives during this title-specific analysis.
+    """
+
+    has_halfwidth = any(
+        0xFF61 <= ord(character) <= 0xFF9F
+        for character in text
+    )
+    if has_halfwidth or text.startswith(("`", "'")):
+        return "review"
+    return "likely_text"
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line interface."""
+    """Build the command-line argument parser.
+
+    Returns:
+        A parser explaining the occurrence-level inventory and editable
+        columns. Positional paths are added by ``main``.
+    """
 
     return argparse.ArgumentParser(
         description=(
@@ -63,13 +106,38 @@ def build_parser() -> argparse.ArgumentParser:
             "occurrence-level translation inventory."
         ),
         epilog=(
-            "Translate in english_translation and annotate uncertain context in "
-            "translator_notes. Preserve all other columns."
+            "Translate in english_translation and annotate uncertain context "
+            "in translator_notes. Preserve all other columns."
         ),
     )
 
 
 def main() -> None:
+    """Merge extracted text and write the translator-facing inventory.
+
+    Inputs:
+        Parses dialogue, auxiliary, and destination TSV paths from command-line
+        arguments.
+
+    Outputs:
+        Writes rows ordered by payload offset using ``OUTPUT_FIELDS``. Prints
+        occurrence, canonical-text, and manual-review counts.
+
+    Side Effects:
+        Reads both input TSVs, creates the output parent directory, and
+        replaces the destination inventory.
+
+    Failure Conditions:
+        File-system and CSV errors propagate. Missing required columns raise
+        ``KeyError``. Malformed hexadecimal offsets raise ``ValueError``.
+
+    Design Decisions:
+        ``entry_id`` identifies an occurrence, while ``canonical_id`` groups
+        identical visible source text. Grouping deliberately ignores control
+        tags so translators can compare repeated wording, but each occurrence
+        retains its own control evidence and byte length.
+    """
+
     parser = build_parser()
     parser.add_argument(
         "dialogue",
@@ -119,7 +187,10 @@ def main() -> None:
         )
     occurrences.sort(key=lambda row: int(str(row["offset"]), 16))
 
-    occurrence_counts = collections.Counter(str(row["source_text"]) for row in occurrences)
+    occurrence_counts = collections.Counter(
+        str(row["source_text"])
+        for row in occurrences
+    )
     canonical_ids: dict[str, str] = {}
     output_rows: list[dict[str, Any]] = []
     for index, row in enumerate(occurrences, start=1):

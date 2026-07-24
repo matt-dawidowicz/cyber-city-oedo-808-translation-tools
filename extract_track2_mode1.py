@@ -41,12 +41,40 @@ def extract_mode1_payload(
     start_lba: int,
     sector_count: int,
 ) -> tuple[int, str]:
-    """Extract a contiguous Mode 1 range and return ``(bytes_written, sha256)``.
+    """Extract a contiguous range of Mode 1 user-data sectors.
 
     Output is first written to a temporary file beside the destination and is
     moved into place only after every source sector passes structural checks.
     This avoids leaving an apparently valid but truncated payload after an
     invalid sector or interrupted read.
+
+    Args:
+        image_path: Source CloneCD IMG containing 2352-byte raw sectors.
+        output_path: Destination for concatenated 2048-byte user-data sectors.
+        start_lba: Zero-based raw-sector index at which extraction begins.
+        sector_count: Number of consecutive Mode 1 sectors to extract.
+
+    Returns:
+        A tuple containing the number of payload bytes written and the
+        lowercase hexadecimal SHA-256 digest of those bytes.
+
+    Raises:
+        OSError: If source metadata cannot be read, source or temporary files
+            cannot be opened, bytes cannot be written, or the final atomic
+            replacement fails.
+        ValueError: If ``start_lba`` is negative, ``sector_count`` is not
+            positive, the image is too short, a sector read is incomplete,
+            a sync pattern is invalid, or a selected sector is not Mode 1.
+
+    Side Effects:
+        Creates ``output_path.parent`` when needed. Writes a temporary file
+        in that directory and atomically replaces ``output_path`` only after
+        successful validation. Removes the temporary file after a failure.
+
+    Notes:
+        Structural checks cover the 12-byte sync pattern and mode byte. The
+        routine deliberately does not verify EDC/ECC or BCD address fields.
+        The source image is opened read-only and is never modified.
     """
 
     if start_lba < 0:
@@ -86,15 +114,18 @@ def extract_mode1_payload(
                 if raw[: len(MODE1_SYNC)] != MODE1_SYNC:
                     raise ValueError(
                         "invalid raw-sector sync at relative sector "
-                        f"{relative_sector} (absolute LBA {start_lba + relative_sector})"
+                        f"{relative_sector} "
+                        f"(absolute LBA {start_lba + relative_sector})"
                     )
                 if raw[15] != 1:
                     raise ValueError(
-                        f"expected Mode 1 at relative sector {relative_sector}, "
+                        "expected Mode 1 at relative sector "
+                        f"{relative_sector}, "
                         f"found mode {raw[15]:02X}"
                     )
                 payload = raw[
-                    MODE1_USER_DATA_OFFSET : MODE1_USER_DATA_OFFSET + SECTOR_SIZE
+                    MODE1_USER_DATA_OFFSET:
+                    MODE1_USER_DATA_OFFSET + SECTOR_SIZE
                 ]
                 destination.write(payload)
                 digest.update(payload)
@@ -110,7 +141,16 @@ def extract_mode1_payload(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Create the CLI parser separately so tests and documentation can inspect it."""
+    """Build the command-line argument parser.
+
+    Returns:
+        A parser containing the program description and usage example. Input
+        and option arguments are added by ``main``.
+
+    Notes:
+        Keeping parser construction separate allows tests and documentation
+        tools to inspect command metadata without performing file I/O.
+    """
 
     return argparse.ArgumentParser(
         description=(
@@ -125,9 +165,36 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Run the Track 2 extraction command.
+
+    Inputs:
+        Parses a source IMG path, output path, starting LBA, and sector count
+        from command-line arguments.
+
+    Outputs:
+        Prints the resolved output path, byte count, sector count, and SHA-256
+        digest to standard output.
+
+    Side Effects:
+        Calls ``extract_mode1_payload``, which creates directories and writes
+        or replaces the requested output file.
+
+    Failure Conditions:
+        ``argparse`` exits with status 2 for invalid arguments or for any
+        ``OSError`` or ``ValueError`` raised by extraction.
+    """
+
     parser = build_parser()
-    parser.add_argument("image", type=pathlib.Path, help="source 2352-byte-sector .img")
-    parser.add_argument("output", type=pathlib.Path, help="destination payload .bin")
+    parser.add_argument(
+        "image",
+        type=pathlib.Path,
+        help="source 2352-byte-sector .img",
+    )
+    parser.add_argument(
+        "output",
+        type=pathlib.Path,
+        help="destination payload .bin",
+    )
     parser.add_argument(
         "--start-lba",
         type=lambda value: int(value, 0),
