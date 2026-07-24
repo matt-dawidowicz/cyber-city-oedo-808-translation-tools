@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """Render candidate PC Engine 4bpp tiles for visual reverse engineering.
 
-The PC Engine stores one 8x8, 4-bits-per-pixel tile in 32 bytes.  Bitplanes 0
-and 1 occupy the first 16 bytes; bitplanes 2 and 3 occupy the next 16.  This
+The PC Engine stores one 8x8, 4-bits-per-pixel tile in 32 bytes. Bitplanes 0
+and 1 occupy the first 16 bytes; bitplanes 2 and 3 occupy the next 16. This
 tool decodes that layout from any byte offset in the extracted Track 2 payload.
 
 The output uses a synthetic 16-step grayscale palette because palette RAM is
-not reconstructed here.  Correct shapes with wrong colors are still useful for
-locating fonts, UI tiles, and graphics banks.  A noisy image can simply mean
+not reconstructed here. Correct shapes with wrong colors are still useful for
+locating fonts, UI tiles, and graphics banks. A noisy image can simply mean
 the selected offset does not contain raw tile data.
+
+The command requires Pillow, reads only the requested payload range, creates
+the output directory, and replaces the requested PNG. It does not decode
+tilemaps, palettes, compression, or runtime VRAM placement.
 """
 
 from __future__ import annotations
@@ -20,22 +24,55 @@ from PIL import Image
 
 
 def decode_tile(tile: bytes) -> list[int]:
-    """Decode one 32-byte PCE tile into 64 row-major palette indexes."""
+    """Decode one raw PC Engine tile into row-major palette indexes.
+
+    Args:
+        tile: Exactly 32 bytes in the PC Engine 4bpp planar layout.
+
+    Returns:
+        Sixty-four integers in row-major pixel order. Each value is a palette
+        index from 0 through 15.
+
+    Raises:
+        ValueError: If ``tile`` is not exactly 32 bytes.
+
+    Design Decisions:
+        For each row, bytes at offsets ``0/1`` provide bitplanes 0/1 and bytes
+        at ``16/17`` provide bitplanes 2/3. Bits are consumed most-significant
+        first because bit 7 represents the leftmost pixel.
+    """
 
     if len(tile) != 32:
         raise ValueError("A PC Engine 4bpp tile must be exactly 32 bytes")
     pixels: list[int] = []
     for y in range(8):
-        planes = (tile[y * 2], tile[y * 2 + 1], tile[16 + y * 2], tile[17 + y * 2])
+        planes = (
+            tile[y * 2],
+            tile[y * 2 + 1],
+            tile[16 + y * 2],
+            tile[17 + y * 2],
+        )
         for x in range(8):
             mask = 0x80 >> x
-            value = sum(((plane & mask) != 0) << bit for bit, plane in enumerate(planes))
+            value = sum(
+                ((plane & mask) != 0) << bit
+                for bit, plane in enumerate(planes)
+            )
             pixels.append(value)
     return pixels
 
 
 def grayscale_palette() -> list[int]:
-    """Build the 768-entry RGB palette required by Pillow's ``P`` mode."""
+    """Build a diagnostic grayscale palette for Pillow ``P`` images.
+
+    Returns:
+        A 768-integer RGB palette. Entries 0-15 form evenly spaced grayscale
+        values; unused entries 16-255 are black.
+
+    Notes:
+        Palette values visualize indexes only. They are not colors recovered
+        from the game or emulated palette RAM.
+    """
 
     palette: list[int] = []
     for value in range(16):
@@ -46,12 +83,17 @@ def grayscale_palette() -> list[int]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line interface."""
+    """Build the command-line argument parser.
+
+    Returns:
+        A parser explaining payload-relative offsets and diagnostic rendering.
+        Paths, dimensions, and scale arguments are added by ``main``.
+    """
 
     return argparse.ArgumentParser(
         description=(
-            "Render raw 32-byte PC Engine 4bpp tiles from an arbitrary payload "
-            "offset using a diagnostic grayscale palette."
+            "Render raw 32-byte PC Engine 4bpp tiles from an arbitrary "
+            "payload offset using a diagnostic grayscale palette."
         ),
         epilog=(
             "Offsets accept decimal or 0x-prefixed hexadecimal. They address "
@@ -61,8 +103,37 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Render candidate 4bpp tiles from an arbitrary payload offset.
+
+    Inputs:
+        Parses payload and PNG paths, payload offset, maximum tile count, tiles
+        per row, and integer scale from command-line arguments.
+
+    Outputs:
+        Writes one indexed-color PNG containing every complete tile read.
+        Normal success produces no console output.
+
+    Side Effects:
+        Reads up to ``tiles * 32`` bytes, creates the output parent directory,
+        and replaces the destination PNG.
+
+    Failure Conditions:
+        ``argparse`` exits for negative offsets, non-positive dimensions or
+        scale, or an offset with no complete tile. File-system and Pillow
+        encoding errors propagate.
+
+    Design Decisions:
+        Incomplete bytes at the end of the selected range are ignored.
+        Nearest-neighbor scaling preserves hard pixel edges, and a requested
+        row wider than the tile count intentionally leaves blank image space.
+    """
+
     parser = build_parser()
-    parser.add_argument("input", type=pathlib.Path, help="Track 2 payload .bin")
+    parser.add_argument(
+        "input",
+        type=pathlib.Path,
+        help="Track 2 payload .bin",
+    )
     parser.add_argument("output", type=pathlib.Path, help="destination PNG")
     parser.add_argument(
         "--offset",

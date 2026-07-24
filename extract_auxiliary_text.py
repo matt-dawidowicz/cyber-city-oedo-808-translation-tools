@@ -2,12 +2,16 @@
 """Build a non-dialogue text inventory from the broad Shift-JIS scan.
 
 ``scan_likely_sjis.py`` intentionally finds both dialogue and standalone
-labels.  This command subtracts every byte interval already represented in
+labels. This command subtracts every byte interval already represented in
 ``dialogue.tsv`` so the remaining rows are useful as an auxiliary/UI/item/
 location inventory.
 
-The result is still heuristic.  It may contain unused data, false positives,
+The result is still heuristic. It may contain unused data, false positives,
 or strings embedded in tables that require pointer-aware editing.
+
+Both inputs are UTF-8 tab-separated files from the documented pipeline. The
+command creates the output directory, replaces the destination TSV, and prints
+summary counts. It does not read or modify the source disc image.
 """
 
 from __future__ import annotations
@@ -22,7 +26,19 @@ from game_layout import bank_for_offset
 
 
 def parse_hex(value: str) -> int:
-    """Parse the ``0x...`` offsets written by the scanners."""
+    """Parse a hexadecimal offset written by an upstream scanner.
+
+    Args:
+        value: String accepted by ``int(value, 16)``, normally ``0x...``.
+
+    Returns:
+        The corresponding integer byte offset.
+
+    Raises:
+        ValueError: If ``value`` is not a valid base-16 integer.
+        TypeError: If ``value`` is not a string-like value accepted by
+            ``int``.
+    """
 
     return int(value, 16)
 
@@ -32,6 +48,18 @@ def merge_ranges(ranges: Iterable[tuple[int, int]]) -> list[tuple[int, int]]:
 
     Merging makes the later binary-search overlap test correct even if two
     candidate dialogue records happen to overlap.
+
+    Args:
+        ranges: Iterable of ``(start, end)`` half-open byte intervals.
+
+    Returns:
+        A start-sorted list of non-empty, non-overlapping ranges. Adjacent
+        ranges are coalesced because no auxiliary byte can exist between them.
+
+    Notes:
+        Empty and reversed ranges are ignored instead of raising. Negative
+        coordinates are retained and sorted because this low-level helper does
+        not know which coordinate space the caller is validating.
     """
 
     merged: list[tuple[int, int]] = []
@@ -47,7 +75,12 @@ def merge_ranges(ranges: Iterable[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line interface."""
+    """Build the command-line argument parser.
+
+    Returns:
+        A parser describing the dialogue-subtraction operation. Positional
+        input and output paths are added by ``main``.
+    """
 
     return argparse.ArgumentParser(
         description=(
@@ -58,6 +91,32 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Subtract dialogue ranges and write the auxiliary-text inventory.
+
+    Inputs:
+        Parses paths for ``likely_shift_jis.tsv``, ``dialogue.tsv``, and the
+        destination auxiliary TSV from the command line.
+
+    Outputs:
+        Writes non-overlapping broad-scan rows with their original payload
+        coordinates plus a derived mission-bank label. Prints record, unique
+        text, and character counts.
+
+    Side Effects:
+        Reads both input TSVs, creates the output parent directory, and
+        replaces the destination TSV.
+
+    Failure Conditions:
+        File-system and CSV errors propagate. Missing columns raise
+        ``KeyError``; malformed numeric fields raise ``ValueError``.
+        Header-only inputs are valid and produce a header-only output.
+
+    Design Decisions:
+        Every dialogue interval, including ``review`` candidates, is removed.
+        This prevents the same source bytes from appearing in both inventories
+        even when dialogue confidence is low.
+    """
+
     parser = build_parser()
     parser.add_argument(
         "likely_scan",
@@ -69,7 +128,11 @@ def main() -> None:
         type=pathlib.Path,
         help="TSV produced by extract_dialogue.py",
     )
-    parser.add_argument("output", type=pathlib.Path, help="destination auxiliary TSV")
+    parser.add_argument(
+        "output",
+        type=pathlib.Path,
+        help="destination auxiliary TSV",
+    )
     args = parser.parse_args()
 
     with args.dialogue.open("r", encoding="utf-8-sig", newline="") as source:
@@ -84,7 +147,21 @@ def main() -> None:
     range_starts = [start for start, _end in ranges]
 
     def covered(start: int, end: int) -> bool:
-        """Return whether ``[start, end)`` overlaps a dialogue byte range."""
+        """Return whether a half-open candidate overlaps dialogue.
+
+        Args:
+            start: First candidate byte offset.
+            end: First byte after the candidate.
+
+        Returns:
+            ``True`` when ``[start, end)`` intersects any merged dialogue
+            interval, otherwise ``False``.
+
+        Assumptions:
+            ``ranges`` is sorted and non-overlapping, and ``range_starts`` has
+            the same order. ``bisect`` limits each query to the immediately
+            preceding and following intervals.
+        """
 
         index = bisect.bisect_right(range_starts, start) - 1
         if index >= 0 and ranges[index][1] > start:
@@ -93,7 +170,11 @@ def main() -> None:
         return next_index < len(ranges) and ranges[next_index][0] < end
 
     output_rows: list[dict[str, object]] = []
-    with args.likely_scan.open("r", encoding="utf-8-sig", newline="") as source:
+    with args.likely_scan.open(
+        "r",
+        encoding="utf-8-sig",
+        newline="",
+    ) as source:
         for row in csv.DictReader(source, delimiter="\t"):
             offset = parse_hex(row["offset"])
             length = int(row["bytes"])

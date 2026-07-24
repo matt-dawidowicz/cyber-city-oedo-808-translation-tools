@@ -132,6 +132,52 @@ Examples:
 Do not promote a heuristic or hypothesis by changing its variable name alone.
 Add the supporting code/runtime evidence.
 
+## Python documentation standard
+
+Every Python module, class, method, nested function, and top-level function
+must have a PEP 257-compatible docstring.
+
+Use this structure when a section is relevant:
+
+```text
+"""Perform one clearly stated action.
+
+Explain context, assumptions, and non-obvious behavior.
+
+Args:
+    name: Meaning, coordinate system, accepted range, or ownership.
+
+Returns:
+    Exact return shape and sentinel behavior.
+
+Raises:
+    Exceptions intentionally exposed to callers.
+
+Side Effects:
+    Files, directories, streams, memory, or external state affected.
+
+Design Decisions:
+    Why behavior that may look surprising is intentional.
+
+Notes:
+    Limits that do not fit the sections above.
+"""
+```
+
+Do not add empty sections merely for uniformity. A small pure predicate may
+need only `Args`, `Returns`, and a design note; CLI entry points should document
+inputs, outputs, side effects, and failure conditions explicitly.
+
+Explanatory comments follow PEP 8:
+
+- use `# ` and complete sentences;
+- explain *why* a binary rule, cursor movement, or safety check exists;
+- do not narrate obvious assignments or repeat the docstring; and
+- keep every Python source line at or below 79 characters.
+
+`tests/test_documentation.py` enforces docstring presence and summary shape,
+the 79-character limit, and comment prefixes without third-party lint tools.
+
 ## Adding a new scanner
 
 1. Decide whether it consumes the raw IMG or extracted payload. Prefer the
@@ -224,6 +270,10 @@ Fast and redistributable:
 - resource-name filtering;
 - 4bpp bitplane order;
 - raw Mode 1 payload extraction.
+- invalid parser-bound validation;
+- docstrings on every documentable Python syntax node;
+- PEP 257 summary shape; and
+- PEP 8 line length and comment prefixes.
 
 ### Golden inventory checks
 
@@ -256,6 +306,7 @@ For any code change:
 - [ ] `--help` explains inputs and outputs.
 - [ ] Empty outputs do not crash.
 - [ ] Synthetic tests cover the changed rule.
+- [ ] PEP 257/PEP 8 documentation checks pass.
 - [ ] `py_compile` passes.
 - [ ] Inventory differences are explained.
 - [ ] Documentation matches actual CLI behavior.

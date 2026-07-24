@@ -245,7 +245,9 @@ colors are expected because the runtime palette is not reconstructed.
 
 ## Test after changing code
 
-The tests use synthetic data and do not require the game image:
+The tests use synthetic data and source inspection; they do not require the
+game image. They also enforce the repository's PEP 257 docstring baseline,
+PEP 8 line limit, and explanatory-comment prefix:
 
 ```powershell
 python -m unittest discover -s .\tests -v
@@ -278,7 +280,8 @@ offsets, and source hashes before accepting the change.
 |-- render_pce_tiles.py              PCE 4bpp diagnostic renderer
 |-- make_contact_sheet.py            labeled PNG aggregation
 |-- tests/
-|   `-- test_toolkit.py
+|   |-- test_documentation.py        PEP 257/PEP 8 source contract
+|   `-- test_toolkit.py              synthetic binary-format tests
 `-- docs/
     |-- disc_layout.md
     |-- data_policy.md
