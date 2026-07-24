@@ -32,6 +32,7 @@
 *.zip
 /dist/
 /build/
+/human_test_builds/
 /scratch/
 /tmp/
 

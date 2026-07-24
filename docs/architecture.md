@@ -35,6 +35,32 @@ coordinates. All later tools operate exclusively on payload bytes.
 This boundary prevents scanners from repeatedly reimplementing `2352`-byte
 sector math and accidentally treating EDC/ECC bytes as game data.
 
+### Guarded raw-sector patch boundary
+
+`cdrom_mode1.py` owns standard Mode 1 EDC/ECC generation and payload-coordinate
+patch application. It must remain game-agnostic and requires exact source bytes
+for every same-size replacement.
+
+`build_human_test_disc.py` owns the title-specific trust boundary:
+
+- authenticate the complete source set;
+- copy before modification;
+- define the limited fullwidth text profile;
+- compare all raw sectors;
+- preserve CCD and SUB data; and
+- write a machine-readable manifest.
+
+`InPlaceTextPatch` owns same-size fullwidth text conversion.
+`InformationScreenLine` composes that text rule with the Media Mix
+interpreter's adjacent `00 01 RR` row command. It derives both the text patch
+and any row-operand patch from one immutable record. Keep those fields together
+when editing the merchandise translation; parallel hand-maintained text and
+layout tables would allow them to drift.
+
+Do not move source authentication into the low-level sector module. Keeping
+those layers separate allows synthetic sector tests without weakening the
+release-specific guardrails.
+
 ### Broad discovery
 
 `scan_track.py` and `scan_likely_sjis.py` find structures worth inspecting.
@@ -81,6 +107,18 @@ run them after any editor or spreadsheet.
 `render_pce_tiles.py` and `make_contact_sheet.py` are independent from text
 extraction. They share the payload coordinate model but make no claim that an
 offset is a font or tile bank.
+
+### Executable-code diagnostics
+
+`disassemble_huc6280.py` owns deterministic single-instruction decoding and
+linear presentation. It requires the analyst to supply both the payload/file
+offset and logical CPU address because the disc does not encode the runtime
+MPR mapping beside each code block.
+
+The disassembler must not decide that bytes are code. Record the evidence for
+the module load address separately, and stop a listing before an embedded table
+unless the table is itself under investigation. Payload offsets remain the
+patch coordinate; logical addresses remain the control-flow coordinate.
 
 ## Evidence levels
 
@@ -254,8 +292,9 @@ cyber_oedo/
     `-- verify.py
 ```
 
-Do not create `patch/` until a byte-for-byte no-op rebuild and raw-sector
-verification are available.
+The flat `cdrom_mode1.py` module now supplies the first verified rebuild layer.
+Create a package-level `patch/` only when pointer-aware relocation, compact
+English encoding, and public patch generation justify that structure.
 
 ## Testing strategy
 
@@ -270,6 +309,11 @@ Fast and redistributable:
 - resource-name filtering;
 - 4bpp bitplane order;
 - raw Mode 1 payload extraction.
+- CD-ROM EDC check vector and Mode 1 ECC regeneration;
+- stale-integrity detection and repair;
+- guarded cross-sector payload patching;
+- fullwidth startup-profile encoding and capacity;
+- fixed-cell English word wrapping and invalid-input rejection;
 - invalid parser-bound validation;
 - docstrings on every documentable Python syntax node;
 - PEP 257 summary shape; and
@@ -296,6 +340,15 @@ Required for behavior:
 - EDC/ECC rebuilt image;
 - save/load and audio-track transitions.
 
+The local real-disc build adds a middle validation layer:
+
+- source CCD/IMG/SUB hashes;
+- source text at every patch coordinate;
+- affected original-sector EDC/ECC;
+- exact changed raw-sector set;
+- unchanged CCD/SUB; and
+- output image and sector hashes.
+
 ## Review checklist
 
 For any code change:
@@ -310,4 +363,4 @@ For any code change:
 - [ ] `py_compile` passes.
 - [ ] Inventory differences are explained.
 - [ ] Documentation matches actual CLI behavior.
-- [ ] No reinsertion safety is claimed without runtime/raw-sector proof.
+- [ ] Reinsertion claims distinguish raw-sector proof from runtime proof.

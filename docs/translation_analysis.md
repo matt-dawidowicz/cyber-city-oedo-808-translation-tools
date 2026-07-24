@@ -1,5 +1,10 @@
 # Cyber City Oedo 808: English Translation Analysis
 
+> Status note: This report records the original static-analysis milestone.
+> The current repository now includes a structurally verified fullwidth
+> Mission 0 vertical slice and Mode 1 EDC/ECC rebuilding. See
+> `human_test_build.md` and `validation_results.md` for the newer milestone.
+
 ## Verdict
 
 An English patch is technically viable.
@@ -27,7 +32,7 @@ Source hashes:
 
 | File | SHA-256 |
 |---|---|
-| `.ccd` | `716e509edaeedddc1b12c827ada3579b15c612a5f16400b72dabd2c6bcfece1b` |
+| `.ccd` | `716e509edaeeddc1b12c827ada3579b15c612a5f16400b72dabad2c6bcfece1b` |
 | `.img` | `815a8dda33ba2bb046fcbde773ad3a80fc6f89a96ef07e9c06bcc1c2e5fddece` |
 | `.sub` | `ae8f54a4cd83e5e985d975f29654f8aa2f384cb4f7dcbd16a39b05b3263db411` |
 

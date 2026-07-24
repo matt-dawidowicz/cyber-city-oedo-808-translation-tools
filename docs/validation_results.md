@@ -25,7 +25,16 @@ This validates:
 - user-data slicing; and
 - deterministic output identity.
 
-It does not validate source EDC/ECC mathematically or boot the result.
+The extractor itself does not validate source EDC/ECC mathematically. The
+human-test builder now validates and rebuilds the affected raw sectors through
+`cdrom_mode1.py`.
+
+Live hashing also corrected a transcription error in the earlier CCD hash. The
+confirmed descriptor SHA-256 is:
+
+```text
+716e509edaeeddc1b12c827ada3579b15c612a5f16400b72dabad2c6bcfece1b
+```
 
 ## Synthetic tests
 
@@ -38,7 +47,7 @@ python -m unittest discover -s .\tests -v
 Result:
 
 ```text
-Ran 13 tests
+Ran 18 tests
 OK
 ```
 
@@ -53,6 +62,11 @@ Covered behavior:
 - resource-name versus fill filtering;
 - PCE 4bpp plane order; and
 - structurally valid Mode 1 user-data extraction;
+- standard CD-ROM EDC check vector;
+- Mode 1 stale-integrity detection and repair;
+- guarded cross-sector payload patching;
+- fullwidth startup-profile capacity and expected sector set;
+- rejection of low/control characters in profile English;
 - docstrings on every module, class, and function;
 - PEP 257 summary shape;
 - PEP 8's 79-character Python line limit; and
@@ -65,6 +79,7 @@ Every Python source file, including the tests, passed `py_compile`.
 Every command-line script returned success for `--help`:
 
 - `analyze_text_slots.py`
+- `build_human_test_disc.py`
 - `build_translation_inventory.py`
 - `extract_auxiliary_text.py`
 - `extract_dialogue.py`
@@ -78,6 +93,279 @@ Every command-line script returned success for `--help`:
 
 The two PNG tools were also exercised against the real payload, including a
 contact-sheet output located inside its input directory.
+
+## Playable human-test builds
+
+### v0.1 startup profile
+
+`build_human_test_disc.py` completed the historical `boot-menu-v1` profile
+against the authenticated CloneCD set:
+
+```text
+text_patches=23
+changed_relative_sectors=3,4
+changed_absolute_lbas=3593,3594
+structural_validation=passed
+human_emulator_test=pending
+```
+
+Output identity:
+
+```text
+CCD  716e509edaeeddc1b12c827ada3579b15c612a5f16400b72dabad2c6bcfece1b
+IMG  98352b629bb6a7679a56a6f38ff773d100d53c2ca93f9917a764178a7eaf0b17
+SUB  ae8f54a4cd83e5e985d975f29654f8aa2f384cb4f7dcbd16a39b05b3263db411
+```
+
+The final IMG is 587,614,272 bytes, equal to the source size. The builder
+compared all 249,836 raw sectors and found differences only at the expected
+LBAs. Independent post-build checks confirmed:
+
+- the source files retained their original hashes;
+- output CCD and SUB hashes equal their source hashes;
+- the output IMG has the manifest hash above;
+- source text matched at all 23 addresses;
+- every replacement preserved Shift-JIS byte length;
+- the boundary-crossing missing-file message rebuilt both sectors; and
+- stored EDC/ECC matches regeneration for LBAs 3593 and 3594.
+
+An independent byte-range audit found 662 changed raw bytes at LBA 3593 and
+270 at LBA 3594. Every difference was either an intended text byte or part of
+the EDC/ECC area. Both raw headers and all unrelated user-data bytes remained
+identical to the source.
+
+### v0.2 Mission 0 profile
+
+The expanded `mission0-v2` profile completed against the same authenticated
+source:
+
+```text
+text_patches=58
+changed_relative_sectors=3,4,651,6692,12163,17624,22100,26313,30340,34079,36786,37030,37036
+changed_absolute_lbas=3593,3594,4241,10282,15753,21214,25690,29903,33930,37669,40376,40620,40626
+structural_validation=passed
+human_emulator_test=pending
+```
+
+Output identity:
+
+```text
+CCD  716e509edaeeddc1b12c827ada3579b15c612a5f16400b72dabad2c6bcfece1b
+IMG  8f74fe8e1249acc6eb7f574630b63cc009d89c34a5a5f26733898321289ce5fe
+SUB  ae8f54a4cd83e5e985d975f29654f8aa2f384cb4f7dcbd16a39b05b3263db411
+```
+
+The final IMG remains 587,614,272 bytes. The builder compared all 249,836 raw
+sectors and found differences at exactly the 13 listed LBAs. An independent
+post-build audit confirmed for each changed sector:
+
+- the 16-byte raw header is unchanged;
+- every changed user-data byte belongs to one of the 58 reviewed text runs;
+- no title or dialogue control byte belongs to a replacement range;
+- stored EDC/ECC matches regeneration;
+- CCD and SUB remain byte-identical to the source; and
+- v0.1 remains available as a separate, unchanged build set.
+
+The user reported that the earlier build mostly works. No emulator version,
+BIOS hash, complete save/load result, or audio test matrix has been recorded.
+Those runtime checks, plus visible review of the new Mission 0 dialogue and
+later mission titles, remain the explicit v0.2 human test gate.
+
+### v0.3 screenshot-identified narration
+
+The `mission0-v3` profile adds the exact narration page identified in a tester
+screenshot:
+
+```text
+payload_offset=0x00175851
+source_characters=37
+replacement=I HUNT CYBER CROOKS AND TURN THEM IN.
+text_patches=59
+changed_relative_sectors=3,4,651,747,6692,12163,17624,22100,26313,30340,34079,36786,37030,37036
+changed_absolute_lbas=3593,3594,4241,4337,10282,15753,21214,25690,29903,33930,37669,40376,40620,40626
+structural_validation=passed
+human_emulator_test=pending
+```
+
+Output identity:
+
+```text
+CCD  716e509edaeeddc1b12c827ada3579b15c612a5f16400b72dabad2c6bcfece1b
+IMG  992d4a196d4eb7e853f6a87dd2261c68648f584784368ffe19ef9bdf41f0c597
+SUB  ae8f54a4cd83e5e985d975f29654f8aa2f384cb4f7dcbd16a39b05b3263db411
+```
+
+The new 74-byte visible run occupies relative payload sector 747, absolute LBA
+4337. The replacement uses the full 37-character capacity. Independent audit
+of that raw sector found:
+
+- no changed header bytes;
+- no changed user-data bytes outside the selected run;
+- 56 differing user-data bytes, with unchanged bytes arising where encoded
+  source and replacement bytes already matched;
+- valid regenerated Mode 1 EDC/ECC; and
+- untouched `0x40` page controls immediately before and after the run.
+
+The complete v0.3 builder again compared all 249,836 raw sectors and accepted
+exactly the 14 expected changed LBAs. Visible emulator confirmation of this page
+remains pending.
+
+### v0.4 complete opening narration
+
+The `mission0-v4` profile expands the screenshot-identified page to all ten
+pages of the same opening record:
+
+```text
+text_patches=68
+prologue_pages=10
+changed_relative_sectors=3,4,651,747,6692,12163,17624,22100,26313,30340,34079,36786,37030,37036
+changed_absolute_lbas=3593,3594,4241,4337,10282,15753,21214,25690,29903,33930,37669,40376,40620,40626
+structural_validation=passed
+human_emulator_test=pending
+```
+
+Output identity:
+
+```text
+CCD  716e509edaeeddc1b12c827ada3579b15c612a5f16400b72dabad2c6bcfece1b
+IMG  cbf2d12f6eadc1b96a71549c27f1a79112b495f162343f6c89b4cca5e2419c4c
+SUB  ae8f54a4cd83e5e985d975f29654f8aa2f384cb4f7dcbd16a39b05b3263db411
+```
+
+All ten visible runs remain within relative sector 747, absolute LBA 4337.
+Independent comparison of that sector found:
+
+- 816 changed raw bytes;
+- 536 changed user-data bytes, all inside reviewed narration runs;
+- no changed raw-header or unrelated user-data bytes;
+- the original `27 28` record marker;
+- all nine original `0x40` page controls;
+- the original null terminator; and
+- valid regenerated Mode 1 EDC/ECC.
+
+The complete v0.4 builder compared all 249,836 sectors and accepted exactly the
+same 14-LBA set as v0.3 because the nine additional pages share LBA 4337. Human
+testing must now confirm all ten pages display in order without clipping,
+paging regressions, or stale Japanese.
+
+### v0.5 failed 13-cell wrapping experiment
+
+The `mission0-v5` profile keeps the same 68 translated runs and adds
+presentation behavior at build time:
+
+- Mission 0 dialogue uses fullwidth lowercase Shift-JIS glyphs;
+- narration words are packed into lines no wider than 13 cells;
+- non-final short lines are padded to the next automatic wrap boundary;
+- no newline or dialogue-control byte is inserted; and
+- words wider than the configured line are rejected.
+
+Output identity:
+
+```text
+CCD  716e509edaeeddc1b12c827ada3579b15c612a5f16400b72dabad2c6bcfece1b
+IMG  6e48fc1b408df70dd997bdc7d0b43786da05869ed207b5761317bfddbcc93e92
+SUB  ae8f54a4cd83e5e985d975f29654f8aa2f384cb4f7dcbd16a39b05b3263db411
+```
+
+The changed sector set remains the same 14 LBAs as v0.4. Independent audit of
+the narration sector at LBA 4337 found:
+
+- 827 changed raw bytes;
+- 548 changed user-data bytes, all inside reviewed narration runs;
+- no changed raw-header or unrelated user-data bytes;
+- the original `27 28` record marker;
+- all nine original `0x40` page controls;
+- the original null terminator; and
+- valid regenerated Mode 1 EDC/ECC.
+
+Runtime testing rejected the screenshot-derived 13-cell assumption. The game
+displayed the padding as bad spacing, still split words, and placed a comma on
+its own line. v0.5 remains preserved as evidence, but must not be used as the
+base for further translation builds.
+
+Static disassembly subsequently identified the cause:
+
+- the active Mission 0 glyph routine begins at CPU `$5915`;
+- `$5946` returns 11 for ordinary glyphs and 12 for listed punctuation;
+- the original table includes `81 41` and `81 42`, the Japanese comma/stop;
+- fullwidth English comma/period are `81 43` and `81 44`; and
+- those English codes therefore took the ordinary 11-cell wrap path.
+
+### v0.6 code-confirmed wrapping and English punctuation
+
+The `mission0-v6` profile changes narration wrapping from 13 to 11 cells and
+adds two exact-byte renderer patches:
+
+- payload `0x00137165`: redirect the ordinary-limit return to a code cave;
+- payload `0x00136D0E`: recognize `81 43` and `81 44`, returning the original
+  12-cell hanging-punctuation limit only for those two codes.
+
+The code cave resides in a 34-byte zero-fill run in the same mapped 8 KiB CPU
+page. No original Japanese punctuation entry is replaced. The builder checks
+all expected source bytes before applying either patch.
+
+Output identity:
+
+```text
+CCD  716e509edaeeddc1b12c827ada3579b15c612a5f16400b72dabad2c6bcfece1b
+IMG  2045e3dd606d5e28065acd81ac35d431e5eed71fcd21465f595886bf3a384644
+SUB  ae8f54a4cd83e5e985d975f29654f8aa2f384cb4f7dcbd16a39b05b3263db411
+```
+
+The complete v0.6 build accepted exactly 16 changed absolute LBAs:
+
+```text
+3593, 3594, 4211, 4212, 4241, 4337, 10282, 15753,
+21214, 25690, 29903, 33930, 37669, 40376, 40620, 40626
+```
+
+The synthetic suite now has 26 passing tests, including HuC6280 opcode-table
+coverage, address formatting, wrap behavior, and guarded renderer-patch
+structure. Human testing remains required to confirm the 11-cell layout and
+English punctuation on screen. Increasing visible letters per line remains
+outside this build because the renderer still advances one 16x16 cell per
+glyph.
+
+### v0.7 Media Mix translation and row reflow
+
+The `mission0-v7` profile preserves every v0.6 patch and adds all 43 text
+records belonging to the video, novel, and music Media Mix pages. Raw-byte
+inspection confirmed that each line begins immediately after a `00 01 RR`
+command. The source body uses consecutive 8-pixel tile rows for 16-pixel BIOS
+glyphs, explaining the overlap visible in the tester screenshots.
+
+The implementation:
+
+- replaces all 43 records with same-size fullwidth Shift-JIS;
+- places visible English at least two tile rows apart;
+- reuses original 30-character decorative records for long English titles;
+- moves cleared Japanese and decorative fragments to offscreen row `1E`;
+- changes 33 row operands while preserving every `00 01` opcode;
+- preserves every null terminator, page boundary, and file size; and
+- retains the two v0.6 Mission 0 renderer patches unchanged.
+
+The authenticated complete build applied 111 text patches and 35 binary
+patches. It accepted exactly 18 changed absolute LBAs:
+
+```text
+3593, 3594, 3602, 3603, 4211, 4212, 4241, 4337, 10282, 15753,
+21214, 25690, 29903, 33930, 37669, 40376, 40620, 40626
+```
+
+Output identity:
+
+```text
+CCD  716e509edaeeddc1b12c827ada3579b15c612a5f16400b72dabad2c6bcfece1b
+IMG  1cdb81d72e77ab9bffb3bbbf225a3f976fff1fc598621317d50f621f208a25e9
+SUB  ae8f54a4cd83e5e985d975f29654f8aa2f384cb4f7dcbd16a39b05b3263db411
+```
+
+An independent post-build decoder re-read all 43 text records and row
+commands from the raw output IMG, including the record crossing the payload
+sector 12/13 boundary. All replacements and display rows matched. The suite
+now has 29 passing tests. Human emulator screenshots remain required to
+confirm the page interpreter accepts offscreen row `1E` and that the proposed
+English wording is visually centered.
 
 ## Dialogue regeneration
 
@@ -188,10 +476,9 @@ No dialogue record crossed its assigned candidate region boundary in this run.
 - runtime control semantics;
 - player-visible coverage;
 - exact resource pointers/lengths;
-- English glyph rendering;
-- payload reinsertion;
-- EDC/ECC rebuilding;
-- CloneCD track/subchannel preservation after patching;
+- compact-width English glyph rendering;
+- dialogue reinsertion or relocation;
 - full-game playthrough.
 
-Those remain required milestones, not implied successes.
+The startup test image proves same-size fullwidth insertion and raw-sector
+rebuilding only. Those remaining milestones are not implied successes.

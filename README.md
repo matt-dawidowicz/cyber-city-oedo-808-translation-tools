@@ -1,15 +1,22 @@
 # Cyber City Oedo 808 translation-analysis toolkit
 
-This directory contains a reproducible, read-only analysis pipeline for the
+This directory contains a reproducible analysis and test-build pipeline for the
 Japanese PC Engine CD release of *Cyber City Oedo 808: Kemono no Alignment*.
 It extracts the data track from the supplied CloneCD image, inventories the
 disc, finds Shift-JIS text, separates structured dialogue from auxiliary text,
-and builds a translator-facing TSV.
+builds a translator-facing TSV, and creates a guarded playable test image.
 
-The current tools **do not create a patched disc**. That boundary is deliberate:
-the text renderer, control-byte semantics, pointers/lengths, and raw Mode 1
-EDC/ECC rebuild path must be confirmed before automated reinsertion can be
-considered safe.
+The current `mission0-v7` builder creates a **guarded fullwidth Shift-JIS
+vertical slice**. It translates startup messages, all mission-title subtitles,
+the opening Mission 0 bartender conversation, and the complete ten-page opening
+narration. It also translates and reflows all three Media Mix merchandise
+pages. Mission 0 uses lowercase English. Narration pages are padded for
+word-aware wrapping at the renderer's code-confirmed 11-cell boundary, and a
+small hook adds fullwidth English comma and period to the original hanging
+punctuation behavior. It is not a complete English translation. A compact
+Latin renderer, complete dialogue control semantics, pointers, lengths, and
+relocation still require runtime engineering before broad automated
+reinsertion is safe.
 
 Start with:
 
@@ -17,6 +24,7 @@ Start with:
 - [Data and rights policy](docs/data_policy.md)
 - [Text format and TSV schemas](docs/text_format.md)
 - [Translation and patch-development workflow](docs/translation_workflow.md)
+- [Playable human-test build](docs/human_test_build.md)
 - [Complete command reference](docs/tool_reference.md)
 - [Architecture and extension guide](docs/architecture.md)
 - [Validated results and known baseline difference](docs/validation_results.md)
@@ -33,8 +41,15 @@ Start with:
 - Low ASCII-range values inside those records are controls, not safe ASCII text.
 - The boot code calls the System Card BIOS `EX_GETFNT` routine at `$E060` in
   16x16 glyph mode.
+- The active Mission 0 renderer wraps ordinary glyphs at 11 cells and permits
+  listed punctuation in a twelfth hanging cell.
+- Control `2F` is a skippable 20-vblank delay; `5C` waits for a press/release;
+  `21` waits on `$37F1`; and `40` advances the text row after window handling.
 - Repeated engine/resource anchors divide the payload into mission analysis
   banks recorded in `game_layout.py`.
+- Standard Mode 1 EDC and P/Q ECC rebuilding matches original raw sectors.
+- The startup menu accepts same-size fullwidth Shift-JIS English.
+- Visible dialogue runs can be replaced without touching adjacent controls.
 
 ## What is not yet confirmed
 
@@ -43,23 +58,30 @@ Start with:
 - Every module's pointer and length fields.
 - A compact English rendering path.
 - Which constant-fill tails are genuinely unreferenced relocation space.
-- A correct raw-sector EDC/ECC rebuild and tested CloneCD patch.
+- Emulator boot, save/load, audio continuity, and later track transitions for
+  the generated human-test build.
 
 The tools preserve those unknowns instead of assigning plausible-sounding names
 to them.
 
 ## Safety model
 
-The supplied `.ccd`, `.img`, and `.sub` files are source evidence. Every command
-here reads them or reads derived files and writes new artifacts elsewhere.
+The supplied `.ccd`, `.img`, and `.sub` files are source evidence. Analysis
+commands read them or derived files. The test builder authenticates the source,
+copies the complete set to an isolated output directory, and patches only the
+copy.
 
-Do not hex-edit the original IMG. A future patching workflow should:
+Do not hex-edit the original IMG. `build_human_test_disc.py` now performs the
+limited proof workflow:
 
 1. work on a copy;
-2. patch 2048-byte user data through a format-aware reinserter;
+2. patch same-size 2048-byte user data through a guarded reinserter;
 3. recalculate raw-sector EDC/ECC;
 4. preserve track starts, pregaps, audio data, and subchannel data; and
-5. verify the result in an emulator before any hardware test.
+5. leave emulator confirmation as the required human test gate.
+
+The builder rejects unknown source hashes, mismatched source text, changed file
+sizes, stale EDC/ECC, unexpected modified sectors, and altered CCD/SUB data.
 
 ## Repository contents and data policy
 
@@ -220,6 +242,58 @@ Important rules:
 will become a separate insertion concern after runtime tracing gives each
 control a verified meaning. Do not invent a tagged-English syntax prematurely.
 
+## Build the playable human-test image
+
+The v0.7 vertical slice translates 111 visible runs with the original 16x16
+fullwidth glyph path, applies two guarded renderer patches, and repositions 33
+Media Mix row operands:
+
+- 23 original startup notice, menu, load, and memory runs;
+- 11 additional memory-state and recovery messages;
+- 10 mission-title subtitle occurrences;
+- 14 visible segments in the opening Mission 0 bartender exchange; and
+- all 10 pages of Sengoku's opening narration; and
+- 43 records across the video, novel, and music Media Mix pages.
+
+```powershell
+python .\build_human_test_disc.py `
+  "C:\path\to\Cyber City Oedo 808 - Kemono no Alignment (Japan).ccd" `
+  "C:\path\to\output\cyber_city_oedo_808_human_test_v0.7"
+```
+
+The output directory must not already exist. Open the generated `.ccd` in a PC
+Engine CD emulator with a legally obtained Japanese System Card 3.0 BIOS.
+
+Automated build verification covers:
+
+- exact source CCD/IMG/SUB hashes;
+- exact source text at all 111 payload offsets;
+- equal-length fullwidth Shift-JIS replacements;
+- 33 guarded Media Mix row-operand changes;
+- Mode 1 EDC and ECC regeneration;
+- all-sector comparison proving only 18 expected absolute LBAs changed;
+- byte-identical CCD and SUB copies; and
+- an output manifest with before/after sector and image hashes.
+
+This is a vertical slice, not a full translation. Dialogue outside the opening
+bar exchange and most later interfaces remain Japanese. Follow
+[human_test_build.md](docs/human_test_build.md) for the tester checklist and
+distribution boundary.
+
+The v0.7 profile retains the v0.6 formatter that prevents words from crossing
+the code-confirmed 11-cell
+narration boundary by padding the prior line with fullwidth spaces. The
+renderer hook sends only fullwidth comma and period through the original
+12th-cell punctuation allowance; Japanese punctuation behavior remains
+unchanged. This does not increase line width. More letters per line require an
+8x16 or proportional Latin renderer and an unambiguous encoded path that does
+not collide with existing dialogue controls.
+
+The Media Mix pages use a separate row-addressed format. Their original
+consecutive 8-pixel rows overlap 16-pixel glyphs. The v0.7 data-only reflow
+spaces visible rows two tile rows apart and moves cleared records to offscreen
+row `0x1E`; it does not change the shared dialogue renderer.
+
 ## Graphics reconnaissance
 
 Render 512 candidate tiles beginning at payload offset `0x00145800`:
@@ -269,6 +343,7 @@ offsets, and source hashes before accepting the change.
 .
 |-- README.md
 |-- game_layout.py                   confirmed shared constants/address helpers
+|-- cdrom_mode1.py                   guarded raw Mode 1 EDC/ECC patch layer
 |-- extract_track2_mode1.py          raw IMG -> 2048-byte Track 2 payload
 |-- scan_track.py                    sector/ASCII/broad Shift-JIS reconnaissance
 |-- scan_likely_sjis.py              natural-language discovery heuristic
@@ -277,6 +352,7 @@ offsets, and source hashes before accepting the change.
 |-- build_translation_inventory.py   translator-facing occurrence TSV
 |-- validate_translation_inventory.py read-only edit/schema checks
 |-- analyze_text_slots.py            header-bounded resource-tail analysis
+|-- build_human_test_disc.py         authenticated playable test build
 |-- render_pce_tiles.py              PCE 4bpp diagnostic renderer
 |-- make_contact_sheet.py            labeled PNG aggregation
 |-- tests/
@@ -287,6 +363,7 @@ offsets, and source hashes before accepting the change.
     |-- data_policy.md
     |-- text_format.md
     |-- translation_workflow.md
+    |-- human_test_build.md
     |-- tool_reference.md
     |-- architecture.md
     |-- validation_results.md
@@ -299,8 +376,9 @@ explains why its output must not enter the translation inventory.
 
 ## Project status
 
-This toolkit is ready for reproducible static analysis and translation-script
-editing. The next engineering milestone is a runtime trace of the dialogue
-renderer and control bytes, followed by a one-line, same-size insertion proof
-on a disposable image copy. See
+This toolkit is ready for reproducible static analysis, translation-script
+editing, and a structurally verified Mission 0 vertical slice. Initial human
+testing reports that the earlier startup build mostly works; a recorded
+save/load and audio test matrix remains the release gate. Runtime tracing of
+the dialogue renderer and controls is the next engineering milestone. See
 [translation_workflow.md](docs/translation_workflow.md) for the release path.

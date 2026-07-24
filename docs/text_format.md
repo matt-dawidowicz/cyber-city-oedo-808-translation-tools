@@ -32,19 +32,21 @@ Do not read `21`, `2F`, `40`, or `5C` as ASCII `!`, `/`, `@`, or `\`. Their
 frequency and placement show that they are bytecode/layout controls in this
 record format.
 
-## Known controls, unknown meanings
+## Control dispatch confirmed from code
 
 | Byte | Observed count in the initial dialogue corpus | Status |
 |---|---:|---|
-| `40` | 1,538 | common; exact runtime behavior unconfirmed |
-| `2F` | 1,004 | common; exact runtime behavior unconfirmed |
-| `21` | 831 | common; exact runtime behavior unconfirmed |
-| `5C` | 18 | seen on mission-title records; exact behavior unconfirmed |
+| `40` | 1,538 | invokes page/window handling, then advances a row |
+| `2F` | 1,004 | waits up to 20 vertical blanks unless input skips it |
+| `21` | 831 | waits for `$37F1` to clear unless input skips it |
+| `5C` | 18 | waits for an input press and subsequent release |
 
 `COMMON_DIALOGUE_CONTROLS` in `game_layout.py` is an extraction allowlist. It
-does not assign semantics.
+does not assign semantics. The descriptions above are confirmed from the active
+Mission 0 parser at CPU `$9543`; the higher-level purpose of `$37F1` still
+needs runtime correlation.
 
-To name a control responsibly:
+Before assigning a more specific user-facing name:
 
 1. break on or trace the dialogue renderer;
 2. display records containing the value in several contexts;
@@ -66,8 +68,57 @@ uses 16x16 glyph transfer mode for Shift-JIS. Two implementation paths follow:
 - A release patch should introduce an unambiguous Latin escape and an 8x16 or
   variable-width font while preserving existing Japanese/control parsing.
 
+Fullwidth lowercase Latin is available in the same Shift-JIS path and already
+appears in shipped resources such as `Ｄｒｉｖｅ　Ｒｅａｄｙ．`. The v0.6
+test profile therefore uses lowercase without replacing the glyph path.
+
+Static disassembly now confirms the active Mission 0 glyph routine at CPU
+`$5915`. It calls `$5946`, which returns an 11-cell ordinary line limit and a
+12-cell limit for punctuation listed at `$5968`. The prior screenshot-derived
+13-cell estimate was wrong. This explains the failed v0.5 layout: its padding
+crossed the real boundary, producing visible spacing errors and broken words.
+
+The original punctuation table includes Japanese comma/stop (`81 41`,
+`81 42`) but not fullwidth English comma/period (`81 43`, `81 44`). The v0.6
+test hook extends only the default lookup path for those two English codes, so
+they may occupy the original hanging-punctuation cell instead of wrapping
+alone. The original table and Japanese behavior remain unchanged.
+
+The v0.6 formatter pads narration lines to 11 cells. This moves the existing
+automatic cell wrap to a word boundary without inserting `2F`, `40`, or
+another control. It does not increase the number of visible cells per line.
+
 Do not choose an escape byte until the runtime parser and all existing controls
 are mapped.
+
+## Media Mix information-screen records
+
+The three promotional information pages use a simpler format than dialogue:
+
+```text
+00 01 RR  [fullwidth Shift-JIS text]  00
+```
+
+- `00 01` introduces a row-addressed line;
+- `RR` is the destination background-map tile row;
+- the Shift-JIS string is null-terminated; and
+- separate color commands may appear between records.
+
+The source body assigns rows `08`, `09`, `0A`, and so on, while the active BIOS
+font path produces 16-pixel-tall glyphs. Because a tile row is 8 pixels,
+consecutive source rows overlap by half a glyph. This is an original
+data-layout property, not screenshot blur and not a flattened graphic.
+
+The v0.7 profile treats each command and text run as one
+`InformationScreenLine`. Visible English is placed on rows at least two apart.
+Long lines may reuse the original 30-character decorative-box records.
+Superseded records remain the same byte size, contain only fullwidth spaces,
+and are assigned to offscreen row `1E`. The original opcode, null terminator,
+record order, page boundaries, and all non-row control bytes remain unchanged.
+
+This method is specific to the Media Mix page interpreter. It does not increase
+the dialogue renderer's 11-cell width and must not be generalized to dialogue
+without runtime evidence.
 
 ## Extraction-confidence labels
 

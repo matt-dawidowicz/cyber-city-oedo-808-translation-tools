@@ -36,6 +36,20 @@ dialogue.tsv -----------------------------------------------------+
 All sector/offset outputs after extraction use the 2048-byte payload coordinate
 system.
 
+The independent human-test build path is:
+
+```text
+authenticated CCD + IMG + SUB
+              |
+              v
+build_human_test_disc.py
+              |
+              +--> copied CCD and SUB
+              +--> patched IMG through cdrom_mode1.py
+              +--> build_manifest.json
+              `--> HUMAN_TEST_README.txt
+```
+
 ## `game_layout.py`
 
 Purpose: one source of truth for confirmed title-specific constants.
@@ -56,6 +70,28 @@ Important exports:
 
 Use `payload_offset`, `absolute_lba`, `bank_for_sector`, and `bank_for_offset`
 instead of open-coding address arithmetic in new tools.
+
+## `cdrom_mode1.py`
+
+Purpose: validate, patch, and rebuild raw 2352-byte Mode 1 sectors.
+
+Important exports:
+
+| Name | Meaning |
+|---|---|
+| `PayloadPatch` | same-size expected/replacement bytes at a payload offset |
+| `compute_edc` | reflected CD-ROM EDC calculation |
+| `rebuild_mode1_sector` | regenerate EDC, reserved bytes, and P/Q ECC |
+| `mode1_integrity_matches` | compare stored integrity fields to regeneration |
+| `apply_payload_patches` | prevalidate and write complete affected sectors |
+
+`apply_payload_patches` accepts replacements that cross payload-sector
+boundaries. It validates all affected source sectors and builds every
+replacement in memory before its first write.
+
+This module modifies the image path passed to it. Call it only with a disposable
+copy. It does not authenticate the complete game release or compare unchanged
+sectors; those responsibilities belong to the higher-level builder.
 
 ## `extract_track2_mode1.py`
 
@@ -87,6 +123,83 @@ Does not check:
 - EDC/ECC validity;
 - subchannel data;
 - game bootability.
+
+## `build_human_test_disc.py`
+
+Purpose: create the authenticated `mission0-v7` playable-format test build.
+
+```text
+usage: build_human_test_disc.py [-h] source_ccd output_directory
+```
+
+Arguments:
+
+- `source_ccd`: descriptor for the source CloneCD set;
+- `output_directory`: new directory for the completed test build.
+
+Source requirements:
+
+- CCD, IMG, and SUB companions exist;
+- every SHA-256 matches the documented release;
+- affected source sectors have valid stored EDC/ECC;
+- every selected Japanese text run matches exactly.
+
+Profile behavior:
+
+- converts printable ASCII English to fullwidth Shift-JIS;
+- maps ASCII hyphen and apostrophe to encodable Shift-JIS punctuation;
+- supports optional word-aware padding for a fixed display-cell width;
+- uses the code-confirmed 11-cell width for the opening narration;
+- pads shorter wording with fullwidth spaces;
+- rejects longer or byte-size-changing wording;
+- applies 111 startup, mission-title, Mission 0, and Media Mix text patches;
+- applies two guarded Mission 0 renderer patches for English punctuation;
+- applies 33 guarded Media Mix row-operand patches for readable spacing;
+- preserves all adjacent dialogue and title control bytes;
+- changes 18 reviewed payload sectors; and
+- rebuilds the corresponding 18 absolute LBAs.
+
+Whole-build verification:
+
+- CCD and SUB output hashes equal the source hashes;
+- IMG size is unchanged;
+- every output replacement matches;
+- all 249,836 raw sectors are compared;
+- the changed raw-sector set equals the profile's expected 18 LBAs;
+- a JSON manifest records source/output/sector hashes, exact text, and exact
+  renderer and row-command bytes.
+
+The output is a limited vertical slice. It translates the opening Mission 0
+bartender exchange and complete ten-page narration with lowercase text and
+word-aware 11-cell wrapping. It also translates the three Media Mix
+merchandise pages and separates their 16-pixel glyphs onto non-overlapping tile
+rows. It does not relocate records or provide a compact Latin renderer.
+
+## `disassemble_huc6280.py`
+
+Purpose: linearly decode a caller-confirmed HuC6280 code region while showing
+both payload/file offsets and logical CPU addresses.
+
+```text
+usage: disassemble_huc6280.py [-h] --offset OFFSET --address ADDRESS
+                              --length LENGTH binary
+```
+
+Arguments:
+
+- `binary`: extracted payload or module containing the code;
+- `--offset`: byte offset of the first opcode;
+- `--address`: logical CPU address corresponding to that offset; and
+- `--length`: exact byte count to decode.
+
+All numeric options accept decimal or `0x`-prefixed hexadecimal. The tool uses
+the complete HuC6280 opcode/addressing matrix and formats relative branches
+against the supplied logical address.
+
+This is intentionally a linear disassembler. It does not infer MPR mappings,
+follow control flow, or distinguish code from data. Supplying an arbitrary
+offset can therefore produce plausible-looking nonsense. Establish the module
+load mapping independently and keep both coordinate systems in analysis notes.
 
 ## `scan_track.py`
 
@@ -300,7 +413,8 @@ specific binary table, nothing more.
 - Parent directories are created for normal outputs.
 - TSV outputs have explicit headers even when no candidates are found.
 - Translator-facing TSVs use UTF-8 with a BOM.
-- Source disc files are never modified.
+- Source disc files are never modified; the test builder modifies only its
+  authenticated copy.
 
 ## Recommended command checks
 
@@ -310,6 +424,7 @@ Display authoritative built-in help:
 python .\extract_dialogue.py --help
 python .\analyze_text_slots.py --help
 python .\validate_translation_inventory.py --help
+python .\build_human_test_disc.py --help
 ```
 
 Run tests:
