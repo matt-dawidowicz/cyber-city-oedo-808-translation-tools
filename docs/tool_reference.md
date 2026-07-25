@@ -126,16 +126,20 @@ Does not check:
 
 ## `build_human_test_disc.py`
 
-Purpose: create the authenticated `mission0-v7` playable-format test build.
+Purpose: create the authenticated `mission0-v9` playable-format test build.
 
 ```text
-usage: build_human_test_disc.py [-h] source_ccd output_directory
+usage: build_human_test_disc.py [-h] [--title-screen {clean,original}]
+                                source_ccd output_directory
 ```
 
 Arguments:
 
 - `source_ccd`: descriptor for the source CloneCD set;
-- `output_directory`: new directory for the completed test build.
+- `output_directory`: new directory for the completed test build;
+- `--title-screen clean`: use the antialiased animation-logo-inspired opening
+  graphic and its isolated grayscale palette cycle; and
+- `--title-screen original`: omit only those two cosmetic patches.
 
 Source requirements:
 
@@ -152,12 +156,16 @@ Profile behavior:
 - uses the code-confirmed 11-cell width for the opening narration;
 - pads shorter wording with fullwidth spaces;
 - rejects longer or byte-size-changing wording;
-- applies 111 startup, mission-title, Mission 0, and Media Mix text patches;
+- applies 271 startup, dossier, mission-title, Mission 0, and Media Mix text
+  patches;
 - applies two guarded Mission 0 renderer patches for English punctuation;
-- applies 33 guarded Media Mix row-operand patches for readable spacing;
+- applies 46 guarded dossier row-operand patches for readable spacing;
+- applies 34 guarded Media Mix row-operand patches for readable spacing;
+- optionally applies one 30,720-byte title-graphic patch and one 224-byte
+  seven-frame palette patch;
 - preserves all adjacent dialogue and title control bytes;
-- changes 18 reviewed payload sectors; and
-- rebuilds the corresponding 18 absolute LBAs.
+- changes 23 reviewed sectors in original-title mode or 37 in clean mode; and
+- rebuilds EDC/ECC for every guarded Mode 1 sector.
 
 Whole-build verification:
 
@@ -165,9 +173,12 @@ Whole-build verification:
 - IMG size is unchanged;
 - every output replacement matches;
 - all 249,836 raw sectors are compared;
-- the changed raw-sector set equals the profile's expected 18 LBAs;
+- the changed raw-sector set equals the selected variant's expected LBAs;
 - a JSON manifest records source/output/sector hashes, exact text, and exact
-  renderer and row-command bytes.
+  small renderer and row-command bytes;
+- large binary patches use before/after SHA-256 values instead of embedding
+  bulky hexadecimal data; and
+- the manifest records guarded sectors separately from byte-different sectors.
 
 The output is a limited vertical slice. It translates the opening Mission 0
 bartender exchange and complete ten-page narration with lowercase text and
@@ -361,6 +372,47 @@ Region rule:
 be at most `--max-region-sectors` (default 64). Wider gaps are labeled
 `wide_header_gap` because an undiscovered boundary is likely. A positive result
 is a prioritization signal only.
+
+## `pce_graphics.py`
+
+Purpose: encode and decode one raw PC Engine 8-by-8, four-bit planar tile
+without requiring Pillow.
+
+Library functions:
+
+- `encode_tile(pixels)`: convert 64 row-major palette indexes to 32 bytes; and
+- `decode_tile(tile)`: convert a 32-byte planar tile to 64 palette indexes.
+
+Both functions reject malformed sizes or palette indexes. The title generator,
+diagnostic renderer, and synthetic tests share this codec.
+
+## `title_screen.py`
+
+Purpose: generate the optional clean 256-by-240 opening-title asset.
+
+```text
+usage: title_screen.py [-h] [--source-image SOURCE_IMAGE]
+                       output
+```
+
+The output is exactly 30,720 bytes: 960 tiles in 32-column, 30-row screen
+order. The default uses a compressed, SHA-256-guarded four-bit coverage mask
+derived from the approved logo reference. `--source-image` instead uses Pillow
+to proportionally fit and center another master. Luminance at or below 8 maps
+to black, luminance at or above 200 maps to white, and the interval between
+them retains four-bit edge coverage.
+
+`build_grayscale_title_palette_cycle()` emits the companion 224-byte palette
+replacement. It repeats one 16-index grayscale frame seven times so the
+original color-cycle code cannot change antialiased edge colors. Indexes 0
+through 5 remain black to hide the original routine's residual upper-border
+pixels; title coverage is remapped into indexes 6 through 15. The portrait
+palette before the cycle is not part of this replacement.
+
+The command does not read or modify a disc image. It replaces only the
+requested standalone output file so contributors can render and inspect
+revisions before running the full builder. Normal default generation does not
+import or require Pillow.
 
 ## `render_pce_tiles.py`
 

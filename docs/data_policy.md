@@ -14,6 +14,7 @@ game's developers, publishers, or current rights holders.
 - original Python source code;
 - original documentation and format descriptions;
 - synthetic tests and synthetic binary fixtures;
+- original replacement artwork and compact code-native masks derived from it;
 - cryptographic hashes used to identify the analyzed release;
 - small excerpts necessary to explain findings or localization context; and
 - patch-development metadata that does not reconstruct the original game.
@@ -43,6 +44,15 @@ that build directory must remain local and excluded from source control.
 A future translation release should distribute a patch against a hash-identified
 source, not a modified disc image. `build_manifest.json` may be shared after
 reviewing it for local paths, but it does not replace that patch format.
+
+The optional clean title follows the same boundary. `title_logo_mask.py`
+contains a compact four-bit coverage mask derived from approved replacement
+artwork, while `title_screen.py` contains its guarded decoder, importer, and
+generated grayscale palette. The builder reads the copyrighted source-game
+graphic and seven-frame title palette from the user's authenticated IMG solely
+to form exact same-size patch guards. Do not commit the extracted original tile
+block, original palette bytes, generated source renders, modified title block,
+or playable output image.
 
 ## Reporting issues
 

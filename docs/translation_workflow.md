@@ -101,16 +101,19 @@ understood.
 
 ## Phase 4: same-size insertion proof
 
-Implementation status: the `mission0-v7` build now completes the static and
-raw-sector portions of this phase for 111 visible runs. They cover startup
-text, mission-title subtitles, the opening Mission 0 bartender exchange, the
-complete ten-page opening narration, and all three Media Mix merchandise
-pages. The builder authenticates the source, uses same-size fullwidth
-Shift-JIS, preserves all narration and dialogue controls, uses lowercase
-Mission 0 glyphs, pads narration to word boundaries at the code-confirmed
-11-cell limit, extends hanging punctuation to English comma/period, and
-reflows the Media Mix pages by changing only their row operands. It rebuilds
-Mode 1 EDC/ECC and proves that only 18 reviewed absolute LBAs differ.
+Implementation status: the `mission0-v9` build now completes the static and
+raw-sector portions of this phase for 271 visible runs. They cover startup
+text, both copies of all seven opening profiles, mission-title subtitles, the
+opening Mission 0 bartender exchange, the complete ten-page opening narration,
+and all three Media Mix merchandise pages. The builder authenticates the
+source, uses same-size fullwidth Shift-JIS, preserves all narration and
+dialogue controls, uses lowercase Mission 0 glyphs, pads narration to word
+boundaries at the code-confirmed 11-cell limit, extends hanging punctuation to
+English comma/period, and reflows only confirmed row-addressed profile and
+Media Mix records. It rebuilds Mode 1 EDC/ECC and proves that 23 reviewed
+absolute LBAs differ when the original title is retained. The default clean-
+title variant changes 14 additional sectors: one palette sector and 13 visible
+title-tile sectors.
 
 The earlier build has an informal user report that it mostly works. Exact
 emulator, BIOS, save/load, audio, and failure details have not yet been recorded
@@ -118,6 +121,8 @@ in the project evidence, so they remain the human gate for v0.6. v0.5's
 13-cell wrapping specifically failed runtime review and is retained only as
 historical evidence. The Media Mix additions in v0.7 require their own
 screenshots because they use a different row-addressed text path.
+The v0.9 profile screens and antialiased title require the same screenshot
+gate; structural validation cannot prove live palette selection or timing.
 
 Before building a new renderer:
 
@@ -149,7 +154,7 @@ A release-quality path should satisfy:
 Prefer a minimal extension around the existing parser. Replacing the complete
 text engine increases risk to unrelated Japanese logic and resource loading.
 
-The v0.7 profile retains the v0.6 word-wrap formatter; it is not the compact-
+The v0.9 profile retains the v0.6 word-wrap formatter; it is not the compact-
 renderer milestone. It pads
 fullwidth spaces until the existing 11-cell cursor wraps naturally. Its small
 renderer hook only extends the original hanging-punctuation rule to fullwidth

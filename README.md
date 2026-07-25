@@ -6,17 +6,23 @@ It extracts the data track from the supplied CloneCD image, inventories the
 disc, finds Shift-JIS text, separates structured dialogue from auxiliary text,
 builds a translator-facing TSV, and creates a guarded playable test image.
 
-The current `mission0-v7` builder creates a **guarded fullwidth Shift-JIS
+The current `mission0-v9` builder creates a **guarded fullwidth Shift-JIS
 vertical slice**. It translates startup messages, all mission-title subtitles,
 the opening Mission 0 bartender conversation, and the complete ten-page opening
-narration. It also translates and reflows all three Media Mix merchandise
-pages. Mission 0 uses lowercase English. Narration pages are padded for
-word-aware wrapping at the renderer's code-confirmed 11-cell boundary, and a
-small hook adds fullwidth English comma and period to the original hanging
-punctuation behavior. It is not a complete English translation. A compact
-Latin renderer, complete dialogue control semantics, pointers, lengths, and
-relocation still require runtime engineering before broad automated
-reinsertion is safe.
+narration. It translates both copies of all seven opening criminal dossiers
+and reflows their overlapping name and charge lines. It also translates and
+reflows all three Media Mix merchandise pages. The default build replaces the
+original opening art and its seven-frame color cycle with an antialiased
+grayscale screen modeled on the animation logo, including the translated
+subtitle `ATTRIBUTE OF THE BEAST`. Its low palette indexes remain black so
+stray pixels from the original upper-border effect stay hidden;
+`--title-screen original` omits only those two cosmetic patches.
+Mission 0 uses lowercase English. Narration pages are padded for word-aware
+wrapping at the renderer's code-confirmed 11-cell boundary, and a small hook
+adds fullwidth English comma and period to the original hanging punctuation
+behavior. It is not a complete English translation. A compact Latin renderer,
+complete dialogue control semantics, pointers, lengths, and relocation still
+require runtime engineering before broad automated reinsertion is safe.
 
 Start with:
 
@@ -97,13 +103,20 @@ synthetic tests. It intentionally does not contain:
 
 You must supply your own legally obtained source image and generate local
 artifacts with the documented commands. `.gitignore` enforces these boundaries.
+The clean title is a compact four-bit coverage mask derived from approved
+replacement artwork, not an extracted game graphic. Its guarded source graphic
+and seven-frame palette bytes are read from the authenticated IMG during a
+build and are never stored in the repository. The portrait palette immediately
+before the title cycle remains untouched. Coverage is remapped into palette
+indexes 6 through 15; indexes 0 through 5 remain black to suppress residual
+upper-border pixels drawn by the original title routine.
 See [Data and rights policy](docs/data_policy.md) before contributing or making
 the repository public.
 
 ## Requirements
 
 - Python 3.11 or newer
-- Pillow 10 or newer, only for the PNG tile tools
+- Pillow 10 or newer, only for PNG tools and optional title-image importing
 
 Install the optional image dependency:
 
@@ -244,34 +257,49 @@ control a verified meaning. Do not invent a tagged-English syntax prematurely.
 
 ## Build the playable human-test image
 
-The v0.7 vertical slice translates 111 visible runs with the original 16x16
-fullwidth glyph path, applies two guarded renderer patches, and repositions 33
-Media Mix row operands:
+The v0.9 vertical slice translates 271 visible runs with the original 16x16
+fullwidth glyph path, applies two guarded renderer patches, and repositions 80
+row operands. By default it also generates replacements for the opening
+256-by-240 tile graphic and its isolated seven-frame palette cycle:
 
 - 23 original startup notice, menu, load, and memory runs;
 - 11 additional memory-state and recovery messages;
 - 10 mission-title subtitle occurrences;
 - 14 visible segments in the opening Mission 0 bartender exchange; and
-- all 10 pages of Sengoku's opening narration; and
+- all 10 pages of Sengoku's opening narration;
+- 160 fields covering both copies of all seven opening dossiers; and
 - 43 records across the video, novel, and music Media Mix pages.
 
 ```powershell
 python .\build_human_test_disc.py `
   "C:\path\to\Cyber City Oedo 808 - Kemono no Alignment (Japan).ccd" `
-  "C:\path\to\output\cyber_city_oedo_808_human_test_v0.7"
+  "C:\path\to\output\cyber_city_oedo_808_human_test_v0.9"
 ```
 
 The output directory must not already exist. Open the generated `.ccd` in a PC
 Engine CD emulator with a legally obtained Japanese System Card 3.0 BIOS.
 
+To build the same translation while preserving the original opening graphic:
+
+```powershell
+python .\build_human_test_disc.py `
+  "C:\path\to\Cyber City Oedo 808 - Kemono no Alignment (Japan).ccd" `
+  "C:\path\to\output\cyber_city_oedo_808_human_test_v0.9_original" `
+  --title-screen original
+```
+
 Automated build verification covers:
 
 - exact source CCD/IMG/SUB hashes;
-- exact source text at all 111 payload offsets;
+- exact source text at all 271 payload offsets;
 - equal-length fullwidth Shift-JIS replacements;
-- 33 guarded Media Mix row-operand changes;
+- 46 guarded opening-profile row-operand changes;
+- 34 guarded Media Mix row-operand changes;
 - Mode 1 EDC and ECC regeneration;
-- all-sector comparison proving only 18 expected absolute LBAs changed;
+- all-sector comparison proving exactly 23 LBAs change in original-title mode
+  or 37 LBAs in clean-title mode;
+- an independent SHA-256 guard over the complete original title block;
+- an independent SHA-256 guard over the seven original title palettes;
 - byte-identical CCD and SUB copies; and
 - an output manifest with before/after sector and image hashes.
 
@@ -280,7 +308,7 @@ bar exchange and most later interfaces remain Japanese. Follow
 [human_test_build.md](docs/human_test_build.md) for the tester checklist and
 distribution boundary.
 
-The v0.7 profile retains the v0.6 formatter that prevents words from crossing
+The v0.9 profile retains the v0.6 formatter that prevents words from crossing
 the code-confirmed 11-cell
 narration boundary by padding the prior line with fullwidth spaces. The
 renderer hook sends only fullwidth comma and period through the original
@@ -290,9 +318,17 @@ unchanged. This does not increase line width. More letters per line require an
 not collide with existing dialogue controls.
 
 The Media Mix pages use a separate row-addressed format. Their original
-consecutive 8-pixel rows overlap 16-pixel glyphs. The v0.7 data-only reflow
+consecutive 8-pixel rows overlap 16-pixel glyphs. The data-only reflow
 spaces visible rows two tile rows apart and moves cleared records to offscreen
-row `0x1E`; it does not change the shared dialogue renderer.
+row `0x1E`; it does not change the shared dialogue renderer. Visible target
+rows also increase in source-record order so the original top-to-bottom reveal
+animation is preserved. Every visible body line uses the same three-cell left
+margin, and each title is deliberately concise enough to remain on one line.
+
+Opening dossiers use a related `00 0C RR` row command. The v0.9 profile clears
+the redundant Japanese name line offscreen, moves the existing romanized name
+to row `0x04`, and spaces two-line charges, aliases, and bounties two tile rows
+apart. It applies the same guarded translation to both dossier banks.
 
 ## Graphics reconnaissance
 
@@ -316,6 +352,26 @@ python .\make_contact_sheet.py `
 
 The renderer uses grayscale palette indexes. Correct shapes with incorrect
 colors are expected because the runtime palette is not reconstructed.
+
+The opening screen is simpler than the later tile reconnaissance suggested:
+payload bytes `0x0000A000` through `0x000117FF` are 960 raw tiles already
+ordered as a 32-by-30 screen. `title_screen.py` generates a clean replacement
+without embedding source art. To edit and preview it independently:
+
+```powershell
+python .\title_screen.py .\local_artifacts\clean_title.bin
+python .\render_pce_tiles.py `
+  .\local_artifacts\clean_title.bin `
+  .\local_artifacts\clean_title.png `
+  --offset 0 --tiles 960 --tiles-wide 32 --scale 2
+```
+
+The default silhouette is stored in `title_logo_mask.py`. To replace it, pass a
+new master to `title_screen.py --source-image`; the importer proportionally
+fits and centers the image, then maps luminance 8 through 200 to four-bit edge
+coverage using the same documented process.
+The generator enforces the 256-by-240, four-bit, tile-major hardware format.
+Generated `.bin` and `.png` files are local artifacts, not repository content.
 
 ## Test after changing code
 
@@ -353,6 +409,9 @@ offsets, and source hashes before accepting the change.
 |-- validate_translation_inventory.py read-only edit/schema checks
 |-- analyze_text_slots.py            header-bounded resource-tail analysis
 |-- build_human_test_disc.py         authenticated playable test build
+|-- pce_graphics.py                  dependency-free PCE 4bpp tile codec
+|-- title_screen.py                  generated optional opening-title art
+|-- title_logo_mask.py               approved packed replacement silhouette
 |-- render_pce_tiles.py              PCE 4bpp diagnostic renderer
 |-- make_contact_sheet.py            labeled PNG aggregation
 |-- tests/

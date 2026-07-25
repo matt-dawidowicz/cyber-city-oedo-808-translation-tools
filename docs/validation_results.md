@@ -367,6 +367,125 @@ now has 29 passing tests. Human emulator screenshots remain required to
 confirm the page interpreter accepts offscreen row `1E` and that the proposed
 English wording is visually centered.
 
+### v0.8 optional opening-title graphic
+
+The `mission0-v8` profile preserves all 111 v0.7 text patches and all 35
+renderer/layout patches. It adds one independently selectable cosmetic patch:
+
+- `--title-screen clean` generates a 30,720-byte, 256-by-240 tile image;
+- `--title-screen original` omits the patch and never reads the title block;
+- the original block at payload `0x0000A000` has SHA-256
+  `74319e81bfeba32b385620a8bf32848e78da19271c87b6337decf4991a2fe5c4`;
+- the deterministic animation-logo-inspired block has SHA-256
+  `c9b0127e5d82834062c909db7f2285e24d6bde959b505bcffbf539bd4baa9593`;
+  and
+- its translated subtitle is exactly `ATTRIBUTE OF THE BEAST`.
+
+The codec round-trips all 960 generated tiles to the exact row-major source
+pixels. The standalone test suite has 36 passing tests, including tile
+encoding, title-layout identity, opt-out behavior, the 15-sector guard span,
+and cross-sector payload reading.
+
+The approved 1448-by-1086 master and embedded mask independently generated the
+same title asset hash. The conversion proportionally fits the source to
+256-by-192, centers it in the 256-by-240 frame, and applies luminance threshold
+48. This preserves the supplied composition while avoiding a build-time image
+dependency.
+
+Both complete authenticated variants built successfully. Original-title mode
+retained the exact v0.7 IMG identity:
+
+```text
+original title IMG
+1cdb81d72e77ab9bffb3bbbf225a3f976fff1fc598621317d50f621f208a25e9
+
+clean title IMG
+830b9155e2066621672973bf6bf7378c488f7b90b04e96f0be7691e1d2628d63
+```
+
+Original mode changed the same 18 absolute LBAs as v0.7. Clean mode changed 31:
+
+```text
+3593, 3594, 3602, 3603, 3610, 3611, 3612, 3613, 3614, 3615,
+3616, 3617, 3618, 3619, 3620, 3621, 3622, 4211, 4212, 4241,
+4337, 10282, 15753, 21214, 25690, 29903, 33930, 37669, 40376,
+40620, 40626
+```
+
+The clean patch guards relative sectors 20-34 and changes sectors 20-32. Its
+proportional fit leaves the final 32 pixel rows black, matching the source in
+sectors 33 and 34. The verifier and manifest distinguish guarded sectors from
+actually changed sectors. CCD and SUB hashes remain identical to the
+authenticated source in both variants.
+
+Structural and generated-preview validation passed. Emulator confirmation of
+the clean title's live palette, timing, and exact display framing remains the
+human test gate.
+
+### v0.9 opening profiles and antialiased title
+
+The `mission0-v9` profile preserves the v0.8 translation and adds:
+
+- 80 modeled dossier fields, each patched in the primary and repeated bank;
+- 160 same-size fullwidth text patches across all seven opening profiles;
+- 46 guarded `00 0C RR` row edits for names and two-line charges;
+- a four-bit title coverage mask whose packed SHA-256 is
+  `2d48dae1c9807a4a0d6dbe224ab191834aa40b3e1c4510437d6b20a5224dcbc7`;
+- a 30,720-byte title asset with SHA-256
+  `f8e91ad827040796ea63a80541e06f71159ca18121b10ab5128347ad6206e8f1`;
+  and
+- a generated 224-byte grayscale replacement for all seven original title
+  palette frames.
+
+The source palette cycle at payload `0x00002848` has SHA-256
+`650a61cee3f91e3c4b2a5159feb38800384daa2ad6ba48903f3596417fa1085b`.
+The separate portrait palette at `0x00002828` is outside the patch. The
+approved master is resized to 256 by 192 and centered; luminance 8 maps to
+black, 200 maps to white, and intermediate values retain four-bit coverage.
+Coverage is remapped to indexes 6 through 15. Indexes 0 through 5 are black,
+hiding residual upper-border pixels that the original title routine leaves
+active. All seven generated palette frames are byte-identical grayscale ramps,
+so the original color-cycle timing cannot tint antialiased edge indexes.
+
+The standalone suite now has 38 passing tests. New coverage verifies:
+
+- artifact-safe title indexes survive tile encoding and decoding;
+- the first six title-palette indexes remain black in all seven frames;
+- each palette word has equal red, green, and blue components;
+- all seven palette frames are identical;
+- all 80 profile fields generate two same-size source-guarded patches;
+- every profile's visible rows are unique and at least two tile rows apart;
+- every Media Mix page's visible rows increase by at least two in actual
+  source-record order, preserving the original top-to-bottom reveal;
+- all visible Media Mix body lines use a three-cell margin and one source
+  record per line; and
+- clean-title mode adds only relative palette sector `5` and title sectors
+  `20` through `34` to the v0.9 guarded sector set.
+
+Both authenticated variants completed structural and whole-image validation:
+
+```text
+original title IMG
+dd7843425d241045c5ae9077b9d5d1060714ed704f06b26fe2c54f04a7dc6239
+
+antialiased title IMG
+78248c4f0306d81867b94a722e28e566fe92de333bc217c5368a70e7b4880562
+```
+
+Original-title mode changed 23 absolute LBAs:
+
+```text
+3593, 3594, 3602, 3603, 3655, 3656, 3657, 3783, 3784, 4211,
+4212, 4241, 4337, 10282, 15753, 21214, 25690, 29903, 33930,
+37669, 40376, 40620, 40626
+```
+
+Clean-title mode additionally changed LBA `3595` and LBAs `3610` through
+`3622`, for 37 changed sectors and 39 guarded sectors. CCD and SUB hashes
+remain byte-identical to the authenticated source in both variants. Emulator
+screenshots of all seven profiles and the live antialiased title remain the
+manual release gate.
+
 ## Dialogue regeneration
 
 The documented `extract_dialogue.py` reproduced:
