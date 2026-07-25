@@ -23,43 +23,7 @@ import pathlib
 from PIL import Image
 
 
-def decode_tile(tile: bytes) -> list[int]:
-    """Decode one raw PC Engine tile into row-major palette indexes.
-
-    Args:
-        tile: Exactly 32 bytes in the PC Engine 4bpp planar layout.
-
-    Returns:
-        Sixty-four integers in row-major pixel order. Each value is a palette
-        index from 0 through 15.
-
-    Raises:
-        ValueError: If ``tile`` is not exactly 32 bytes.
-
-    Design Decisions:
-        For each row, bytes at offsets ``0/1`` provide bitplanes 0/1 and bytes
-        at ``16/17`` provide bitplanes 2/3. Bits are consumed most-significant
-        first because bit 7 represents the leftmost pixel.
-    """
-
-    if len(tile) != 32:
-        raise ValueError("A PC Engine 4bpp tile must be exactly 32 bytes")
-    pixels: list[int] = []
-    for y in range(8):
-        planes = (
-            tile[y * 2],
-            tile[y * 2 + 1],
-            tile[16 + y * 2],
-            tile[17 + y * 2],
-        )
-        for x in range(8):
-            mask = 0x80 >> x
-            value = sum(
-                ((plane & mask) != 0) << bit
-                for bit, plane in enumerate(planes)
-            )
-            pixels.append(value)
-    return pixels
+from pce_graphics import decode_tile
 
 
 def grayscale_palette() -> list[int]:

@@ -319,6 +319,103 @@ def mode1_integrity_matches(raw_sector: bytes | bytearray) -> bool:
     return rebuild_mode1_sector(raw_sector) == bytes(raw_sector)
 
 
+def read_payload_range(
+    image_path: pathlib.Path,
+    offset: int,
+    size: int,
+    *,
+    start_lba: int,
+    sector_count: int,
+) -> bytes:
+    """Read a validated byte range from raw Mode 1 payload sectors.
+
+    Args:
+        image_path: Raw CloneCD IMG containing the payload.
+        offset: Byte offset relative to payload sector zero.
+        size: Positive number of payload bytes to return.
+        start_lba: Absolute IMG sector corresponding to payload sector zero.
+        sector_count: Number of valid Mode 1 payload sectors.
+
+    Returns:
+        Exactly ``size`` bytes assembled across one or more user-data areas.
+
+    Raises:
+        OSError: If image metadata, seeks, or reads fail.
+        ValueError: If arguments, bounds, image size, sector structure, or
+            original EDC/ECC fields are invalid.
+
+    Side Effects:
+        Opens and reads ``image_path`` without modifying it.
+
+    Design Decisions:
+        Source bytes used as guards for large generated patches must come from
+        the authenticated disc rather than being redistributed in this
+        repository. Verifying every touched raw sector retains the same trust
+        boundary used by ``apply_payload_patches``.
+    """
+
+    if offset < 0:
+        raise ValueError("payload offset must be non-negative")
+    if size <= 0:
+        raise ValueError("payload read size must be positive")
+    if start_lba < 0:
+        raise ValueError("start_lba must be non-negative")
+    if sector_count <= 0:
+        raise ValueError("sector_count must be positive")
+    payload_size = sector_count * SECTOR_SIZE
+    if offset + size > payload_size:
+        raise ValueError("payload range ends beyond the available sectors")
+
+    required_size = (start_lba + sector_count) * RAW_SECTOR_SIZE
+    image_size = image_path.stat().st_size
+    if image_size < required_size:
+        raise ValueError(
+            f"IMG is too short: need at least {required_size:,} bytes, "
+            f"found {image_size:,}"
+        )
+
+    first_sector = offset // SECTOR_SIZE
+    last_sector = (offset + size - 1) // SECTOR_SIZE
+    result = bytearray()
+    with image_path.open("rb") as image:
+        for relative_sector in range(first_sector, last_sector + 1):
+            absolute_lba = start_lba + relative_sector
+            image.seek(absolute_lba * RAW_SECTOR_SIZE)
+            raw = image.read(RAW_SECTOR_SIZE)
+            if len(raw) != RAW_SECTOR_SIZE:
+                raise ValueError(
+                    f"short read at absolute LBA {absolute_lba}"
+                )
+            validate_mode1_structure(raw)
+            if not mode1_integrity_matches(raw):
+                raise ValueError(
+                    f"original EDC/ECC mismatch at absolute LBA "
+                    f"{absolute_lba}"
+                )
+
+            sector_payload_start = relative_sector * SECTOR_SIZE
+            overlap_start = max(offset, sector_payload_start)
+            overlap_end = min(
+                offset + size,
+                sector_payload_start + SECTOR_SIZE,
+            )
+            raw_start = (
+                MODE1_USER_DATA_OFFSET
+                + overlap_start
+                - sector_payload_start
+            )
+            raw_end = (
+                MODE1_USER_DATA_OFFSET
+                + overlap_end
+                - sector_payload_start
+            )
+            result.extend(raw[raw_start:raw_end])
+
+    if len(result) != size:
+        raise AssertionError("payload range reader returned the wrong size")
+    return bytes(result)
+
+
 def _validate_patch_set(
     patches: Iterable[PayloadPatch],
     *,

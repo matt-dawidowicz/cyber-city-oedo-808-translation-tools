@@ -109,16 +109,55 @@ font path produces 16-pixel-tall glyphs. Because a tile row is 8 pixels,
 consecutive source rows overlap by half a glyph. This is an original
 data-layout property, not screenshot blur and not a flattened graphic.
 
-The v0.7 profile treats each command and text run as one
+The profile treats each command and text run as one
 `InformationScreenLine`. Visible English is placed on rows at least two apart.
-Long lines may reuse the original 30-character decorative-box records.
 Superseded records remain the same byte size, contain only fullwidth spaces,
 and are assigned to offscreen row `1E`. The original opcode, null terminator,
 record order, page boundaries, and all non-row control bytes remain unchanged.
 
+Record order is also animation order. Visible `display_row` values must rise by
+at least two in tuple/source order, not merely form a valid set after sorting.
+When one late decorative record was moved above earlier records, the final
+layout was readable but its lines appeared out of order. The English layout
+therefore keeps each visible item in one original record, shortens wording
+where necessary, and gives every body line the same three-cell left margin.
+This keeps alignment, reveal order, and visual order consistent without
+changing record capacity.
+
 This method is specific to the Media Mix page interpreter. It does not increase
 the dialogue renderer's 11-cell width and must not be generalized to dialogue
 without runtime evidence.
+
+## Opening profile records
+
+Opening dossiers use a parallel row-addressed structure:
+
+```text
+00 0C RR  [fullwidth Shift-JIS text]  00
+```
+
+The text is still null-terminated and `RR` is still an 8-pixel background-map
+row, but opcode `00 0C` identifies the dossier interpreter rather than the
+Media Mix page interpreter. Record numbers, separators, portrait selection, and
+other screen controls occur outside the translated string ranges.
+
+Seven profiles appear twice at different payload offsets. Each
+`OpeningProfileField` therefore stores both offsets and requires both guarded
+copies to be patched. Most source strings are identical. Gogul's alias is the
+documented exception: the primary bank contains a longer alias while the
+repeated bank contains only `ゴーグル`. The model accepts that difference
+explicitly and never searches approximately.
+
+The Japanese name and romanized name occupy rows `04` and `05`, which overlap
+because the glyph is 16 pixels tall. The English layout clears the Japanese
+line on offscreen row `1E` and moves the romanized line to row `04`. Profiles
+with a charge continuation use visible rows `14`, `16`, `18`, and `1A` for the
+charge, continuation, alias, and bounty. Profiles without a continuation keep
+the original even rows.
+
+Every replacement remains fullwidth Shift-JIS and exactly matches its source
+byte length. Short English is padded with fullwidth spaces; record opcodes,
+null terminators, order, portrait data, and unmodified fields remain unchanged.
 
 ## Extraction-confidence labels
 

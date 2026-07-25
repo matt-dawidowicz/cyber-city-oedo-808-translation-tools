@@ -46,6 +46,7 @@ for every same-size replacement.
 - authenticate the complete source set;
 - copy before modification;
 - define the limited fullwidth text profile;
+- select or omit the generated cosmetic title patch;
 - compare all raw sectors;
 - preserve CCD and SUB data; and
 - write a machine-readable manifest.
@@ -60,6 +61,11 @@ layout tables would allow them to drift.
 Do not move source authentication into the low-level sector module. Keeping
 those layers separate allows synthetic sector tests without weakening the
 release-specific guardrails.
+
+`read_payload_range()` is the one game-agnostic exception needed by large
+generated patches. It validates raw sector structure and EDC/ECC while
+returning only a requested payload slice. The high-level builder still owns the
+release hash, title-block hash, source offset, and interpretation.
 
 ### Broad discovery
 
@@ -107,6 +113,31 @@ run them after any editor or spreadsheet.
 `render_pce_tiles.py` and `make_contact_sheet.py` are independent from text
 extraction. They share the payload coordinate model but make no claim that an
 offset is a font or tile bank.
+
+`pce_graphics.py` is the dependency-free hardware codec shared by visual
+diagnostics and generated art. It knows only the 32-byte planar representation
+of one tile.
+
+`title_screen.py` owns the optional opening graphic. It generates a complete
+256-by-240 palette-index image, encodes its 960 tiles in screen order, and
+generates the replacement seven-frame grayscale palette cycle. The generator
+reserves indexes 0 through 5 as black and remaps logo coverage into indexes 6
+through 15; this hides residual upper-border pixels from the original routine
+without disabling its timing. It does not contain original game art, know disc
+offsets, or decide whether the patch is enabled. `title_logo_mask.py` stores
+only the compressed four-bit coverage mask derived from approved replacement
+artwork. These separations allow downstream projects to:
+
+- use the exact approved reference composition;
+- import another master image and retain all builder guardrails;
+- replace the generator with another same-size asset; or
+- select `--title-screen original` and keep every translation patch.
+
+Do not place the source game title block in either module. The builder reads it
+and the original 224-byte title palette cycle from the authenticated IMG at
+runtime so expected bytes remain exact patch guards without redistributing
+game data. The portrait palette immediately before the cycle is deliberately
+outside the optional patch.
 
 ### Executable-code diagnostics
 
@@ -313,6 +344,8 @@ Fast and redistributable:
 - stale-integrity detection and repair;
 - guarded cross-sector payload patching;
 - fullwidth startup-profile encoding and capacity;
+- two-bank opening-profile coverage and non-overlapping row layout;
+- four-bit title coverage and stable grayscale palette frames;
 - fixed-cell English word wrapping and invalid-input rejection;
 - invalid parser-bound validation;
 - docstrings on every documentable Python syntax node;

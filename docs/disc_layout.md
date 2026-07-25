@@ -113,8 +113,8 @@ LBAs without changing:
 
 `cdrom_mode1.py` now implements this operation for guarded same-size payload
 patches. `build_human_test_disc.py` uses it only on an authenticated copy,
-rebuilds the two changed startup sectors, compares the complete source/output
-images, and preserves the CCD and SUB byte-for-byte.
+rebuilds every affected sector, compares the complete source/output images,
+and preserves the CCD and SUB byte-for-byte.
 
 This does not authorize general reinsertion. The current profile does not
 relocate data, update pointers, or alter dialogue controls.
@@ -134,6 +134,52 @@ The extracted payload has a valid PC Engine CD header. The observed fields are:
 
 `SAMPLE PROGRAM` appears to be a development placeholder and is not evidence of
 a bad dump.
+
+### Opening-title graphic
+
+The first visible title is a complete raw background image rather than a
+Shift-JIS string or hardcoded tilemap. Its confirmed payload geometry is:
+
+| Field | Value |
+|---|---|
+| start offset | `0x0000A000` |
+| exclusive end | `0x00011800` |
+| byte size | `0x7800` (30,720) |
+| tile count | 960 |
+| tile order | 32 columns by 30 rows |
+| pixel size | 256 by 240 |
+| tile encoding | PC Engine 8-by-8 planar 4bpp |
+| source SHA-256 | `74319e81bfeba32b385620a8bf32848e78da19271c87b6337decf4991a2fe5c4` |
+
+The title's seven 16-color animation palettes occupy payload
+`0x00002848` through `0x00002927` (224 bytes), with SHA-256
+`650a61cee3f91e3c4b2a5159feb38800384daa2ad6ba48903f3596417fa1085b`.
+The clean-title variant replaces all seven frames with one repeated grayscale
+ramp so four-bit edge coverage remains stable. Palette indexes 0 through 5 are
+black because the original title routine leaves a few low-index pixels active
+in the upper border; clean-logo coverage is remapped into indexes 6 through
+15. The distinct 32-byte portrait palette at `0x00002828` through
+`0x00002847` is not part of the patch.
+
+The boot program transfers this ready-to-display block without requiring a
+new tilemap. The optional clean-title patch can therefore replace the complete
+same-size range while preserving boot code, display dimensions, and disc
+geometry. `title_screen.py` generates the replacement; no original graphic
+bytes are stored in the repository.
+
+### Opening profile records
+
+The seven opening dossiers occupy two resource copies:
+
+| Copy | First visible record | Last visible record |
+|---|---:|---:|
+| primary | `0x00020BF1` | `0x0002180D` |
+| repeated | `0x00060B8D` | `0x00061783` |
+
+Each visible line begins with `00 0C RR`, where `RR` is an 8-pixel tile-row
+operand, and ends with a null byte. The v0.9 builder changes 160 same-size text
+runs and 46 row commands across these banks. It does not alter the adjacent
+portrait data, record order, separators, or profile-selection controls.
 
 ## Mission analysis banks
 

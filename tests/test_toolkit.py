@@ -6,6 +6,7 @@ edit and do not require redistributing or copying the game image.
 
 from __future__ import annotations
 
+import hashlib
 import pathlib
 import sys
 import tempfile
@@ -27,8 +28,16 @@ from build_human_test_disc import (  # noqa: E402
     MISSION0_PROLOGUE_PATCHES,
     MISSION0_RENDERER_PATCHES,
     MISSION_TITLE_PATCHES,
+    OPENING_PROFILE_FIELDS,
+    OPENING_PROFILE_LAYOUT_PATCHES,
+    OPENING_PROFILE_TEXT_PATCHES,
     PROLOGUE_WRAP_WIDTH,
+    TITLE_ASSET_BYTES,
+    TITLE_PALETTE_OFFSET,
+    TITLE_SCREEN_OFFSET,
     ascii_to_fullwidth,
+    optional_title_screen_patches,
+    profile_relative_sectors,
     wrap_ascii_text,
 )
 from cdrom_mode1 import (  # noqa: E402
@@ -37,6 +46,7 @@ from cdrom_mode1 import (  # noqa: E402
     apply_payload_patches,
     compute_edc,
     mode1_integrity_matches,
+    read_payload_range,
     rebuild_mode1_sector,
 )
 from extract_auxiliary_text import merge_ranges  # noqa: E402
@@ -55,7 +65,23 @@ from game_layout import (  # noqa: E402
     bank_for_offset,
     payload_offset,
 )
-from render_pce_tiles import decode_tile  # noqa: E402
+from pce_graphics import decode_tile, encode_tile  # noqa: E402
+from title_screen import (  # noqa: E402
+    BACKGROUND_INDEX,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    TITLE_PALETTE_BYTES,
+    TITLE_PALETTE_COLORS,
+    TITLE_PALETTE_LEVELS,
+    TITLE_PALETTE_FRAMES,
+    TITLE_FIRST_VISIBLE_INDEX,
+    TITLE_SUBTITLE,
+    build_clean_title_asset,
+    build_clean_title_pixels,
+    build_grayscale_title_palette_cycle,
+    encode_title_pixels,
+    title_palette_index,
+)
 
 
 def synthetic_mode1_sector(payload: bytes) -> bytes:
@@ -156,7 +182,7 @@ class RangeTests(unittest.TestCase):
 
 
 class TileDecoderTests(unittest.TestCase):
-    """Verify PC Engine planar tile decoding."""
+    """Verify PC Engine planar tile encoding and decoding."""
 
     def test_four_bitplanes_form_palette_index(self) -> None:
         """Combine the four high bits into palette index 15 at pixel zero."""
@@ -167,6 +193,147 @@ class TileDecoderTests(unittest.TestCase):
         self.assertEqual(len(pixels), 64)
         self.assertEqual(pixels[0], 15)
         self.assertTrue(all(pixel == 0 for pixel in pixels[1:]))
+
+    def test_encoder_is_the_exact_inverse_of_decoder(self) -> None:
+        """Round-trip all four bitplanes without losing pixel indexes."""
+
+        pixels = [(index * 7) % 16 for index in range(64)]
+        encoded = encode_tile(pixels)
+        self.assertEqual(len(encoded), 32)
+        self.assertEqual(decode_tile(encoded), pixels)
+
+    def test_encoder_rejects_invalid_pixels(self) -> None:
+        """Reject malformed tile dimensions and palette indexes."""
+
+        with self.assertRaises(ValueError):
+            encode_tile([0] * 63)
+        with self.assertRaises(ValueError):
+            encode_tile([0] * 63 + [16])
+
+
+class TitleScreenTests(unittest.TestCase):
+    """Verify the generated title asset and optional profile boundary."""
+
+    def test_generated_asset_is_stable_and_decodes_losslessly(self) -> None:
+        """Keep the reviewed 256-by-240 title layout byte-exact."""
+
+        pixels = build_clean_title_pixels()
+        asset = build_clean_title_asset()
+        self.assertEqual(len(pixels), SCREEN_WIDTH * SCREEN_HEIGHT)
+        self.assertEqual(len(asset), TITLE_ASSET_BYTES)
+        self.assertEqual(
+            hashlib.sha256(asset).hexdigest(),
+            "f8e91ad827040796ea63a80541e06f71"
+            "159ca18121b10ab5128347ad6206e8f1",
+        )
+
+        decoded = [BACKGROUND_INDEX] * len(pixels)
+        for tile_index in range(len(asset) // 32):
+            tile = decode_tile(
+                asset[tile_index * 32:tile_index * 32 + 32]
+            )
+            tile_x = tile_index % (SCREEN_WIDTH // 8)
+            tile_y = tile_index // (SCREEN_WIDTH // 8)
+            for pixel_y in range(8):
+                destination = (
+                    (tile_y * 8 + pixel_y) * SCREEN_WIDTH
+                    + tile_x * 8
+                )
+                source = pixel_y * 8
+                decoded[destination:destination + 8] = (
+                    tile[source:source + 8]
+                )
+        self.assertEqual(decoded, pixels)
+        self.assertEqual(pixels[0], BACKGROUND_INDEX)
+        self.assertEqual(pixels[-1], BACKGROUND_INDEX)
+
+    def test_embedded_mask_retains_approved_title_identity(self) -> None:
+        """Keep the reference-derived silhouette and subtitle explicit."""
+
+        self.assertEqual(TITLE_SUBTITLE, "ATTRIBUTE OF THE BEAST")
+        pixels = build_clean_title_pixels()
+        self.assertEqual(
+            set(pixels),
+            {BACKGROUND_INDEX, *range(TITLE_FIRST_VISIBLE_INDEX, 16)},
+        )
+        self.assertEqual(
+            sum(pixel != BACKGROUND_INDEX for pixel in pixels),
+            10959,
+        )
+        self.assertEqual(title_palette_index(0), BACKGROUND_INDEX)
+        self.assertEqual(title_palette_index(15), 15)
+        with self.assertRaises(ValueError):
+            title_palette_index(16)
+        with self.assertRaises(ValueError):
+            encode_title_pixels(pixels[:-1])
+        invalid = list(pixels)
+        invalid[0] = 16
+        with self.assertRaises(ValueError):
+            encode_title_pixels(invalid)
+
+    def test_grayscale_palette_replaces_every_color_cycle_frame(self) -> None:
+        """Keep antialiased indexes stable throughout title animation."""
+
+        palette = build_grayscale_title_palette_cycle()
+        self.assertEqual(len(palette), TITLE_PALETTE_BYTES)
+        frame_bytes = TITLE_PALETTE_COLORS * 2
+        frames = [
+            palette[offset:offset + frame_bytes]
+            for offset in range(0, len(palette), frame_bytes)
+        ]
+        self.assertEqual(len(frames), TITLE_PALETTE_FRAMES)
+        self.assertTrue(all(frame == frames[0] for frame in frames))
+        words = [
+            int.from_bytes(frames[0][offset:offset + 2], "little")
+            for offset in range(0, frame_bytes, 2)
+        ]
+        self.assertEqual(words[0], 0x000)
+        self.assertEqual(words[-1], 0x1FF)
+        self.assertEqual(words[:TITLE_FIRST_VISIBLE_INDEX], [0] * 6)
+        self.assertEqual(
+            words,
+            [level * 0x49 for level in TITLE_PALETTE_LEVELS],
+        )
+        for word in words:
+            red = word & 0x07
+            green = (word >> 3) & 0x07
+            blue = (word >> 6) & 0x07
+            self.assertEqual(red, green)
+            self.assertEqual(green, blue)
+
+    def test_original_mode_returns_no_cosmetic_patch(self) -> None:
+        """Omit title reads and changes when downstream builders opt out."""
+
+        nonexistent = pathlib.Path("source-image-is-not-needed.img")
+        self.assertEqual(
+            optional_title_screen_patches(nonexistent, "original"),
+            (),
+        )
+        with self.assertRaises(ValueError):
+            optional_title_screen_patches(nonexistent, "unsupported")
+
+    def test_title_mode_changes_only_the_expected_sector_span(self) -> None:
+        """Add the palette sector and sectors 20-34 in clean mode."""
+
+        original = set(profile_relative_sectors("original"))
+        clean = set(profile_relative_sectors("clean"))
+        title_first = TITLE_SCREEN_OFFSET // SECTOR_SIZE
+        title_last = (
+            TITLE_SCREEN_OFFSET + TITLE_ASSET_BYTES - 1
+        ) // SECTOR_SIZE
+        palette_first = TITLE_PALETTE_OFFSET // SECTOR_SIZE
+        palette_last = (
+            TITLE_PALETTE_OFFSET + TITLE_PALETTE_BYTES - 1
+        ) // SECTOR_SIZE
+        self.assertEqual(len(original), 23)
+        self.assertEqual(len(clean), 39)
+        self.assertEqual(
+            clean - original,
+            (
+                set(range(palette_first, palette_last + 1))
+                | set(range(title_first, title_last + 1))
+            ),
+        )
 
 
 class Mode1ExtractionTests(unittest.TestCase):
@@ -270,6 +437,33 @@ class Mode1RebuildTests(unittest.TestCase):
             b"Z" * 8,
         )
 
+    def test_payload_reader_validates_and_joins_sector_data(self) -> None:
+        """Read a cross-sector range without exposing raw-sector metadata."""
+
+        first_payload = bytes(index % 251 for index in range(SECTOR_SIZE))
+        second_payload = bytes(
+            (index + 17) % 251
+            for index in range(SECTOR_SIZE)
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            image = pathlib.Path(temporary_directory) / "synthetic.img"
+            image.write_bytes(
+                synthetic_mode1_sector(first_payload)
+                + synthetic_mode1_sector(second_payload)
+            )
+            actual = read_payload_range(
+                image,
+                SECTOR_SIZE - 5,
+                12,
+                start_lba=0,
+                sector_count=2,
+            )
+
+        self.assertEqual(
+            actual,
+            first_payload[-5:] + second_payload[:7],
+        )
+
 
 class HumanTestProfileTests(unittest.TestCase):
     """Verify the startup and Mission 0 human-test profiles."""
@@ -293,8 +487,8 @@ class HumanTestProfileTests(unittest.TestCase):
             )
         self.assertEqual(sectors, {3, 4})
 
-    def test_v7_profile_is_same_size_and_in_expected_sectors(self) -> None:
-        """Keep all v0.7 replacements within reviewed payload sectors."""
+    def test_v9_profile_is_same_size_and_in_expected_sectors(self) -> None:
+        """Keep all v0.9 text replacements within reviewed payload sectors."""
 
         sectors: set[int] = set()
         for text_patch in HUMAN_TEST_PATCHES:
@@ -310,7 +504,7 @@ class HumanTestProfileTests(unittest.TestCase):
             sectors.update(
                 range(first_sector, last_sector + 1)
             )
-        self.assertEqual(len(HUMAN_TEST_PATCHES), 111)
+        self.assertEqual(len(HUMAN_TEST_PATCHES), 271)
         self.assertEqual(
             sectors,
             {
@@ -318,6 +512,11 @@ class HumanTestProfileTests(unittest.TestCase):
                 4,
                 12,
                 13,
+                65,
+                66,
+                67,
+                193,
+                194,
                 651,
                 747,
                 6692,
@@ -332,6 +531,47 @@ class HumanTestProfileTests(unittest.TestCase):
                 37036,
             },
         )
+
+    def test_opening_profiles_cover_both_banks_without_overlap(self) -> None:
+        """Translate and reflow every visible field in all seven dossiers."""
+
+        self.assertEqual(len(OPENING_PROFILE_FIELDS), 80)
+        self.assertEqual(len(OPENING_PROFILE_TEXT_PATCHES), 160)
+        self.assertEqual(len(OPENING_PROFILE_LAYOUT_PATCHES), 46)
+        self.assertEqual(
+            {field.profile for field in OPENING_PROFILE_FIELDS},
+            {
+                "chris",
+                "kenichi",
+                "jun",
+                "manny",
+                "sanemaro",
+                "benten",
+                "gogul",
+            },
+        )
+        for field in OPENING_PROFILE_FIELDS:
+            self.assertEqual(len(field.offsets), 2)
+            for patch in field.to_text_patches():
+                payload_patch = patch.to_payload_patch()
+                self.assertEqual(
+                    len(payload_patch.expected),
+                    len(payload_patch.replacement),
+                )
+
+        for profile in {field.profile for field in OPENING_PROFILE_FIELDS}:
+            rows = sorted(
+                field.display_row
+                for field in OPENING_PROFILE_FIELDS
+                if field.profile == profile and field.english
+            )
+            self.assertEqual(len(rows), len(set(rows)))
+            self.assertTrue(
+                all(
+                    next_row - row >= 2
+                    for row, next_row in zip(rows, rows[1:])
+                )
+            )
 
     def test_v7_profile_does_not_overwrite_known_controls(self) -> None:
         """Protect title, line-break, and dialogue-terminator bytes."""
@@ -383,7 +623,7 @@ class HumanTestProfileTests(unittest.TestCase):
             },
             {"video", "novel", "music"},
         )
-        self.assertEqual(len(INFORMATION_SCREEN_LAYOUT_PATCHES), 33)
+        self.assertEqual(len(INFORMATION_SCREEN_LAYOUT_PATCHES), 34)
         for line in INFORMATION_SCREEN_LINES:
             text_patch = line.to_text_patch().to_payload_patch()
             self.assertEqual(
@@ -396,20 +636,36 @@ class HumanTestProfileTests(unittest.TestCase):
             )
 
     def test_information_screen_visible_rows_do_not_overlap(self) -> None:
-        """Separate every visible 16-pixel line by two tile rows."""
+        """Reveal consistently aligned lines without vertical overlap."""
 
         for screen in {"video", "novel", "music"}:
-            rows = sorted(
-                line.display_row
+            visible_lines = [
+                line
                 for line in INFORMATION_SCREEN_LINES
                 if line.screen == screen and line.english
-            )
-            self.assertTrue(all(row <= 0x16 for row in rows))
+            ]
+            rows = [
+                line.display_row
+                for line in visible_lines
+            ]
+            self.assertTrue(all(row <= 0x18 for row in rows))
             self.assertEqual(len(rows), len(set(rows)))
             self.assertTrue(
                 all(
                     next_row - row >= 2
                     for row, next_row in zip(rows, rows[1:])
+                )
+            )
+            body_lines = [
+                line
+                for line in visible_lines
+                if line.display_row >= 0x08
+            ]
+            self.assertTrue(
+                all(
+                    line.english.startswith("   ")
+                    and not line.english.startswith("    ")
+                    for line in body_lines
                 )
             )
 
