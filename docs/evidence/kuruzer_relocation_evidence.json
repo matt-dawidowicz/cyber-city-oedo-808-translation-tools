@@ -1,0 +1,50 @@
+{
+  "status": "relocation_not_authorized",
+  "source_payload_sha256": "0817cfa03fedc7b33c52f9bd9423b41480fa385cff3693262732b8768e7ca223",
+  "resource": {
+    "name": "KURUZER",
+    "start": "0x00175800",
+    "end": "0x00179800",
+    "start_relative_sector": 747,
+    "next_resource": "MAYA01",
+    "next_resource_relative_sector": 755,
+    "bytes": 16384,
+    "sha256": "93299df77c6a26616c7dc4916c8e28454a0d0d943e11e02c32d1e28c9923b9c0"
+  },
+  "opening_narration": {
+    "marker_offset": "0x00175828",
+    "resource_relative_offset": "0x0028",
+    "end_offset_exclusive": "0x00175AE0",
+    "bytes": 696,
+    "sha256": "93afb245ad8ee5bf0ac1f1e8c712e6c35a4dd3b910725f88df3bb58145dbdc71",
+    "controls": [
+      "0x40",
+      "0x40",
+      "0x40",
+      "0x40",
+      "0x40",
+      "0x40",
+      "0x40",
+      "0x40",
+      "0x40"
+    ]
+  },
+  "bounded_u16_search": {
+    "pointer_base": "0x00175800",
+    "encoded_target": "0x0028",
+    "search_start": "0x00175800",
+    "search_end": "0x00179800",
+    "byte_aligned_candidates": [
+      "0x001766FD",
+      "0x00178E73"
+    ],
+    "word_aligned_candidates": []
+  },
+  "conclusion": [
+    "The narration begins inline at KURUZER + 0x28.",
+    "The two unaligned byte matches are candidates only and occur in opaque data.",
+    "No aligned pointer table or runtime pointer to the marker is proven.",
+    "The eight-sector named region contains other dialogue and opaque data.",
+    "Do not activate relocation until the entry path and destination ownership are proven."
+  ]
+}

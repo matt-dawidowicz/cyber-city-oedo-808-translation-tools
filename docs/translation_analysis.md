@@ -4,6 +4,9 @@
 > The current repository now includes a structurally verified fullwidth
 > Mission 0 vertical slice and Mode 1 EDC/ECC rebuilding. See
 > `human_test_build.md` and `validation_results.md` for the newer milestone.
+> The later compact-renderer experiment is frozen at commit `3abaf64` and is
+> excluded from the playable build. The active direction is stock-renderer
+> paging plus pointer-aware relocation.
 
 ## Verdict
 

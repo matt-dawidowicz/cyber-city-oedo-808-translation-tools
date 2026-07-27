@@ -117,7 +117,10 @@ rebuilds every affected sector, compares the complete source/output images,
 and preserves the CCD and SUB byte-for-byte.
 
 This does not authorize general reinsertion. The current profile does not
-relocate data, update pointers, or alter dialogue controls.
+relocate data, update pointers, alter dialogue controls, or patch renderer
+code. `dialogue_relocation.py` can construct guarded relocation patches only
+after callers supply proven pointer sites, exact owned destination bytes, and
+the complete loaded-resource extent. It is not active in the playable build.
 
 ## PCE-CD boot header observations
 

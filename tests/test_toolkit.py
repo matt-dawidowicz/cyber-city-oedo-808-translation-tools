@@ -21,6 +21,7 @@ sys.path.insert(0, str(TOOLKIT_DIR))
 from analyze_text_slots import looks_like_resource_name  # noqa: E402
 from build_human_test_disc import (  # noqa: E402
     BOOT_MENU_PATCHES,
+    HUMAN_TEST_BINARY_PATCHES,
     HUMAN_TEST_PATCHES,
     INFORMATION_HIDDEN_ROW,
     INFORMATION_SCREEN_LAYOUT_PATCHES,
@@ -48,6 +49,18 @@ from cdrom_mode1 import (  # noqa: E402
     mode1_integrity_matches,
     read_payload_range,
     rebuild_mode1_sector,
+)
+from dialogue_relocation import (  # noqa: E402
+    DIALOGUE_MARKER,
+    DialoguePage,
+    DialogueRelocationPlan,
+    PageBreakPlan,
+    PageGeometry,
+    PointerSite,
+    RelocationArea,
+    ascii_to_fullwidth_sjis,
+    find_u16_pointer_candidates,
+    wrap_dialogue_page,
 )
 from extract_auxiliary_text import merge_ranges  # noqa: E402
 from extract_dialogue import parse_record  # noqa: E402
@@ -325,8 +338,8 @@ class TitleScreenTests(unittest.TestCase):
         palette_last = (
             TITLE_PALETTE_OFFSET + TITLE_PALETTE_BYTES - 1
         ) // SECTOR_SIZE
-        self.assertEqual(len(original), 23)
-        self.assertEqual(len(clean), 39)
+        self.assertEqual(len(original), 21)
+        self.assertEqual(len(clean), 37)
         self.assertEqual(
             clean - original,
             (
@@ -465,6 +478,220 @@ class Mode1RebuildTests(unittest.TestCase):
         )
 
 
+class DialogueRelocationTests(unittest.TestCase):
+    """Verify stock-renderer paging and guarded relocation contracts."""
+
+    @staticmethod
+    def page_only_source() -> bytes:
+        """Return a synthetic two-page Shift-JIS dialogue record."""
+
+        return (
+            DIALOGUE_MARKER
+            + "一頁".encode("shift_jis")
+            + b"\x40"
+            + "二頁".encode("shift_jis")
+            + b"\x00"
+        )
+
+    def test_page_plan_uses_stock_fullwidth_and_existing_control(
+        self,
+    ) -> None:
+        """Compile explicit lines without introducing a renderer escape."""
+
+        geometry = PageGeometry(width=11, maximum_lines=3)
+        plan = PageBreakPlan(
+            pages=(
+                DialoguePage(("Accurate", "English.")),
+                wrap_dialogue_page("Second page.", geometry),
+            ),
+            source_page_breaks=1,
+            geometry=geometry,
+        )
+        compiled = plan.compile_record(self.page_only_source())
+        parsed = parse_record(compiled, len(DIALOGUE_MARKER))
+
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed.controls, (0x40,))
+        self.assertIn(
+            ascii_to_fullwidth_sjis("Accurate"),
+            compiled,
+        )
+        self.assertNotIn(b"\xFF", compiled)
+        self.assertNotIn(b"\xFE", compiled)
+
+    def test_added_pages_require_record_specific_opt_in(self) -> None:
+        """Reject silent paging changes but allow an explicit expansion."""
+
+        pages = (
+            DialoguePage(("One.",)),
+            DialoguePage(("Two.",)),
+            DialoguePage(("Three.",)),
+        )
+        geometry = PageGeometry(width=11, maximum_lines=3)
+        with self.assertRaises(ValueError):
+            PageBreakPlan(
+                pages=pages,
+                source_page_breaks=1,
+                geometry=geometry,
+            )
+
+        plan = PageBreakPlan(
+            pages=pages,
+            source_page_breaks=1,
+            geometry=geometry,
+            allow_added_page_breaks=True,
+        )
+        compiled = plan.compile_record(self.page_only_source())
+        parsed = parse_record(compiled, len(DIALOGUE_MARKER))
+        self.assertEqual(parsed.controls, (0x40, 0x40))
+
+    def test_page_plan_rejects_mixed_source_controls(self) -> None:
+        """Keep waits and input commands out of a page-only compiler."""
+
+        source = (
+            DIALOGUE_MARKER
+            + "一".encode("shift_jis")
+            + b"\x21"
+            + "二".encode("shift_jis")
+            + b"\x00"
+        )
+        plan = PageBreakPlan(
+            pages=(DialoguePage(("English.",)),),
+            source_page_breaks=0,
+            geometry=PageGeometry(width=11, maximum_lines=3),
+        )
+        with self.assertRaises(ValueError):
+            plan.compile_record(source)
+
+    def test_relocation_updates_all_pointers_and_keeps_source(
+        self,
+    ) -> None:
+        """Guard the source while updating mapped pointers and owned bytes."""
+
+        source = self.page_only_source()
+        replacement = PageBreakPlan(
+            pages=(
+                DialoguePage(("First.",)),
+                DialoguePage(("Second.",)),
+            ),
+            source_page_breaks=1,
+            geometry=PageGeometry(width=11, maximum_lines=3),
+        ).compile_record(source)
+        area = RelocationArea(
+            offset=0x1200,
+            expected=b"\x00" * 64,
+            resource_start=0x1000,
+            resource_end=0x1300,
+            alignment=2,
+            purpose="synthetic confirmed resource tail",
+        )
+        pointers = (
+            PointerSite(
+                offset=0x1010,
+                base_offset=0x1000,
+                source_offset=0x1080,
+                purpose="synthetic table entry A",
+            ),
+            PointerSite(
+                offset=0x1014,
+                base_offset=0x1000,
+                source_offset=0x1080,
+                purpose="synthetic table entry B",
+            ),
+        )
+        plan = DialogueRelocationPlan(
+            source_offset=0x1080,
+            source_record=source,
+            replacement_record=replacement,
+            area=area,
+            pointers=pointers,
+            purpose="synthetic dialogue",
+        )
+        source_guard, first, second, destination = (
+            plan.to_payload_patches()
+        )
+
+        self.assertEqual(source_guard.expected, source_guard.replacement)
+        self.assertEqual(first.expected, bytes.fromhex("80 00"))
+        self.assertEqual(first.replacement, bytes.fromhex("00 02"))
+        self.assertEqual(second.replacement, bytes.fromhex("00 02"))
+        self.assertTrue(destination.replacement.startswith(replacement))
+        self.assertEqual(
+            len(destination.expected),
+            len(destination.replacement),
+        )
+
+    def test_relocation_refuses_unproven_reachability(self) -> None:
+        """Require at least one proven pointer before a plan can activate."""
+
+        source = self.page_only_source()
+        area = RelocationArea(
+            offset=0x1200,
+            expected=b"\x00" * 64,
+            resource_start=0x1000,
+            resource_end=0x1300,
+            alignment=1,
+            purpose="synthetic owned area",
+        )
+        with self.assertRaises(ValueError):
+            DialogueRelocationPlan(
+                source_offset=0x1080,
+                source_record=source,
+                replacement_record=source,
+                area=area,
+                pointers=(),
+                purpose="unmapped dialogue",
+            )
+
+    def test_relocation_rejects_pointer_overlap_with_source(self) -> None:
+        """Prevent overlapping source guards and pointer updates."""
+
+        source = self.page_only_source()
+        area = RelocationArea(
+            offset=0x1200,
+            expected=b"\x00" * 64,
+            resource_start=0x1000,
+            resource_end=0x1300,
+            alignment=1,
+            purpose="synthetic owned area",
+        )
+        pointer = PointerSite(
+            offset=0x1082,
+            base_offset=0x1000,
+            source_offset=0x1080,
+            purpose="invalid embedded pointer",
+        )
+        with self.assertRaises(ValueError):
+            DialogueRelocationPlan(
+                source_offset=0x1080,
+                source_record=source,
+                replacement_record=source,
+                area=area,
+                pointers=(pointer,),
+                purpose="overlapping dialogue",
+            )
+
+    def test_pointer_scanner_reports_candidates_without_claiming_proof(
+        self,
+    ) -> None:
+        """Return bounded byte matches for later structural review."""
+
+        data = bytearray(b"\x00" * 64)
+        data[8:10] = bytes.fromhex("20 00")
+        data[20:22] = bytes.fromhex("20 00")
+        self.assertEqual(
+            find_u16_pointer_candidates(
+                bytes(data),
+                target_offset=0x1020,
+                base_offset=0x1000,
+                search_start=0,
+                search_end=len(data),
+                alignment=2,
+            ),
+            (8, 20),
+        )
+
+
 class HumanTestProfileTests(unittest.TestCase):
     """Verify the startup and Mission 0 human-test profiles."""
 
@@ -596,21 +823,26 @@ class HumanTestProfileTests(unittest.TestCase):
             for control_offset in control_offsets:
                 self.assertNotIn(control_offset, patch_range)
 
-    def test_v6_renderer_patch_is_guarded_and_page_local(self) -> None:
-        """Keep the punctuation hook same-size and in one mapped CPU page."""
+    def test_stock_renderer_profile_has_no_code_patches(self) -> None:
+        """Keep parser, glyph, cursor, and punctuation code byte-identical."""
 
-        self.assertEqual(len(MISSION0_RENDERER_PATCHES), 2)
-        for patch in MISSION0_RENDERER_PATCHES:
-            self.assertEqual(len(patch.expected), len(patch.replacement))
-            self.assertEqual(
-                (patch.offset - 0x00131800) // 0x2000,
-                2,
-            )
-        hook, cave = MISSION0_RENDERER_PATCHES
-        self.assertEqual(hook.replacement, bytes.fromhex("4C 0E 55"))
-        self.assertEqual(cave.expected, b"\x00" * 22)
-        self.assertIn(bytes.fromhex("C9 43"), cave.replacement)
-        self.assertIn(bytes.fromhex("C9 44"), cave.replacement)
+        self.assertEqual(MISSION0_RENDERER_PATCHES, ())
+        self.assertEqual(
+            len(HUMAN_TEST_BINARY_PATCHES),
+            len(OPENING_PROFILE_LAYOUT_PATCHES)
+            + len(INFORMATION_SCREEN_LAYOUT_PATCHES),
+        )
+        retired_ranges = (
+            range(0x00137165, 0x00137168),
+            range(0x00136D0E, 0x00136D24),
+        )
+        for patch in HUMAN_TEST_BINARY_PATCHES:
+            patch_range = range(patch.offset, patch.end_offset)
+            for retired_range in retired_ranges:
+                self.assertTrue(
+                    patch_range.stop <= retired_range.start
+                    or retired_range.stop <= patch_range.start
+                )
 
     def test_information_screen_source_records_are_complete(self) -> None:
         """Cover every translated line in the three merchandise pages."""

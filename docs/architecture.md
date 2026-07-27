@@ -323,9 +323,10 @@ cyber_oedo/
     `-- verify.py
 ```
 
-The flat `cdrom_mode1.py` module now supplies the first verified rebuild layer.
-Create a package-level `patch/` only when pointer-aware relocation, compact
-English encoding, and public patch generation justify that structure.
+The flat `cdrom_mode1.py` module supplies the verified rebuild layer, while
+`dialogue_relocation.py` supplies a guarded but inactive pointer/page model.
+Create a package-level `patch/` only when real resource parsers, activated
+relocations, and public patch generation justify that structure.
 
 ## Testing strategy
 
@@ -347,6 +348,9 @@ Fast and redistributable:
 - two-bank opening-profile coverage and non-overlapping row layout;
 - four-bit title coverage and stable grayscale palette frames;
 - fixed-cell English word wrapping and invalid-input rejection;
+- explicit stock-renderer page compilation and added-page opt-in;
+- guarded pointer arithmetic and relocation-area containment;
+- refusal to relocate without a proven pointer;
 - invalid parser-bound validation;
 - docstrings on every documentable Python syntax node;
 - PEP 257 summary shape; and

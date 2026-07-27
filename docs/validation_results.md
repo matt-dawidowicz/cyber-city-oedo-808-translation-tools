@@ -5,6 +5,50 @@ Validation date: 2026-07-24
 These results describe the documented toolkit in this directory. They separate
 code/tool validation from emulator or hardware validation.
 
+## 2026-07-26 stock-renderer reset
+
+Commit `f7c0e6e` was identified as the last committed stable baseline before
+the compact-renderer experiment. The complete experiment, including all later
+English source strings, is frozen on branch `agent/compact-english-renderer` at
+commit `3abaf64`. Its 56-test snapshot passed, but its runtime validation
+remains incomplete and it is not a playable baseline.
+
+The active `mission0-stock-renderer` profile has these verified properties:
+
+- 271 same-size text patches;
+- 80 layout-only binary patches with the original title;
+- 82 layout/title binary patches with the clean title;
+- zero parser, glyph, cursor, punctuation, compact, or code-cave patches;
+- an explicitly empty `MISSION0_RENDERER_PATCHES`;
+- 45 passing unit/documentation tests;
+- successful Python compilation; and
+- clean `git diff --check`.
+
+Both authenticated source-backed builds completed whole-image validation:
+
+```text
+original title
+changed sectors=21
+guarded sectors=21
+IMG SHA-256=890faa78a25a25c2dd324d76be880b9c80af427832c1d87a9b7db16d3660dfa7
+
+clean title
+changed sectors=35
+guarded sectors=37
+IMG SHA-256=99faced18086c3d9cd0c218d86b524b4dfc2d8be0cbb882f4dba4253343a6f64
+```
+
+Both manifests report matching source hashes/text, same-size replacements,
+rebuilt Mode 1 EDC/ECC, only expected raw-sector changes, and byte-identical
+CCD/SUB files. Neither manifest contains the retired hook at `0x00137165`, the
+former cave at `0x00136D0E`, or any renderer-like binary patch.
+
+`dialogue_relocation.py` adds synthetic validation for explicit stock-renderer
+pages, added-page opt-in, mixed-control rejection, bounded pointer candidate
+search, complete pointer updates, destination containment, and refusal to
+relocate without a proven pointer. No real relocation is active. Emulator boot,
+scene replay, audio, save, restart, and reload remain pending.
+
 ## Source and extraction
 
 `extract_track2_mode1.py` was run against the supplied IMG with its title-

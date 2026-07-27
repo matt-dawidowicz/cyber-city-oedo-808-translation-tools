@@ -6,8 +6,9 @@ It extracts the data track from the supplied CloneCD image, inventories the
 disc, finds Shift-JIS text, separates structured dialogue from auxiliary text,
 builds a translator-facing TSV, and creates a guarded playable test image.
 
-The current `mission0-v9` builder creates a **guarded fullwidth Shift-JIS
-vertical slice**. It translates startup messages, all mission-title subtitles,
+The current `mission0-stock-renderer` builder creates a **guarded fullwidth
+Shift-JIS vertical slice**. It translates startup messages, all mission-title
+subtitles,
 the opening Mission 0 bartender conversation, and the complete ten-page opening
 narration. It translates both copies of all seven opening criminal dossiers
 and reflows their overlapping name and charge lines. It also translates and
@@ -18,11 +19,10 @@ subtitle `ATTRIBUTE OF THE BEAST`. Its low palette indexes remain black so
 stray pixels from the original upper-border effect stay hidden;
 `--title-screen original` omits only those two cosmetic patches.
 Mission 0 uses lowercase English. Narration pages are padded for word-aware
-wrapping at the renderer's code-confirmed 11-cell boundary, and a small hook
-adds fullwidth English comma and period to the original hanging punctuation
-behavior. It is not a complete English translation. A compact Latin renderer,
-complete dialogue control semantics, pointers, lengths, and relocation still
-require runtime engineering before broad automated reinsertion is safe.
+wrapping at the renderer's code-confirmed 11-cell boundary. No parser, glyph,
+cursor, or punctuation code is patched. It is not a complete English
+translation. Resource access, pointer aliases, loaded extents, and relocation
+areas still require runtime proof before broad automated reinsertion is safe.
 
 Start with:
 
@@ -30,6 +30,7 @@ Start with:
 - [Data and rights policy](docs/data_policy.md)
 - [Text format and TSV schemas](docs/text_format.md)
 - [Translation and patch-development workflow](docs/translation_workflow.md)
+- [Renderer freeze and relocation strategy](docs/renderer_freeze_and_relocation.md)
 - [Playable human-test build](docs/human_test_build.md)
 - [Complete command reference](docs/tool_reference.md)
 - [Architecture and extension guide](docs/architecture.md)
@@ -62,7 +63,7 @@ Start with:
 - The runtime meaning of dialogue controls `21`, `2F`, `40`, and `5C`.
 - Which extracted records are reachable and visible during normal play.
 - Every module's pointer and length fields.
-- A compact English rendering path.
+- The access mode and pointer aliases for each dialogue resource.
 - Which constant-fill tails are genuinely unreferenced relocation space.
 - Emulator boot, save/load, audio continuity, and later track transitions for
   the generated human-test build.
@@ -257,9 +258,9 @@ control a verified meaning. Do not invent a tagged-English syntax prematurely.
 
 ## Build the playable human-test image
 
-The v0.9 vertical slice translates 271 visible runs with the original 16x16
-fullwidth glyph path, applies two guarded renderer patches, and repositions 80
-row operands. By default it also generates replacements for the opening
+The stock-renderer vertical slice translates 271 visible runs with the original
+16x16 fullwidth glyph path, applies no dialogue code patches, and repositions
+80 row operands. By default it also generates replacements for the opening
 256-by-240 tile graphic and its isolated seven-frame palette cycle:
 
 - 23 original startup notice, menu, load, and memory runs;
@@ -273,7 +274,7 @@ row operands. By default it also generates replacements for the opening
 ```powershell
 python .\build_human_test_disc.py `
   "C:\path\to\Cyber City Oedo 808 - Kemono no Alignment (Japan).ccd" `
-  "C:\path\to\output\cyber_city_oedo_808_human_test_v0.9"
+  "C:\path\to\output\cyber_city_oedo_808_stock_renderer"
 ```
 
 The output directory must not already exist. Open the generated `.ccd` in a PC
@@ -284,7 +285,7 @@ To build the same translation while preserving the original opening graphic:
 ```powershell
 python .\build_human_test_disc.py `
   "C:\path\to\Cyber City Oedo 808 - Kemono no Alignment (Japan).ccd" `
-  "C:\path\to\output\cyber_city_oedo_808_human_test_v0.9_original" `
+  "C:\path\to\output\cyber_city_oedo_808_stock_renderer_original" `
   --title-screen original
 ```
 
@@ -296,8 +297,8 @@ Automated build verification covers:
 - 46 guarded opening-profile row-operand changes;
 - 34 guarded Media Mix row-operand changes;
 - Mode 1 EDC and ECC regeneration;
-- all-sector comparison proving exactly 23 LBAs change in original-title mode
-  or 37 LBAs in clean-title mode;
+- all-sector comparison proving exactly 21 LBAs change in original-title mode
+  or 35 LBAs in clean-title mode;
 - an independent SHA-256 guard over the complete original title block;
 - an independent SHA-256 guard over the seven original title palettes;
 - byte-identical CCD and SUB copies; and
@@ -308,14 +309,11 @@ bar exchange and most later interfaces remain Japanese. Follow
 [human_test_build.md](docs/human_test_build.md) for the tester checklist and
 distribution boundary.
 
-The v0.9 profile retains the v0.6 formatter that prevents words from crossing
-the code-confirmed 11-cell
-narration boundary by padding the prior line with fullwidth spaces. The
-renderer hook sends only fullwidth comma and period through the original
-12th-cell punctuation allowance; Japanese punctuation behavior remains
-unchanged. This does not increase line width. More letters per line require an
-8x16 or proportional Latin renderer and an unambiguous encoded path that does
-not collide with existing dialogue controls.
+The stock profile retains the stable formatter that prevents words from
+crossing the code-confirmed 11-cell narration boundary by padding the prior
+line with fullwidth spaces. Punctuation remains inside that ordinary limit.
+Accurate longer English uses additional pages and guarded relocation only
+after the record's access path and loaded destination ownership are proven.
 
 The Media Mix pages use a separate row-addressed format. Their original
 consecutive 8-pixel rows overlap 16-pixel glyphs. The data-only reflow
@@ -436,8 +434,9 @@ explains why its output must not enter the translation inventory.
 ## Project status
 
 This toolkit is ready for reproducible static analysis, translation-script
-editing, and a structurally verified Mission 0 vertical slice. Initial human
-testing reports that the earlier startup build mostly works; a recorded
-save/load and audio test matrix remains the release gate. Runtime tracing of
-the dialogue renderer and controls is the next engineering milestone. See
+editing, and a structurally verified stock-renderer Mission 0 vertical slice.
+Initial human testing reports that the earlier startup build mostly works; a
+recorded save/load and audio test matrix remains the release gate. Mapping
+resource entry modes, pointer aliases, and loaded extents is the next
+engineering milestone. See
 [translation_workflow.md](docs/translation_workflow.md) for the release path.
