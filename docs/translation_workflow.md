@@ -101,19 +101,18 @@ understood.
 
 ## Phase 4: same-size insertion proof
 
-Implementation status: the `mission0-v9` build now completes the static and
-raw-sector portions of this phase for 271 visible runs. They cover startup
-text, both copies of all seven opening profiles, mission-title subtitles, the
-opening Mission 0 bartender exchange, the complete ten-page opening narration,
-and all three Media Mix merchandise pages. The builder authenticates the
-source, uses same-size fullwidth Shift-JIS, preserves all narration and
-dialogue controls, uses lowercase Mission 0 glyphs, pads narration to word
-boundaries at the code-confirmed 11-cell limit, extends hanging punctuation to
-English comma/period, and reflows only confirmed row-addressed profile and
-Media Mix records. It rebuilds Mode 1 EDC/ECC and proves that 23 reviewed
-absolute LBAs differ when the original title is retained. The default clean-
-title variant changes 14 additional sectors: one palette sector and 13 visible
-title-tile sectors.
+Implementation status: the `mission0-stock-renderer` build completes the
+static and raw-sector portions of this phase for 271 visible runs. They cover
+startup text, both copies of all seven opening profiles, mission-title
+subtitles, the opening Mission 0 bartender exchange, the complete ten-page
+opening narration, and all three Media Mix merchandise pages. The builder
+authenticates the source, uses same-size fullwidth Shift-JIS, preserves all
+narration and dialogue controls, uses lowercase Mission 0 glyphs, keeps
+punctuation inside the code-confirmed 11-cell limit, and reflows only confirmed
+row-addressed profile and Media Mix records. It applies no dialogue code
+patches. Mode 1 EDC/ECC rebuilding covers 21 changed absolute LBAs with the
+original title. The default clean-title variant changes 14 additional sectors:
+one palette sector and 13 visible title-tile sectors.
 
 The earlier build has an informal user report that it mostly works. Exact
 emulator, BIOS, save/load, audio, and failure details have not yet been recorded
@@ -124,7 +123,7 @@ screenshots because they use a different row-addressed text path.
 The v0.9 profile screens and antialiased title require the same screenshot
 gate; structural validation cannot prove live palette selection or timing.
 
-Before building a new renderer:
+Before changing any renderer code:
 
 1. Choose short, confirmed-visible lines.
 2. Use same-size fullwidth Shift-JIS English or another representation already
@@ -136,31 +135,31 @@ Before building a new renderer:
 7. Confirm save/load and the next track transition still work.
 
 The automated builder proves the address-to-disc rebuild path independently of
-the English font project. Human testing must now prove runtime behavior.
+the English font project. The compact-renderer experiment is frozen at commit
+`3abaf64` and is not part of the playable build. Human testing must still prove
+runtime behavior.
 
-## Phase 5: English renderer design
+## Phase 5: stock-renderer page design
 
-A release-quality path should satisfy:
+A release-quality record should satisfy:
 
-- an escape or state transition that cannot collide with existing controls;
-- 8x16 or variable-width Latin glyphs;
-- explicit glyph table and fallback behavior;
-- English-aware word wrapping;
-- predictable line/page overflow behavior;
-- preservation of the original Japanese path;
+- fullwidth Shift-JIS glyphs accepted by the original path;
+- explicit translator-approved 11-cell lines;
+- explicit page boundaries using only mapped controls;
+- record-specific visible line limits;
+- preservation of every non-page control;
 - preservation of control timing and audio interactions; and
 - deterministic rendering for screenshots and regression tests.
 
-Prefer a minimal extension around the existing parser. Replacing the complete
-text engine increases risk to unrelated Japanese logic and resource loading.
+Do not add a parser escape, compact glyph path, or code cave to the playable
+profile. Accurate longer English should use more pages in a relocated stock-
+renderer record after the resource entry path is mapped.
 
-The v0.9 profile retains the v0.6 word-wrap formatter; it is not the compact-
-renderer milestone. It pads
-fullwidth spaces until the existing 11-cell cursor wraps naturally. Its small
-renderer hook only extends the original hanging-punctuation rule to fullwidth
-English comma and period. Increasing visible letters per line still requires
-a compact glyph path and cannot be achieved by changing capitalization or
-Shift-JIS wording alone.
+The stock profile retains the stable word-wrap formatter. It pads fullwidth
+spaces until the existing 11-cell cursor wraps naturally. The retired v0.6
+punctuation hook is absent; punctuation must fit the ordinary line budget.
+`PageBreakPlan` extends that approach by compiling explicit pages without
+changing renderer code.
 
 The Media Mix fix does not change that conclusion. Those pages already carry
 explicit tile-row operands, so their overlap can be corrected by reassigning
@@ -191,9 +190,20 @@ For each named resource containing text:
 `analyze_text_slots.py` helps prioritize regions with large constant-fill tails.
 It does not establish ownership of those bytes.
 
+`dialogue_relocation.py` now implements the guarded part of this contract.
+`PointerSite` requires exact pointer arithmetic, `RelocationArea` requires
+exact destination bytes inside a proven loaded extent, and
+`DialogueRelocationPlan` refuses an empty pointer list. No real relocation is
+active yet.
+
+The opening `KURUZER` narration begins inline at resource offset `+0x28`.
+Static searching has not proven a pointer to that marker. Treat it as an inline
+command-stream candidate until a runtime trace establishes a different access
+path.
+
 ### Reinserter contract
 
-A future reinserter should:
+An activated reinserter must:
 
 - accept a validated inventory and explicit encoding;
 - reject missing/duplicate IDs;
@@ -206,6 +216,9 @@ A future reinserter should:
 - rebuild Mode 1 EDC/ECC for those sectors;
 - preserve the CloneCD track/subchannel geometry; and
 - emit a verification report and patch format, not overwrite the source image.
+
+See `renderer_freeze_and_relocation.md` for the frozen experiment, exact
+`KURUZER` evidence, page compiler, relocation gates, and stop conditions.
 
 ## Phase 7: vertical-slice QA
 

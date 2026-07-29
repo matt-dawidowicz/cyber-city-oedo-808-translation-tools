@@ -62,11 +62,10 @@ The existing parser consumes low ASCII-range values as control bytes. Writing
 Latin glyphs.
 
 The boot program calls the System Card BIOS `EX_GETFNT` routine at `$E060` and
-uses 16x16 glyph transfer mode for Shift-JIS. Two implementation paths follow:
-
-- A same-size proof can use fullwidth Shift-JIS Latin where it fits.
-- A release patch should introduce an unambiguous Latin escape and an 8x16 or
-  variable-width font while preserving existing Japanese/control parsing.
+uses 16x16 glyph transfer mode for Shift-JIS. The playable profile uses
+fullwidth Shift-JIS Latin through that original path. The experimental compact
+escape/font path is frozen at commit `3abaf64` and is not imported by the
+builder.
 
 Fullwidth lowercase Latin is available in the same Shift-JIS path and already
 appears in shipped resources such as `Ｄｒｉｖｅ　Ｒｅａｄｙ．`. The v0.6
@@ -80,16 +79,37 @@ crossed the real boundary, producing visible spacing errors and broken words.
 
 The original punctuation table includes Japanese comma/stop (`81 41`,
 `81 42`) but not fullwidth English comma/period (`81 43`, `81 44`). The v0.6
-test hook extends only the default lookup path for those two English codes, so
-they may occupy the original hanging-punctuation cell instead of wrapping
-alone. The original table and Japanese behavior remain unchanged.
+test hook extended the default lookup path for those two English codes. The
+current stock profile retires that hook and keeps English punctuation inside
+the ordinary 11-cell limit.
 
 The v0.6 formatter pads narration lines to 11 cells. This moves the existing
 automatic cell wrap to a word boundary without inserting `2F`, `40`, or
 another control. It does not increase the number of visible cells per line.
 
-Do not choose an escape byte until the runtime parser and all existing controls
-are mapped.
+Do not choose an escape byte for the playable build. Use mapped page breaks and
+pointer-aware relocation without changing the parser or renderer.
+
+## Page-only relocated records
+
+`dialogue_relocation.py` compiles only a narrow, explicit record shape:
+
+```text
+27 28 [fullwidth page 1] 40 [fullwidth page 2] ... 00
+```
+
+The source record must contain only `40` controls. A translator supplies each
+page's explicit lines and a record-specific `PageGeometry`. Non-final lines
+are padded to the known cell width so the stock renderer wraps between words.
+
+The compiler does not remove source page breaks. Added pages require explicit
+opt-in and runtime testing. Records containing `21`, `2F`, `5C`, or other
+controls are rejected until a record-specific control template can preserve
+their exact sequence and semantics.
+
+Compilation does not authorize relocation. `PointerSite`, `RelocationArea`,
+and `DialogueRelocationPlan` require proven reachability, exact destination
+ownership, loaded-resource containment, and full 16-bit pointer arithmetic.
 
 ## Media Mix information-screen records
 

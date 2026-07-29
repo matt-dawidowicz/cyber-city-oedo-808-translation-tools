@@ -126,7 +126,7 @@ Does not check:
 
 ## `build_human_test_disc.py`
 
-Purpose: create the authenticated `mission0-v9` playable-format test build.
+Purpose: create the authenticated stock-renderer playable-format test build.
 
 ```text
 usage: build_human_test_disc.py [-h] [--title-screen {clean,original}]
@@ -158,13 +158,13 @@ Profile behavior:
 - rejects longer or byte-size-changing wording;
 - applies 271 startup, dossier, mission-title, Mission 0, and Media Mix text
   patches;
-- applies two guarded Mission 0 renderer patches for English punctuation;
+- applies no dialogue parser or renderer code patches;
 - applies 46 guarded dossier row-operand patches for readable spacing;
 - applies 34 guarded Media Mix row-operand patches for readable spacing;
 - optionally applies one 30,720-byte title-graphic patch and one 224-byte
   seven-frame palette patch;
 - preserves all adjacent dialogue and title control bytes;
-- changes 23 reviewed sectors in original-title mode or 37 in clean mode; and
+- changes 21 reviewed sectors in original-title mode or 35 in clean mode; and
 - rebuilds EDC/ECC for every guarded Mode 1 sector.
 
 Whole-build verification:
@@ -175,7 +175,7 @@ Whole-build verification:
 - all 249,836 raw sectors are compared;
 - the changed raw-sector set equals the selected variant's expected LBAs;
 - a JSON manifest records source/output/sector hashes, exact text, and exact
-  small renderer and row-command bytes;
+  row-command bytes;
 - large binary patches use before/after SHA-256 values instead of embedding
   bulky hexadecimal data; and
 - the manifest records guarded sectors separately from byte-different sectors.
@@ -185,6 +185,33 @@ bartender exchange and complete ten-page narration with lowercase text and
 word-aware 11-cell wrapping. It also translates the three Media Mix
 merchandise pages and separates their 16-pixel glyphs onto non-overlapping tile
 rows. It does not relocate records or provide a compact Latin renderer.
+
+## `dialogue_relocation.py`
+
+Purpose: compile explicit stock-renderer pages and model relocation only after
+pointer and destination ownership are proven.
+
+This is a library module, not a disc-writing command.
+
+Key interfaces:
+
+- `PageGeometry` stores record-specific line width, page height, and page
+  command.
+- `DialoguePage` stores translator-approved visual lines.
+- `PageBreakPlan` validates a page-only source record and compiles fullwidth
+  Shift-JIS pages without a renderer escape.
+- `PointerSite` stores one exact little-endian pointer field and base.
+- `RelocationArea` stores exact owned destination bytes inside a proven loaded
+  resource.
+- `DialogueRelocationPlan` emits a source guard, every pointer update, and one
+  same-size destination-area patch.
+- `find_u16_pointer_candidates` performs a bounded byte search but does not
+  claim that a match is a real pointer.
+
+The module rejects mixed-control source records, silent removal of page breaks,
+unapproved added pages, missing pointers, pointer-window overflow, overlap,
+out-of-resource destinations, and insufficient capacity. No real relocation is
+included in `HUMAN_TEST_PATCHES` or `HUMAN_TEST_BINARY_PATCHES`.
 
 ## `disassemble_huc6280.py`
 

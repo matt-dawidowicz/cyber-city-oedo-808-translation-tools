@@ -2,13 +2,14 @@
 """Build a guarded CloneCD image for early human testing.
 
 This command creates a complete disposable copy of the supplied CloneCD set
-and applies the ``mission0-v9`` guarded insertion profile. The profile
-translates startup notices, prompts, mission-title subtitles, and the opening
+and applies the ``mission0-stock-renderer`` guarded insertion profile. The
+profile is based on the committed ``mission0-v9`` stable baseline and removes
+all dialogue-renderer code patches. It translates startup notices, prompts,
+mission-title subtitles, and the opening
 Mission 0 bartender conversation and complete ten-page opening narration with
 sentence-case fullwidth Shift-JIS English that the original 16x16 BIOS font
 path can render. Narration is word-wrapped on the code-confirmed 11-cell line
-width. A narrowly scoped renderer hook recognizes fullwidth English comma and
-period codes as hanging punctuation, matching the original Japanese behavior.
+width. English punctuation stays inside that ordinary 11-cell budget.
 Both copies of all seven opening criminal dossiers are translated and reflowed
 without changing their portraits, interpreter, or record sizes.
 The three Media Mix merchandise pages are translated and reflowed onto
@@ -24,8 +25,8 @@ EDC/ECC fields are rebuilt. The builder then compares every raw sector against
 the source and rejects changes outside the expected absolute LBAs.
 
 This is a playable vertical slice, not a complete English translation. Most
-dialogue, interfaces, and later game content remain Japanese until the compact
-Latin renderer and relocation work are done.
+dialogue, interfaces, and later game content remain Japanese until their
+resource ownership, pointers, and page layouts are mapped.
 """
 
 from __future__ import annotations
@@ -62,10 +63,10 @@ from title_screen import (
 )
 
 
-BUILD_PROFILE = "mission0-v9"
+BUILD_PROFILE = "mission0-stock-renderer"
 OUTPUT_STEM = (
     "Cyber City Oedo 808 - Kemono no Alignment (Japan) "
-    "[Human Test v0.9]"
+    "[Stock Renderer Test]"
 )
 PROLOGUE_WRAP_WIDTH = 11
 INFORMATION_HIDDEN_ROW = 0x1E
@@ -2053,36 +2054,14 @@ HUMAN_TEST_PATCHES = (
 )
 
 
-# Mission 0's active dialogue renderer is in the executable block whose
-# payload-to-CPU mapping is ``payload 0x00131800 == CPU $0000``. Its original
-# kinsoku table treats Japanese comma/stop codes as hanging punctuation, but
-# not the fullwidth English comma/period codes emitted by this builder. The
-# three-byte default return is redirected to an unused, unreferenced zero-fill
-# cave in the same mapped 8 KiB page. The cave preserves every original
-# punctuation entry and returns the existing 12-cell limit only for Shift-JIS
-# ``81 43`` and ``81 44``.
-MISSION0_RENDERER_PATCHES: tuple[PayloadPatch, ...] = (
-    PayloadPatch(
-        offset=0x00137165,
-        expected=bytes.fromhex("A9 0B 60"),
-        replacement=bytes.fromhex("4C 0E 55"),
-        label="Mission 0 English hanging-punctuation hook",
-    ),
-    PayloadPatch(
-        offset=0x00136D0E,
-        expected=b"\x00" * 22,
-        replacement=bytes.fromhex(
-            "A5 03 C9 81 D0 0A A5 02 C9 43 F0 07 "
-            "C9 44 F0 03 A9 0B 60 A9 0C 60"
-        ),
-        label="Mission 0 English hanging-punctuation code cave",
-    ),
-)
+# The stock-renderer profile must not patch parser, glyph, cursor, or
+# punctuation code. Keeping the empty collection explicit makes that contract
+# visible to tests, manifests, and downstream builders.
+MISSION0_RENDERER_PATCHES: tuple[PayloadPatch, ...] = ()
 
 
 HUMAN_TEST_BINARY_PATCHES = (
-    MISSION0_RENDERER_PATCHES
-    + OPENING_PROFILE_LAYOUT_PATCHES
+    OPENING_PROFILE_LAYOUT_PATCHES
     + INFORMATION_SCREEN_LAYOUT_PATCHES
 )
 
@@ -2119,7 +2098,7 @@ def optional_title_screen_patches(
         graphic hashes prevent valid-size but wrong source data from becoming
         unsafe guards. The portrait palette at ``0x2828`` is outside the
         patched range. Returning no patch in original mode makes opt-out
-        behavior explicit: translation and renderer patches remain otherwise
+        behavior explicit: translation and layout patches remain otherwise
         identical.
     """
 
@@ -2207,7 +2186,7 @@ def profile_relative_sectors(title_screen_mode: str) -> tuple[int, ...]:
         title_screen_mode: ``"clean"`` or ``"original"``.
 
     Returns:
-        Sorted relative sector indexes for all text, renderer, layout, and
+        Sorted relative sector indexes for all text, layout, and
         optional title-screen patches. A guarded sector can remain
         byte-identical when its source and replacement slices already match.
 
@@ -2267,8 +2246,8 @@ def wrap_ascii_text(text: str, width: int) -> str:
 
     Design Decisions:
         This formatter is intentionally limited to the observed fixed-cell
-        path. It does not claim to increase line width or replace the future
-        compact Latin renderer.
+        path. Longer accurate English belongs in mapped relocated records with
+        explicit page breaks.
     """
 
     if width <= 0:
@@ -2522,8 +2501,8 @@ def build_tester_readme(ccd_name: str, title_screen_mode: str) -> str:
         else "- The opening retains the original title graphic."
     )
     lines = [
-        "Cyber City Oedo 808 - Human Test v0.9",
-        "======================================",
+        "Cyber City Oedo 808 - Stock Renderer Test",
+        "===========================================",
         "",
         "Purpose",
         "-------",
@@ -2553,7 +2532,7 @@ def build_tester_readme(ccd_name: str, title_screen_mode: str) -> str:
         "- Merchandise lines use non-overlapping 16-pixel row spacing.",
         "- Mission 0 dialogue uses lowercase letters.",
         "- Narration words wrap on the renderer's 11-cell grid.",
-        "- English comma and period stay attached as hanging punctuation.",
+        "- English punctuation stays inside the ordinary 11-cell limit.",
         "- Most other dialogue and interfaces remain Japanese.",
         "",
         "Human test checklist",
@@ -2584,8 +2563,8 @@ def build_tester_readme(ccd_name: str, title_screen_mode: str) -> str:
         "-----------------",
         "- English is fullwidth 16x16 text using the existing BIOS font path.",
         "- The existing renderer still fits only 11 fullwidth cells per line.",
-        "- More letters per line require a compact Latin renderer patch.",
-        "- A guarded Mission 0 punctuation hook changes renderer behavior.",
+        "- No parser, glyph, cursor, or punctuation code is patched.",
+        "- Accurate longer English requires mapped relocation and more pages.",
         (
             "- The title graphic is an optional cosmetic patch; use "
             "--title-screen original to omit it."
@@ -2717,7 +2696,7 @@ def build_human_test_disc(
     *,
     title_screen_mode: str = DEFAULT_TITLE_SCREEN_MODE,
 ) -> pathlib.Path:
-    """Build and verify the ``mission0-v9`` CloneCD test set.
+    """Build and verify the stock-renderer CloneCD test set.
 
     Args:
         source_ccd: Authenticated source CloneCD descriptor.
@@ -2812,8 +2791,8 @@ def build_human_test_disc(
             "scope": (
                 "Same-size fullwidth Shift-JIS startup, mission-title, and "
                 "selected Mission 0 translation with sentence case, 11-cell "
-                "word wrapping, and English hanging punctuation; both copies "
-                "of all seven opening profiles; reflowed Media Mix "
+                "word wrapping on the unmodified dialogue renderer; both "
+                "copies of all seven opening profiles; reflowed Media Mix "
                 "information pages; and an optional antialiased title graphic "
                 "with an isolated grayscale palette; not complete."
             ),
@@ -2886,8 +2865,8 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "The output is a limited vertical slice. It does not modify the "
-            "compact text renderer; confirmed profile and Media Mix rows are "
-            "reflowed in place."
+            "dialogue parser or renderer; confirmed profile and Media Mix "
+            "rows are reflowed in place."
         ),
     )
 

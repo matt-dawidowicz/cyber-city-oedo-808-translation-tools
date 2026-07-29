@@ -3,8 +3,8 @@
 ## Scope
 
 `build_human_test_disc.py` creates a complete, bootable-format CloneCD copy for
-the current manual test milestone. The `mission0-v9` profile replaces 271
-visible text runs with fullwidth Shift-JIS English:
+the current manual test milestone. The `mission0-stock-renderer` profile
+replaces 271 visible text runs with fullwidth Shift-JIS English:
 
 - 34 startup, load, and memory-state runs;
 - 10 mission-title subtitle occurrences;
@@ -18,12 +18,13 @@ This build remains deliberately narrow:
 - it uses the original 16x16 System Card font path;
 - Mission 0 dialogue uses the game's existing lowercase Latin glyphs;
 - narration is word-wrapped at the code-confirmed 11-cell boundary;
-- English comma and period use the original hanging-punctuation cell;
+- punctuation remains inside the ordinary 11-cell line budget;
+- it applies no dialogue parser or renderer code patches;
 - it performs only same-size in-place replacements;
 - opening profile names and two-line charges use non-overlapping tile rows;
 - Media Mix body text is separated onto non-overlapping tile rows;
 - it optionally replaces the opening art and its isolated color-cycle palette;
-- it changes 23 sectors with the original title or 37 with the clean title;
+- it changes 21 sectors with the original title or 35 with the clean title;
 - it rebuilds the Mode 1 EDC and P/Q ECC for each changed sector;
 - it preserves the CCD, SUB, track boundaries, pregaps, and audio sectors; and
 - it leaves most dialogue and game text in Japanese.
@@ -35,9 +36,10 @@ The earlier v0.5 image must not be used for layout review. Its 13-cell padding
 assumption was disproved at runtime and caused bad spacing, broken words, and
 an orphaned comma. v0.6 was the first build based on the disassembled 11-cell
 cursor rule; v0.7 preserved that fix and added the merchandise pages. v0.8
-added the independently selectable title graphic. The current `mission0-v9`
-profile adds all opening dossiers and restores four-bit antialiasing to the
-generated title while keeping the original-title opt-out.
+added the independently selectable title graphic. The committed `mission0-v9`
+baseline added all opening dossiers and restored four-bit antialiasing to the
+generated title. The current profile preserves that data work, removes the
+punctuation hook, and keeps the original-title opt-out.
 
 ## Why these targets
 
@@ -83,7 +85,7 @@ Run from the repository root:
 ```powershell
 python .\build_human_test_disc.py `
   "C:\path\to\Cyber City Oedo 808 - Kemono no Alignment (Japan).ccd" `
-  "C:\path\to\output\cyber_city_oedo_808_human_test_v0.9"
+  "C:\path\to\output\cyber_city_oedo_808_stock_renderer"
 ```
 
 The default is `--title-screen clean`. Use the following variant when testing
@@ -92,7 +94,7 @@ translation changes without the cosmetic title replacement:
 ```powershell
 python .\build_human_test_disc.py `
   "C:\path\to\Cyber City Oedo 808 - Kemono no Alignment (Japan).ccd" `
-  "C:\path\to\output\cyber_city_oedo_808_human_test_v0.9_original" `
+  "C:\path\to\output\cyber_city_oedo_808_stock_renderer_original" `
   --title-screen original
 ```
 
@@ -100,9 +102,9 @@ The output directory is intentionally required to be new. A successful build
 contains:
 
 ```text
-Cyber City Oedo 808 - Kemono no Alignment (Japan) [Human Test v0.9].ccd
-Cyber City Oedo 808 - Kemono no Alignment (Japan) [Human Test v0.9].img
-Cyber City Oedo 808 - Kemono no Alignment (Japan) [Human Test v0.9].sub
+Cyber City Oedo 808 - Kemono no Alignment (Japan) [Stock Renderer Test].ccd
+Cyber City Oedo 808 - Kemono no Alignment (Japan) [Stock Renderer Test].img
+Cyber City Oedo 808 - Kemono no Alignment (Japan) [Stock Renderer Test].sub
 build_manifest.json
 HUMAN_TEST_README.txt
 ```
@@ -167,12 +169,10 @@ still draws one 16x16 glyph per cell. Fitting more than 11 Latin letters on a
 line requires an 8x16 or proportional renderer, plus a safe encoding escape so
 ordinary ASCII cannot be mistaken for dialogue controls.
 
-The punctuation hook changes the three-byte ordinary-limit return at payload
-`0x00137165` into a jump to a 22-byte routine at `0x00136D0E`. Both addresses
-are in the active Mission 0 renderer's mapped CPU page. The routine recognizes
-only Shift-JIS `81 43` and `81 44`, then returns the existing 12-cell
-punctuation limit. Every original Japanese punctuation-table entry is
-preserved.
+The stock profile leaves payload `0x00137165` and the former candidate cave at
+`0x00136D0E` byte-identical to the authenticated source. The retired v0.6
+punctuation hook is historical evidence only. English wording and padding must
+keep punctuation inside the ordinary 11-cell budget.
 
 The fullwidth path proves that edited Shift-JIS reaches the screen. It does not
 prove that ordinary ASCII is safe; the low-byte dialogue controls remain in
@@ -289,21 +289,21 @@ Compare ambiguous behavior against the unmodified source in the same emulator.
 - every completed automated check.
 
 The builder compares all 249,836 raw sectors. Original-title mode changes these
-23 absolute LBAs:
+21 absolute LBAs:
 
 ```text
-3593, 3594, 3602, 3603, 3655, 3656, 3657, 3783, 3784, 4211,
-4212, 4241, 4337, 10282, 15753, 21214, 25690, 29903, 33930,
-37669, 40376, 40620, 40626
+3593, 3594, 3602, 3603, 3655, 3656, 3657, 3783, 3784, 4241,
+4337, 10282, 15753, 21214, 25690, 29903, 33930, 37669, 40376,
+40620, 40626
 ```
 
 Clean-title mode additionally changes absolute LBA `3595` for the palette and
-LBAs `3610` through `3622` for visible tile data, for 37 changed LBAs total.
+LBAs `3610` through `3622` for visible tile data, for 35 changed LBAs total.
 The generated asset guards the complete 15-sector source block at relative
 sectors `20` through `34`; the palette guard occupies relative sector `5`.
 The proportional reference fit leaves the final 32 pixel rows black, so
 relative sectors `33` and `34` remain byte-identical. The manifest therefore
-records 39 guarded sectors in clean mode while only 37 raw sectors differ.
+records 37 guarded sectors in clean mode while only 35 raw sectors differ.
 
 `cdrom_mode1.py` implements:
 
@@ -344,10 +344,11 @@ minus and right-quotation glyphs. When `wrap_width` is set, the formatter pads
 non-final lines so the engine's existing cell wrap falls between words. Longer
 wording or a single word wider than the configured line is rejected.
 
-`MISSION0_RENDERER_PATCHES` contains the two exact-byte code patches. Do not
-change their offsets or replacement bytes without disassembling the source
-again and adding a focused test. The builder rejects an image if either
-expected byte sequence differs.
+`MISSION0_RENDERER_PATCHES` is an explicitly empty tuple. A regression test
+also proves that no remaining binary patch overlaps the retired hook or cave
+ranges. Pointer/page expansion belongs in `dialogue_relocation.py` and remains
+inactive until a record-specific plan satisfies
+`renderer_freeze_and_relocation.md`.
 
 `INFORMATION_SCREEN_LINES` keeps each Media Mix row command, source string,
 English replacement, semantic purpose, and target row in one record.
