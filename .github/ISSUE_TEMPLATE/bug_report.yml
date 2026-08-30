@@ -1,0 +1,54 @@
+name: Tooling bug
+description: Report reproducible incorrect or unsafe toolkit behavior
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use synthetic or legally shareable data whenever possible. Do not upload
+        disc images, BIOS files, audio, or complete extracted text inventories.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the incorrect behavior and the command involved.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Include exact arguments and synthetic input details if possible.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Python version, and `python -m cyber_oedo doctor`.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source-risk
+    attributes:
+      label: Did the bug modify or risk modifying a source image?
+      options:
+        - "No"
+        - "Yes"
+        - "Unsure"
+    validations:
+      required: true
