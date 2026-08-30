@@ -1,8 +1,6 @@
 name: Tooling bug
 description: Report reproducible incorrect or unsafe toolkit behavior
 title: "[bug] "
-labels:
-  - bug
 body:
   - type: markdown
     attributes:
