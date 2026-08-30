@@ -7,11 +7,11 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class CommandSpec:
-    """Describe one legacy script exposed through the unified command.
+    """Describe one command exposed through the unified command.
 
     Args:
         name: Hyphenated command name shown to operators.
-        module: Existing top-level Python module that implements the command.
+        module: Python module that implements the command.
         summary: One-line description used by unified help output.
         group: Help group that communicates the command's intended role.
     """
@@ -78,6 +78,24 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Pipeline",
     ),
     CommandSpec(
+        "describe-contracts",
+        "cyber_oedo.commands.describe_contracts",
+        "Print versioned external data contracts as JSON.",
+        "Automation",
+    ),
+    CommandSpec(
+        "plan-human-test",
+        "cyber_oedo.commands.plan_human_test",
+        "Emit a no-disc hash-only human-test patch plan.",
+        "Automation",
+    ),
+    CommandSpec(
+        "inventory-summary",
+        "cyber_oedo.commands.inventory_summary",
+        "Summarize a translator inventory as stable JSON.",
+        "Automation",
+    ),
+    CommandSpec(
         "disassemble-huc6280",
         "disassemble_huc6280",
         "Produce deterministic HuC6280 diagnostic disassembly.",
@@ -136,7 +154,7 @@ def command_by_name(name: str) -> CommandSpec | None:
 
 
 def script_modules() -> tuple[str, ...]:
-    """Return unique legacy command modules in deterministic order.
+    """Return unique command modules in deterministic order.
 
     Returns:
         Sorted module names used by the unified command registry.
