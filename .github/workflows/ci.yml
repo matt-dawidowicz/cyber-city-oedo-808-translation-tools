@@ -2,10 +2,16 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -42,11 +48,22 @@ jobs:
       - name: Compile all Python sources
         run: python -m compileall -q .
 
-      - name: Smoke-test unified command
+      - name: Smoke-test editable command
         run: python -m cyber_oedo --help
 
-      - name: Check installed environment
+      - name: Check editable environment
         run: python -m cyber_oedo doctor
 
-      - name: Build wheel
-        run: python -m build --wheel --outdir dist
+      - name: Build source and wheel distributions
+        run: python -m build --outdir dist
+
+      - name: Smoke-test installed wheel outside checkout
+        run: >-
+          python -c "import glob, subprocess, sys, tempfile;
+          wheel=glob.glob('dist/*.whl')[0];
+          subprocess.check_call([sys.executable, '-m', 'pip', 'install',
+          '--force-reinstall', '--no-deps', wheel]);
+          subprocess.check_call([sys.executable, '-m', 'cyber_oedo', '--help'],
+          cwd=tempfile.gettempdir());
+          subprocess.check_call([sys.executable, '-m', 'cyber_oedo', 'doctor'],
+          cwd=tempfile.gettempdir())"
