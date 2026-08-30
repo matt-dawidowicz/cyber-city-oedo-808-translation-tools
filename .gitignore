@@ -30,6 +30,7 @@
 
 # Local packaging and scratch output
 *.zip
+*.egg-info/
 /dist/
 /build/
 /human_test_builds/

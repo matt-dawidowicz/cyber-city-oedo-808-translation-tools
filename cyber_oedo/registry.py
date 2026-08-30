@@ -84,6 +84,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "clonecd-cue",
+        "clonecd_cue",
+        "Create a non-destructive CUE view of a CloneCD set.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "render-pce-tiles",
         "render_pce_tiles",
         "Render PC Engine 4bpp tiles for visual inspection.",
