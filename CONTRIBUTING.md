@@ -28,13 +28,16 @@ Before opening a pull request, run:
 ```powershell
 python -m unittest discover -s .\tests -v
 python -m compileall -q .
+python -m cyber_oedo --help
 python -m cyber_oedo doctor
-python -m build --wheel --outdir .\dist
+python -m build --outdir .\dist
 ```
 
 The automated suite is intentionally synthetic and must not require the game
-image. Changes that depend on authentic disc data need the additional local
-validation described in `docs/development.md`.
+image. CI also installs the built wheel and reruns the package command from
+outside the checkout so missing distribution files cannot be hidden by an
+editable source tree. Changes that depend on authentic disc data need the
+additional local validation described in `docs/development.md`.
 
 ## Change discipline
 
