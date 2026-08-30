@@ -36,14 +36,22 @@ python -m compileall -q .
 python -m cyber_oedo doctor
 ```
 
-Before changing packaging or the public command surface, also build a wheel:
+Before changing packaging or the public command surface, build both supported
+distribution formats:
 
 ```powershell
-python -m build --wheel --outdir .\dist
+python -m build --outdir .\dist
 ```
 
 CI repeats these checks on Windows and Linux for the oldest supported Python
-minor version and a current Python minor version.
+minor version and a current Python minor version. It then force-installs the
+built wheel and runs `python -m cyber_oedo --help` plus `doctor` from outside
+the checkout. That last step is important: an editable source tree can hide
+missing package files that a real wheel install would expose.
+
+CI runs once for each pull-request commit and for pushes to `main`. Superseded
+runs on the same ref are cancelled so rapid maintenance commits do not waste
+runner capacity.
 
 ## Real-disc validation gate
 
