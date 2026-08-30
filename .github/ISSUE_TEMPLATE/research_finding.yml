@@ -1,8 +1,6 @@
 name: Reverse-engineering finding
 description: Record new evidence without overstating confidence
 title: "[research] "
-labels:
-  - research
 body:
   - type: dropdown
     id: evidence-level
