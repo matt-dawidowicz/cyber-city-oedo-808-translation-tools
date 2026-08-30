@@ -17,8 +17,8 @@ concurrency:
 jobs:
   quick-check:
     if: github.event_name != 'workflow_dispatch'
-    name: Ubuntu / Python 3.13
-    runs-on: ubuntu-latest
+    name: Ubuntu slim / Python 3.13
+    runs-on: ubuntu-slim
 
     steps:
       - name: Check out repository
