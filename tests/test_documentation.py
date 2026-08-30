@@ -18,23 +18,26 @@ from collections.abc import Iterator
 
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[1]
+SOURCE_DIRECTORIES = ("cyber_oedo", "tests")
 
 
 def python_paths() -> list[pathlib.Path]:
-    """Return tracked-source candidates in deterministic path order.
+    """Return maintained Python sources in deterministic path order.
 
     Returns:
-        Root-level Python programs and Python tests, sorted by repository-
-        relative POSIX path.
+        Root-level Python programs plus package and test files, sorted by
+        repository-relative POSIX path.
 
     Notes:
-        The repository intentionally uses a flat script layout. Limiting the
-        search to the root and ``tests`` avoids virtual environments or local
-        generated directories that may exist beside the checkout.
+        Explicit source roots avoid virtual environments and generated local
+        directories that may exist beside the checkout.
     """
 
     paths = list(REPOSITORY_ROOT.glob("*.py"))
-    paths.extend((REPOSITORY_ROOT / "tests").glob("*.py"))
+    for directory in SOURCE_DIRECTORIES:
+        source_root = REPOSITORY_ROOT / directory
+        if source_root.is_dir():
+            paths.extend(source_root.rglob("*.py"))
     return sorted(
         paths,
         key=lambda path: path.relative_to(REPOSITORY_ROOT).as_posix(),

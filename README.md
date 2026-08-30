@@ -8,15 +8,14 @@ builds a translator-facing TSV, and creates a guarded playable test image.
 
 The current `mission0-stock-renderer` builder creates a **guarded fullwidth
 Shift-JIS vertical slice**. It translates startup messages, all mission-title
-subtitles,
-the opening Mission 0 bartender conversation, and the complete ten-page opening
-narration. It translates both copies of all seven opening criminal dossiers
-and reflows their overlapping name and charge lines. It also translates and
-reflows all three Media Mix merchandise pages. The default build replaces the
-original opening art and its seven-frame color cycle with an antialiased
-grayscale screen modeled on the animation logo, including the translated
-subtitle `ATTRIBUTE OF THE BEAST`. Its low palette indexes remain black so
-stray pixels from the original upper-border effect stay hidden;
+subtitles, the opening Mission 0 bartender conversation, and the complete
+ten-page opening narration. It translates both copies of all seven opening
+criminal dossiers and reflows their overlapping name and charge lines. It also
+translates and reflows all three Media Mix merchandise pages. The default build
+replaces the original opening art and its seven-frame color cycle with an
+antialiased grayscale screen modeled on the animation logo, including the
+translated subtitle `ATTRIBUTE OF THE BEAST`. Its low palette indexes remain
+black so stray pixels from the original upper-border effect stay hidden;
 `--title-screen original` omits only those two cosmetic patches.
 Mission 0 uses lowercase English. Narration pages are padded for word-aware
 wrapping at the renderer's code-confirmed 11-cell boundary. No parser, glyph,
@@ -34,6 +33,9 @@ Start with:
 - [Playable human-test build](docs/human_test_build.md)
 - [Complete command reference](docs/tool_reference.md)
 - [Architecture and extension guide](docs/architecture.md)
+- [Development and maintenance guide](docs/development.md)
+- [Modernization roadmap](docs/modernization_roadmap.md)
+- [Toolkit release checklist](docs/release_checklist.md)
 - [Validated results and known baseline difference](docs/validation_results.md)
 - [Original static-analysis report](docs/translation_analysis.md)
 
@@ -50,8 +52,9 @@ Start with:
   16x16 glyph mode.
 - The active Mission 0 renderer wraps ordinary glyphs at 11 cells and permits
   listed punctuation in a twelfth hanging cell.
-- Control `2F` is a skippable 20-vblank delay; `5C` waits for a press/release;
-  `21` waits on `$37F1`; and `40` advances the text row after window handling.
+- Static code-path analysis shows that control `2F` enters a skippable
+  20-vblank delay, `5C` enters press/release wait logic, `21` waits on `$37F1`,
+  and `40` advances the text row after window handling.
 - Repeated engine/resource anchors divide the payload into mission analysis
   banks recorded in `game_layout.py`.
 - Standard Mode 1 EDC and P/Q ECC rebuilding matches original raw sectors.
@@ -60,7 +63,8 @@ Start with:
 
 ## What is not yet confirmed
 
-- The runtime meaning of dialogue controls `21`, `2F`, `40`, and `5C`.
+- Full runtime semantics and edge-case behavior of dialogue controls `21`,
+  `2F`, `40`, and `5C` across every resource that uses them.
 - Which extracted records are reachable and visible during normal play.
 - Every module's pointer and length fields.
 - The access mode and pointer aliases for each dialogue resource.
@@ -114,19 +118,46 @@ upper-border pixels drawn by the original title routine.
 See [Data and rights policy](docs/data_policy.md) before contributing or making
 the repository public.
 
-## Requirements
+## Requirements and installation
 
 - Python 3.11 or newer
-- Pillow 10 or newer, only for PNG tools and optional title-image importing
+- Pillow 10 or newer only for PNG tools and optional title-image importing
 
-Install the optional image dependency:
+The extraction, scanning, TSV, validation, and binary patching modules otherwise
+use only the Python standard library.
+
+For development or long-term maintenance, use an editable install so the stable
+`cyber-oedo` command and all development checks are available:
 
 ```powershell
-python -m pip install -r requirements.txt
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 ```
 
-The extraction, scanning, TSV, and validation tools otherwise use only the
-Python standard library.
+On macOS or Linux, activate the environment with
+`source .venv/bin/activate` instead. For graphics support without the
+development tools, install `.[graphics]`. The historical
+`python -m pip install -r requirements.txt` command remains supported for users
+who run the root scripts directly.
+
+## Unified command
+
+Every established `python script.py ...` invocation remains supported. The
+installable package adds a stable operator surface that can remain unchanged as
+implementation modules are moved into the package over time:
+
+```powershell
+python -m cyber_oedo --help
+python -m cyber_oedo doctor
+cyber-oedo extract-dialogue .\track02_mode1_2048.bin .\dialogue.tsv
+```
+
+Subcommand arguments are forwarded unchanged to the existing script parsers.
+Use the root-script spelling in older notes and the `cyber-oedo` spelling for
+new automation. See [Development and maintenance guide](docs/development.md)
+for the compatibility policy.
 
 ## Reproduce the inventory
 
@@ -374,19 +405,20 @@ Generated `.bin` and `.png` files are local artifacts, not repository content.
 ## Test after changing code
 
 The tests use synthetic data and source inspection; they do not require the
-game image. They also enforce the repository's PEP 257 docstring baseline,
-PEP 8 line limit, and explanatory-comment prefix:
+game image. They enforce the repository's PEP 257 docstring baseline, PEP 8
+line limit, and explanatory-comment prefix across root scripts, package code,
+and tests.
 
 ```powershell
 python -m unittest discover -s .\tests -v
+python -m compileall -q .
+python -m cyber_oedo doctor
 ```
 
-Then compile every script:
-
-```powershell
-$files = (Get-ChildItem -Filter *.py).FullName
-python -m py_compile $files
-```
+GitHub Actions repeats the synthetic test, compile, environment, and packaging
+checks on Windows and Linux. Changes that touch authenticated game behavior
+still require the local real-disc validation gate documented in
+[Development and maintenance guide](docs/development.md).
 
 For changes to heuristics, regenerate the inventory and compare record counts,
 offsets, and source hashes before accepting the change.
@@ -395,37 +427,22 @@ offsets, and source hashes before accepting the change.
 
 ```text
 .
-|-- README.md
-|-- game_layout.py                   confirmed shared constants/address helpers
-|-- cdrom_mode1.py                   guarded raw Mode 1 EDC/ECC patch layer
-|-- extract_track2_mode1.py          raw IMG -> 2048-byte Track 2 payload
-|-- scan_track.py                    sector/ASCII/broad Shift-JIS reconnaissance
-|-- scan_likely_sjis.py              natural-language discovery heuristic
-|-- extract_dialogue.py              structured 27 28 dialogue records
-|-- extract_auxiliary_text.py        broad scan minus dialogue ranges
-|-- build_translation_inventory.py   translator-facing occurrence TSV
-|-- validate_translation_inventory.py read-only edit/schema checks
-|-- analyze_text_slots.py            header-bounded resource-tail analysis
-|-- build_human_test_disc.py         authenticated playable test build
-|-- pce_graphics.py                  dependency-free PCE 4bpp tile codec
-|-- title_screen.py                  generated optional opening-title art
-|-- title_logo_mask.py               approved packed replacement silhouette
-|-- render_pce_tiles.py              PCE 4bpp diagnostic renderer
-|-- make_contact_sheet.py            labeled PNG aggregation
-|-- tests/
-|   |-- test_documentation.py        PEP 257/PEP 8 source contract
-|   `-- test_toolkit.py              synthetic binary-format tests
-`-- docs/
-    |-- disc_layout.md
-    |-- data_policy.md
-    |-- text_format.md
-    |-- translation_workflow.md
-    |-- human_test_build.md
-    |-- tool_reference.md
-    |-- architecture.md
-    |-- validation_results.md
-    `-- translation_analysis.md
+|-- pyproject.toml                   installable package and CLI metadata
+|-- cyber_oedo/                      stable command and package facade
+|-- *.py                             compatibility scripts and core modules
+|-- tests/                           synthetic and source-contract regression tests
+|-- docs/                            formats, evidence, workflows, and maintenance
+|-- .github/                         CI, dependency updates, and contribution forms
+|-- CONTRIBUTING.md                  contributor workflow and data boundary
+|-- SECURITY.md                      private reporting and safety scope
+|-- CHANGELOG.md                     toolkit-interface change history
+`-- README.md                        project entry point
 ```
+
+The transitional package deliberately installs the existing root modules rather
+than moving verified binary logic in the same change. Future internal moves
+must keep thin compatibility wrappers until a documented deprecation. See the
+[Modernization roadmap](docs/modernization_roadmap.md).
 
 `scan_reversed_sjis.py` is intentionally omitted from the canonical path. It is
 an exploratory test for reversed two-byte codes, and its own documentation
@@ -438,5 +455,12 @@ editing, and a structurally verified stock-renderer Mission 0 vertical slice.
 Initial human testing reports that the earlier startup build mostly works; a
 recorded save/load and audio test matrix remains the release gate. Mapping
 resource entry modes, pointer aliases, and loaded extents is the next
-engineering milestone. See
-[translation_workflow.md](docs/translation_workflow.md) for the release path.
+engineering milestone.
+
+The tooling foundation now also has an installable compatibility layer,
+cross-platform CI definition, contributor/release guardrails, and a phased plan
+for moving the verified flat modules into maintainable namespaces without
+changing game bytes as a side effect. See
+[translation_workflow.md](docs/translation_workflow.md) for the translation
+release path and [modernization_roadmap.md](docs/modernization_roadmap.md) for
+the engineering path.

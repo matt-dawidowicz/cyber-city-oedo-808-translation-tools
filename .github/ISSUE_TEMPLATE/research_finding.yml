@@ -1,0 +1,47 @@
+name: Reverse-engineering finding
+description: Record new evidence without overstating confidence
+title: "[research] "
+body:
+  - type: dropdown
+    id: evidence-level
+    attributes:
+      label: Evidence level
+      options:
+        - Confirmed from bytes
+        - Confirmed from code path
+        - Confirmed at runtime
+        - Heuristic
+        - Hypothesis
+    validations:
+      required: true
+
+  - type: textarea
+    id: claim
+    attributes:
+      label: Claim
+      description: State the narrowest conclusion supported by the evidence.
+    validations:
+      required: true
+
+  - type: textarea
+    id: coordinates
+    attributes:
+      label: Coordinates
+      description: Include payload offsets, LBAs, CPU addresses, or record IDs.
+      placeholder: "payload 0x..., absolute LBA ..., CPU $..."
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and reproduction
+      description: Describe the bytes, trace, command, or runtime observation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: limits
+    attributes:
+      label: Limits and unresolved questions
+      description: Record what this evidence does not yet prove.
+    validations:
+      required: true

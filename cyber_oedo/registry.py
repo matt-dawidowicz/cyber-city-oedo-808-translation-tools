@@ -1,0 +1,145 @@
+"""Describe the maintained command surface without importing tool modules."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class CommandSpec:
+    """Describe one legacy script exposed through the unified command.
+
+    Args:
+        name: Hyphenated command name shown to operators.
+        module: Existing top-level Python module that implements the command.
+        summary: One-line description used by unified help output.
+        group: Help group that communicates the command's intended role.
+    """
+
+    name: str
+    module: str
+    summary: str
+    group: str
+
+
+COMMANDS: tuple[CommandSpec, ...] = (
+    CommandSpec(
+        "extract-track2-mode1",
+        "extract_track2_mode1",
+        "Extract the 2048-byte Mode 1 payload from the raw IMG.",
+        "Pipeline",
+    ),
+    CommandSpec(
+        "scan-track",
+        "scan_track",
+        "Build broad structural and string reconnaissance output.",
+        "Pipeline",
+    ),
+    CommandSpec(
+        "scan-likely-sjis",
+        "scan_likely_sjis",
+        "Find likely natural-language Shift-JIS runs.",
+        "Pipeline",
+    ),
+    CommandSpec(
+        "extract-dialogue",
+        "extract_dialogue",
+        "Extract structured dialogue records.",
+        "Pipeline",
+    ),
+    CommandSpec(
+        "extract-auxiliary-text",
+        "extract_auxiliary_text",
+        "Subtract dialogue ranges from broad text candidates.",
+        "Pipeline",
+    ),
+    CommandSpec(
+        "build-translation-inventory",
+        "build_translation_inventory",
+        "Build the translator-facing occurrence inventory.",
+        "Pipeline",
+    ),
+    CommandSpec(
+        "validate-translation-inventory",
+        "validate_translation_inventory",
+        "Validate a generated or translator-edited inventory.",
+        "Pipeline",
+    ),
+    CommandSpec(
+        "analyze-text-slots",
+        "analyze_text_slots",
+        "Measure named resource regions and likely padding tails.",
+        "Pipeline",
+    ),
+    CommandSpec(
+        "build-human-test-disc",
+        "build_human_test_disc",
+        "Build the authenticated stock-renderer human-test image.",
+        "Pipeline",
+    ),
+    CommandSpec(
+        "disassemble-huc6280",
+        "disassemble_huc6280",
+        "Produce deterministic HuC6280 diagnostic disassembly.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "clonecd-cue",
+        "clonecd_cue",
+        "Create a non-destructive CUE view of a CloneCD set.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "render-pce-tiles",
+        "render_pce_tiles",
+        "Render PC Engine 4bpp tiles for visual inspection.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "make-contact-sheet",
+        "make_contact_sheet",
+        "Combine diagnostic renders into a labeled contact sheet.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "title-screen",
+        "title_screen",
+        "Generate or preview the clean replacement title asset.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "scan-reversed-sjis",
+        "scan_reversed_sjis",
+        "Run the non-canonical reversed-code exploration scanner.",
+        "Experimental",
+    ),
+    CommandSpec(
+        "build-wide-engine-stage1",
+        "build_wide_engine_stage1",
+        "Build the isolated Stage 1 English text-engine experiment.",
+        "Experimental",
+    ),
+)
+
+
+def command_by_name(name: str) -> CommandSpec | None:
+    """Return the command specification matching ``name``.
+
+    Args:
+        name: Hyphenated command name supplied by an operator.
+
+    Returns:
+        Matching command specification, or ``None`` for an unknown name.
+    """
+
+    return next((item for item in COMMANDS if item.name == name), None)
+
+
+def script_modules() -> tuple[str, ...]:
+    """Return unique legacy command modules in deterministic order.
+
+    Returns:
+        Sorted module names used by the unified command registry.
+    """
+
+    return tuple(sorted({item.module for item in COMMANDS}))
