@@ -12,10 +12,23 @@ profiles and runtime research retain their own evidence and validation notes in
 - Unified `cyber-oedo` command and `python -m cyber_oedo` entry point.
 - `cyber-oedo doctor` environment diagnostics.
 - Cross-platform GitHub Actions testing on Windows and Linux.
-- Wheel-build validation in CI.
+- Source-distribution and wheel builds in CI.
+- Installed-wheel smoke tests from outside the source checkout.
 - Dependabot configuration for Python and GitHub Actions dependencies.
-- Contributor, security, development, and modernization documentation.
-- Package-surface regression tests.
+- Contributor, security, development, release, and modernization documentation.
+- Separate issue forms for tooling defects and reverse-engineering evidence.
+- Package-surface, packaging-metadata, and command-forwarding regression tests.
+
+### Changed
+
+- CI now runs once per pull-request commit, runs push checks only on `main`, and
+  cancels superseded runs on the same ref.
+- The README documents the stable package/CLI boundary and distinguishes
+  code-path evidence from runtime-confirmed dialogue-control behavior.
+- The architecture guide now treats package migration as active transitional
+  architecture rather than a hypothetical future conversion.
+- Package discovery accepts future `cyber_oedo` subpackages without another
+  distribution-layout change.
 
 ### Compatibility
 
