@@ -19,6 +19,22 @@ Core principles:
 
 ## Module responsibilities
 
+### Operator and package boundary
+
+`cyber_oedo/` owns the stable installed command surface. `cyber_oedo.cli`
+dispatches documented subcommands to the established root modules without
+changing their argument parsers, and `cyber_oedo.registry` is the one inventory
+of root scripts intentionally exposed through that command.
+
+The root scripts remain compatibility entry points during the package migration.
+Moving implementation code must therefore be a two-step operation: move one
+coherent dependency cluster under `cyber_oedo/`, then leave a thin root wrapper
+or compatibility import until a documented deprecation permits removal.
+
+`cyber_oedo.doctor` checks only environment prerequisites and command-module
+availability. It must not authenticate a source disc or claim that runtime
+validation has passed.
+
 ### Confirmed shared model
 
 `game_layout.py` owns title-specific geometry, bank ranges, the observed record
@@ -246,6 +262,7 @@ Explanatory comments follow PEP 8:
 
 `tests/test_documentation.py` enforces docstring presence and summary shape,
 the 79-character limit, and comment prefixes without third-party lint tools.
+It scans the maintained root programs, `cyber_oedo/`, and `tests/` recursively.
 
 ## Adding a new scanner
 
@@ -297,36 +314,58 @@ For schema changes:
 - regenerate to a new file; and
 - do not overwrite a translator's master inventory.
 
-## Future package structure
+## Transitional package structure
 
-The current flat scripts keep invocation simple during investigation. Convert
-to an installable package only when shared code grows beyond `game_layout.py`
-and a few helpers.
+The project has crossed the threshold described by the original architecture:
+shared disc, text, graphics, relocation, and build logic now justify an
+installable package. Phase 1 therefore adds a deliberately thin package shell
+without moving the verified implementation modules in the same change.
 
-A likely later structure:
+Current boundary:
 
 ```text
 cyber_oedo/
-|-- layout.py
-|-- mode1.py
-|-- text/
-|   |-- codec.py
-|   |-- records.py
-|   |-- inventory.py
-|   `-- validation.py
-|-- resources/
-|   |-- headers.py
-|   `-- pointers.py
-`-- patch/
-    |-- reinserter.py
-    |-- edc_ecc.py
-    `-- verify.py
+|-- __init__.py
+|-- __main__.py
+|-- cli.py
+|-- doctor.py
+`-- registry.py
+
+root *.py
+`-- verified implementation modules and compatibility entry points
 ```
 
-The flat `cdrom_mode1.py` module supplies the verified rebuild layer, while
-`dialogue_relocation.py` supplies a guarded but inactive pointer/page model.
-Create a package-level `patch/` only when real resource parsers, activated
-relocations, and public patch generation justify that structure.
+A later internal target is organized by responsibility rather than by command:
+
+```text
+cyber_oedo/
+|-- disc/
+|   |-- layout.py
+|   |-- mode1.py
+|   `-- clonecd.py
+|-- text/
+|   |-- dialogue.py
+|   |-- inventory.py
+|   |-- validation.py
+|   `-- relocation.py
+|-- graphics/
+|   |-- pce.py
+|   `-- title.py
+|-- analysis/
+|   |-- resources.py
+|   `-- disassembly.py
+`-- build/
+    `-- human_test.py
+```
+
+Move one dependency cluster at a time. A structural move must not change patch
+bytes, translation strings, parser decisions, coordinate constants, or output
+schemas merely to make the package look cleaner. See
+`docs/modernization_roadmap.md` for migration order and explicit non-goals.
+
+The flat `cdrom_mode1.py` module continues to supply the verified rebuild layer,
+while `dialogue_relocation.py` supplies a guarded but inactive pointer/page
+model. Do not activate relocation merely as part of moving those modules.
 
 ## Testing strategy
 
@@ -340,7 +379,7 @@ Fast and redistributable:
 - interval merging;
 - resource-name filtering;
 - 4bpp bitplane order;
-- raw Mode 1 payload extraction.
+- raw Mode 1 payload extraction;
 - CD-ROM EDC check vector and Mode 1 ECC regeneration;
 - stale-integrity detection and repair;
 - guarded cross-sector payload patching;
@@ -352,6 +391,7 @@ Fast and redistributable:
 - guarded pointer arithmetic and relocation-area containment;
 - refusal to relocate without a proven pointer;
 - invalid parser-bound validation;
+- package command registry and argument forwarding;
 - docstrings on every documentable Python syntax node;
 - PEP 257 summary shape; and
 - PEP 8 line length and comment prefixes.
@@ -397,7 +437,8 @@ For any code change:
 - [ ] Empty outputs do not crash.
 - [ ] Synthetic tests cover the changed rule.
 - [ ] PEP 257/PEP 8 documentation checks pass.
-- [ ] `py_compile` passes.
+- [ ] `python -m compileall -q .` passes.
+- [ ] `python -m cyber_oedo doctor` reports no core failures.
 - [ ] Inventory differences are explained.
 - [ ] Documentation matches actual CLI behavior.
 - [ ] Reinsertion claims distinguish raw-sector proof from runtime proof.
