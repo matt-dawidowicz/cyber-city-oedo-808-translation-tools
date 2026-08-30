@@ -8,12 +8,19 @@ import importlib.util
 import io
 import pathlib
 import sys
+import tomllib
 import unittest
 from unittest import mock
 
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = REPOSITORY_ROOT / "cyber_oedo"
+
+
+def package_python_paths() -> list[pathlib.Path]:
+    """Return package Python files recursively in deterministic order."""
+
+    return sorted(PACKAGE_ROOT.rglob("*.py"))
 
 
 class PackageSourceTests(unittest.TestCase):
@@ -29,7 +36,7 @@ class PackageSourceTests(unittest.TestCase):
             ast.FunctionDef,
             ast.AsyncFunctionDef,
         )
-        for path in sorted(PACKAGE_ROOT.glob("*.py")):
+        for path in package_python_paths():
             source = path.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(path))
             for node in ast.walk(tree):
@@ -44,7 +51,7 @@ class PackageSourceTests(unittest.TestCase):
         """Keep package source lines within the repository's 79-column rule."""
 
         failures: list[str] = []
-        for path in sorted(PACKAGE_ROOT.glob("*.py")):
+        for path in package_python_paths():
             for number, line in enumerate(
                 path.read_text(encoding="utf-8").splitlines(),
                 start=1,
@@ -52,6 +59,29 @@ class PackageSourceTests(unittest.TestCase):
                 if len(line) > 79:
                     failures.append(f"{path.name}:{number}:{len(line)}")
         self.assertEqual([], failures)
+
+
+class PackagingMetadataTests(unittest.TestCase):
+    """Keep distribution metadata aligned with the unified command registry."""
+
+    def test_registered_commands_are_included_as_py_modules(self) -> None:
+        """Require every forwarded legacy command in the built distribution."""
+
+        from cyber_oedo.registry import script_modules
+
+        pyproject_path = REPOSITORY_ROOT / "pyproject.toml"
+        metadata = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        packaged = set(metadata["tool"]["setuptools"]["py-modules"])
+        missing = set(script_modules()) - packaged
+        self.assertEqual(set(), missing)
+
+    def test_package_discovery_accepts_future_subpackages(self) -> None:
+        """Require recursive package discovery for the planned namespace move."""
+
+        pyproject_path = REPOSITORY_ROOT / "pyproject.toml"
+        metadata = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        patterns = metadata["tool"]["setuptools"]["packages"]["find"]["include"]
+        self.assertIn("cyber_oedo*", patterns)
 
 
 class UnifiedCommandTests(unittest.TestCase):
