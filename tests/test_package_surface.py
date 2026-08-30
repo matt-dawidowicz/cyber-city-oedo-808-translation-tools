@@ -76,11 +76,12 @@ class PackagingMetadataTests(unittest.TestCase):
         self.assertEqual(set(), missing)
 
     def test_package_discovery_accepts_future_subpackages(self) -> None:
-        """Require recursive package discovery for the planned namespace move."""
+        """Require recursive discovery for planned package namespaces."""
 
         pyproject_path = REPOSITORY_ROOT / "pyproject.toml"
         metadata = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
-        patterns = metadata["tool"]["setuptools"]["packages"]["find"]["include"]
+        setuptools = metadata["tool"]["setuptools"]
+        patterns = setuptools["packages"]["find"]["include"]
         self.assertIn("cyber_oedo*", patterns)
 
 
