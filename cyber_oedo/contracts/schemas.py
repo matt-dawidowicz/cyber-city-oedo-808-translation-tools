@@ -2,21 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 from collections.abc import Sequence
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True, slots=True)
 class ContractDescriptor:
-    """Describe one versioned external data contract.
-
-    Args:
-        name: Stable machine-readable contract name.
-        version: Positive integer schema version.
-        kind: Serialization family such as ``tsv`` or ``json``.
-        fields: Ordered tabular fields or stable top-level JSON keys.
-        editable_fields: Fields intentionally owned by human editors.
-    """
+    """Describe one versioned external data contract."""
 
     name: str
     version: int
@@ -25,7 +17,7 @@ class ContractDescriptor:
     editable_fields: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        """Reject malformed descriptors before they become public metadata."""
+        """Reject malformed descriptors before publication."""
 
         if not self.name or self.version <= 0:
             raise ValueError("contract name and positive version are required")
@@ -50,18 +42,7 @@ class ContractDescriptor:
         return payload
 
     def require_compatible_header(self, actual: Sequence[str]) -> None:
-        """Require every field in this contract to exist in a TSV header.
-
-        Args:
-            actual: Header fields found in an input file.
-
-        Raises:
-            ValueError: If one or more required fields are missing.
-
-        Notes:
-            Extra columns are accepted so additive informational fields remain
-            forward-compatible with readers of the same major schema.
-        """
+        """Require every field in this contract to exist in a TSV header."""
 
         missing = [field for field in self.fields if field not in actual]
         if missing:
@@ -130,41 +111,6 @@ TRANSLATION_INVENTORY_V1 = ContractDescriptor(
     ),
 )
 
-BUILD_PLAN_V1 = ContractDescriptor(
-    name="human-test-build-plan-json",
-    version=1,
-    kind="json",
-    fields=(
-        "contract",
-        "schema_version",
-        "plan_sha256",
-        "profile",
-        "plan",
-    ),
-)
-
-BUILD_MANIFEST_V1 = ContractDescriptor(
-    name="human-test-build-manifest-json",
-    version=1,
-    kind="json",
-    fields=(
-        "build_profile",
-        "title_screen_mode",
-        "created_utc",
-        "scope",
-        "source_hashes",
-        "output_hashes",
-        "image_bytes",
-        "changed_absolute_lbas",
-        "changed_relative_sectors",
-        "guarded_relative_sectors",
-        "modified_sectors",
-        "text_patches",
-        "binary_patches",
-        "verification",
-    ),
-)
-
 INVENTORY_SUMMARY_V1 = ContractDescriptor(
     name="translation-inventory-summary-json",
     version=1,
@@ -185,8 +131,6 @@ ALL_CONTRACTS = (
     DIALOGUE_V1,
     AUXILIARY_TEXT_V1,
     TRANSLATION_INVENTORY_V1,
-    BUILD_PLAN_V1,
-    BUILD_MANIFEST_V1,
     INVENTORY_SUMMARY_V1,
 )
 

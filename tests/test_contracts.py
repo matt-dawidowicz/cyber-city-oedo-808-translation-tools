@@ -1,4 +1,4 @@
-"""Regression tests for versioned machine-readable toolkit contracts."""
+"""Regression tests for the restart baseline's external contracts."""
 
 from __future__ import annotations
 
@@ -6,9 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cyber_oedo.commands.plan_human_test import build_payload
 from cyber_oedo.contracts import (
-    BUILD_PLAN_V1,
     TRANSLATION_INVENTORY_V1,
     TranslationInventoryRecord,
     contracts_document,
@@ -16,19 +14,21 @@ from cyber_oedo.contracts import (
 
 
 class ContractTests(unittest.TestCase):
-    """Keep schema versions explicit, deterministic, and compatible."""
+    """Keep the reduced contract catalog explicit and deterministic."""
 
-    def test_catalog_has_stable_versioned_identifiers(self) -> None:
-        """Expose every descriptor with an explicit positive version."""
+    def test_catalog_contains_only_restart_contracts(self) -> None:
+        """Exclude abandoned human-test build contracts."""
 
         document = contracts_document()
+        identifiers = {
+            item["identifier"] for item in document["contracts"]
+        }
         self.assertEqual(document["catalog_version"], 1)
-        for item in document["contracts"]:
-            self.assertGreater(item["version"], 0)
-            self.assertIn("/v", item["identifier"])
+        self.assertEqual(len(identifiers), 4)
+        self.assertFalse(any("human-test" in item for item in identifiers))
 
     def test_inventory_fields_are_owned_by_contract(self) -> None:
-        """Use the contract descriptor as the inventory facade schema."""
+        """Use the contract descriptor as the inventory schema."""
 
         from cyber_oedo.text import build_translation_inventory
 
@@ -38,38 +38,25 @@ class ContractTests(unittest.TestCase):
         )
 
     def test_typed_inventory_record_round_trips(self) -> None:
-        """Preserve every translator inventory field through typed mapping."""
+        """Preserve translator inventory fields through typed mapping."""
 
         row = {
             field: f"value-{index}"
-            for index, field in enumerate(
-                TRANSLATION_INVENTORY_V1.fields
-            )
+            for index, field in enumerate(TRANSLATION_INVENTORY_V1.fields)
         }
         record = TranslationInventoryRecord.from_mapping(row)
         self.assertEqual(record.to_mapping(), row)
 
     def test_missing_inventory_field_is_rejected(self) -> None:
-        """Reject incompatible headers before row processing begins."""
+        """Reject incompatible headers before row processing."""
 
-        fields = TRANSLATION_INVENTORY_V1.fields[:-1]
         with self.assertRaises(ValueError):
-            TRANSLATION_INVENTORY_V1.require_compatible_header(fields)
-
-    def test_dry_run_plan_is_versioned_and_deterministic(self) -> None:
-        """Emit stable plan metadata without embedding source bytes."""
-
-        first = build_payload("original")
-        second = build_payload("original")
-        self.assertEqual(first, second)
-        self.assertEqual(first["contract"], BUILD_PLAN_V1.identifier)
-        self.assertEqual(first["schema_version"], 1)
-        serialized = str(first)
-        self.assertNotIn("expected_hex", serialized)
-        self.assertNotIn("replacement_hex", serialized)
+            TRANSLATION_INVENTORY_V1.require_compatible_header(
+                TRANSLATION_INVENTORY_V1.fields[:-1]
+            )
 
     def test_inventory_summary_accepts_header_only_file(self) -> None:
-        """Return zero counts for a valid empty translator inventory."""
+        """Return zero counts for a valid empty inventory."""
 
         from cyber_oedo.commands.inventory_summary import summarize
 

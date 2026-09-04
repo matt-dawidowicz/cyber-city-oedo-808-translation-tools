@@ -1,4 +1,4 @@
-"""Provide one stable command while preserving every legacy script."""
+"""Provide the unified command-line entry point for the toolkit."""
 
 from __future__ import annotations
 
@@ -11,14 +11,10 @@ from cyber_oedo.registry import COMMANDS, command_by_name
 
 
 def help_text() -> str:
-    """Build deterministic top-level help text.
-
-    Returns:
-        Human-readable command overview grouped by operator role.
-    """
+    """Build deterministic top-level help text."""
 
     lines = [
-        "Cyber City Oedo 808 translation-analysis toolkit",
+        "Cyber City Oedo 808 translation research toolkit",
         "",
         "Usage:",
         "  cyber-oedo <command> [arguments]",
@@ -36,34 +32,15 @@ def help_text() -> str:
                 continue
             lines.append(f"  {item.name:<30} {item.summary}")
         lines.append("")
-    lines.extend(
-        [
-            "Compatibility:",
-            "  Existing 'python script.py ...' invocations remain supported.",
-            "  Subcommand arguments are forwarded unchanged to each script.",
-        ]
-    )
     return "\n".join(lines)
 
 
-def run_script(module: str, arguments: Sequence[str]) -> int:
-    """Execute one existing script module with forwarded arguments.
-
-    Args:
-        module: Top-level module name registered for the command.
-        arguments: Arguments that should become the script's ``sys.argv``.
-
-    Returns:
-        Zero when the script returns normally.
-
-    Side Effects:
-        Temporarily replaces ``sys.argv`` and executes the module as
-        ``__main__``. The original argument vector is always restored.
-    """
+def run_command_module(module: str, arguments: Sequence[str]) -> int:
+    """Execute one registered package module with forwarded arguments."""
 
     original_argv = sys.argv
     try:
-        sys.argv = [f"{module}.py", *arguments]
+        sys.argv = [module, *arguments]
         runpy.run_module(module, run_name="__main__")
     finally:
         sys.argv = original_argv
@@ -71,16 +48,7 @@ def run_script(module: str, arguments: Sequence[str]) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Dispatch a unified toolkit command.
-
-    Args:
-        argv: Optional argument sequence excluding the executable name.
-
-    Returns:
-        Process-style status code. Script-level ``SystemExit`` exceptions are
-        intentionally allowed to propagate so existing argparse behavior is
-        preserved.
-    """
+    """Dispatch a unified toolkit command."""
 
     arguments = list(sys.argv[1:] if argv is None else argv)
     if not arguments or arguments[0] in {"-h", "--help"}:
@@ -101,14 +69,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("", file=sys.stderr)
         print(help_text(), file=sys.stderr)
         return 2
-    return run_script(command.module, arguments)
+    return run_command_module(command.module, arguments)
 
 
 def console_main() -> int:
-    """Run the console entry point installed by the package.
-
-    Returns:
-        Process-style status code from :func:`main`.
-    """
+    """Run the console entry point installed by the package."""
 
     return main()

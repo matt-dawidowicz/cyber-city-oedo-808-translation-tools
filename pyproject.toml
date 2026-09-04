@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cyber-city-oedo-808-translation-tools"
 version = "0.1.0"
-description = "Reproducible analysis and test-build tools for Cyber City Oedo 808"
+description = "Reverse-engineering and text-analysis tools for Cyber City Oedo 808"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -44,31 +44,6 @@ cyber-oedo = "cyber_oedo.cli:console_main"
 Repository = "https://github.com/matt-dawidowicz/cyber-city-oedo-808-translation-tools"
 
 [tool.setuptools]
-py-modules = [
-    "analyze_text_slots",
-    "build_human_test_disc",
-    "build_translation_inventory",
-    "build_wide_engine_stage1",
-    "cdrom_mode1",
-    "clonecd_cue",
-    "dialogue_relocation",
-    "disassemble_huc6280",
-    "extract_auxiliary_text",
-    "extract_dialogue",
-    "extract_track2_mode1",
-    "game_layout",
-    "make_contact_sheet",
-    "pce_graphics",
-    "render_pce_tiles",
-    "scan_likely_sjis",
-    "scan_reversed_sjis",
-    "scan_track",
-    "title_logo_mask",
-    "title_screen",
-    "validate_translation_inventory",
-    "wide_runtime_stage1",
-    "wide_text",
-]
 include-package-data = true
 
 [tool.setuptools.packages.find]

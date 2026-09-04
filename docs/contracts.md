@@ -1,54 +1,37 @@
 # Versioned external contracts
 
-The toolkit now distinguishes durable automation contracts from internal Python
-implementation details.
+The toolkit versions generated data formats that may be consumed by translators
+or automation. Python module paths remain implementation details.
 
-## Stability boundary
+## Current contracts
 
-The supported external surface is:
+The restart baseline exposes four version-1 contracts:
 
-- documented `cyber-oedo` command names and argument behavior;
-- versioned TSV schemas described by `cyber-oedo describe-contracts`;
-- versioned JSON emitted by automation commands; and
-- documented build-manifest fields.
+- `cyber-oedo.dialogue-tsv/v1`
+- `cyber-oedo.auxiliary-text-tsv/v1`
+- `cyber-oedo.translation-inventory-tsv/v1`
+- `cyber-oedo.translation-inventory-summary-json/v1`
 
-Python module paths under `cyber_oedo.*` remain implementation details unless a
-future release explicitly promotes a Python API. Refactors may move Python
-symbols while compatibility shims preserve documented commands and file data.
+The translation inventory's human-editable fields are
+`english_translation` and `translator_notes`. Generated identity, source,
+coordinate, and control fields should be regenerated rather than hand-edited.
 
-## Current schema versions
+`cyber-oedo describe-contracts` prints the current catalog as JSON.
+`cyber-oedo inventory-summary` validates the inventory header and prints stable
+summary counts.
 
-All current contracts begin at version 1:
+## Removed contracts
 
-- `cyber-oedo.dialogue-tsv/v1`;
-- `cyber-oedo.auxiliary-text-tsv/v1`;
-- `cyber-oedo.translation-inventory-tsv/v1`;
-- `cyber-oedo.human-test-build-plan-json/v1`;
-- `cyber-oedo.human-test-build-manifest-json/v1`; and
-- `cyber-oedo.translation-inventory-summary-json/v1`.
+The old human-test build-plan and build-manifest schemas described an abandoned
+prototype patch pipeline. They are not part of the restart baseline. Their
+history is available through Git if it becomes useful when designing a new
+patch architecture.
 
-The translator inventory's only human-editable fields remain
-`english_translation` and `translator_notes`.
+## Compatibility rule
 
-## Compatibility rules
+Adding optional informational fields may be compatible with a version-1 reader
+when all required fields retain their meanings. Removing, renaming, or changing
+the semantics of a required field requires a new schema version.
 
-Additive informational TSV columns may remain readable by a version-1 consumer
-when every required version-1 field is still present. Removing, renaming, or
-changing the meaning of a required field requires a new schema version.
-
-A schema migration must write a new artifact or explicitly migrate to a new
-version. It must not silently overwrite a translator's master inventory.
-
-## Automation commands
-
-`cyber-oedo describe-contracts` prints the complete contract catalog as JSON.
-
-`cyber-oedo plan-human-test --title-screen clean` emits the complete hash-only
-patch plan without opening a source disc. The plan includes a canonical SHA-256
-identity, profile metadata, patch categories, guarded offsets, source hashes,
-replacement hashes, and the reviewed sector footprint. It never writes a disc
-image and never embeds copyrighted expected bytes.
-
-`cyber-oedo inventory-summary translation_inventory.tsv` validates the required
-version-1 header and emits stable JSON counts for rows, canonical IDs,
-translations, blanks, and quality labels.
+A schema migration must never silently overwrite a translator's master
+inventory.

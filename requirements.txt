@@ -1,4 +1,0 @@
-# Runtime dependency for render_pce_tiles.py and make_contact_sheet.py.
-# The extraction and TSV-analysis tools otherwise use only the Python standard
-# library. Python 3.11 or newer is recommended.
-Pillow>=10
