@@ -2,71 +2,54 @@
 
 ## Purpose
 
-This repository documents original reverse-engineering research and provides
-tools that operate on a user-supplied copy of *Cyber City Oedo 808: Kemono no
-Alignment* for PC Engine CD.
+This repository contains original reverse-engineering research and tools that
+operate on a user-supplied copy of *Cyber City Oedo 808: Kemono no Alignment*
+for PC Engine CD. It is not a game distribution and is not affiliated with or
+endorsed by the game's developers, publishers, or rights holders.
 
-It is not a game distribution and is not affiliated with or endorsed by the
-game's developers, publishers, or current rights holders.
+## Allowed repository content
 
-## Content allowed in the repository
-
-- original Python source code;
-- original documentation and format descriptions;
+- original source code and documentation;
 - synthetic tests and synthetic binary fixtures;
-- original replacement artwork and compact code-native masks derived from it;
-- cryptographic hashes used to identify the analyzed release;
-- small excerpts necessary to explain findings or localization context; and
-- patch-development metadata that does not reconstruct the original game.
+- cryptographic hashes identifying analyzed source data;
+- offsets, lengths, format descriptions, and compact research metadata;
+- small excerpts necessary to explain a technical finding; and
+- narrowly scoped evidence that cannot reconstruct substantial game content.
 
-## Content excluded from the repository
+## Excluded repository content
+
+Do not commit:
 
 - original or modified disc images;
-- `.ccd`, `.img`, `.sub`, `.cue`, `.iso`, `.chd`, or raw `.bin` images;
-- extracted program/data-track payloads;
-- audio tracks;
+- `.ccd`, `.img`, `.sub`, `.cue`, `.iso`, `.chd`, or raw extracted `.bin`
+  images;
+- extracted program/data-track payloads or audio tracks;
 - emulator BIOS or System Card images;
-- full dialogue/text dumps and generated translation inventories;
-- decompressed graphics, tile dumps, and bulk screenshots; and
-- files that allow substantial reconstruction of copyrighted game content.
+- complete dialogue dumps or generated translation inventories;
+- decompressed graphics dumps or bulk screenshots; or
+- files that permit substantial reconstruction of copyrighted game content.
 
-The root `.gitignore` blocks common forms of these files. Contributors must
-still review staged changes because ignore rules cannot identify every renamed
-or repackaged asset.
+`.gitignore` blocks common forms of local artifacts, but contributors must still
+review staged changes.
 
 ## Local workflow
 
-Users provide their own legally obtained CloneCD image and run the documented
-extractors and scanners locally. Generated TSVs and renders stay outside source
-control. The human-test builder also produces a complete modified CloneCD set;
-that build directory must remain local and excluded from source control.
+Use a legally obtained source image locally. Extracted payloads, generated TSVs,
+renders, traces, and emulator evidence stay outside source control unless they
+have been reduced to compact non-infringing metadata suitable for the evidence
+directory.
 
-A future translation release should distribute a patch against a hash-identified
-source, not a modified disc image. `build_manifest.json` may be shared after
-reviewing it for local paths, but it does not replace that patch format.
-
-The optional clean title follows the same boundary. `title_logo_mask.py`
-contains a compact four-bit coverage mask derived from approved replacement
-artwork, while `title_screen.py` contains its guarded decoder, importer, and
-generated grayscale palette. The builder reads the copyrighted source-game
-graphic and seven-frame title palette from the user's authenticated IMG solely
-to form exact same-size patch guards. Do not commit the extracted original tile
-block, original palette bytes, generated source renders, modified title block,
-or playable output image.
+If a future translation release is produced, distribute a patch against a
+hash-identified source rather than a modified disc image.
 
 ## Reporting issues
 
-When filing an issue:
+Include hashes, offsets, short hexadecimal excerpts, and synthetic reproducers
+where possible. Do not attach complete sectors, disc images, audio, BIOS files,
+or private filesystem paths when they are unnecessary.
 
-- include offsets, hashes, short hexadecimal excerpts, and tool output needed
-  to reproduce the problem;
-- do not attach complete disc sectors, audio, BIOS files, or large text dumps;
-  and
-- redact local paths or account information when they are irrelevant.
+## Licensing
 
-## Licensing status
-
-No open-source license has been selected for this repository yet. Copyright in
-the original code and documentation remains with their author until a license
-is added. Third-party game content remains the property of its respective
-rights holders.
+The repository's original code and documentation are licensed under the MIT
+License. Third-party game content remains the property of its respective rights
+holders and is not covered by that license.

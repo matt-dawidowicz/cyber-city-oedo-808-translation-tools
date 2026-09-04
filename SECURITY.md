@@ -2,10 +2,10 @@
 
 ## Supported code
 
-Security fixes should target the current `main` branch. The toolkit is not a
-network service, but it processes binary files and creates output directories,
-so malformed-input handling, path safety, and accidental source modification
-still matter.
+Security fixes target the current `main` branch. The restart baseline is a local
+analysis toolkit, not a network service or a supported translation patcher. It
+reads user-supplied binary data and writes derived analysis artifacts, so input
+validation, path safety, and source-file immutability still matter.
 
 ## Reporting a problem
 
@@ -14,18 +14,17 @@ not available, contact the repository maintainer through GitHub before posting
 proof-of-concept details publicly.
 
 Do not attach proprietary disc images, BIOS files, private filesystem paths, or
-other copyrighted source material to a report. A minimal synthetic reproducer
-is preferred.
+other copyrighted source material. Prefer a minimal synthetic reproducer.
 
 ## Scope priorities
 
 High-priority reports include behavior that can:
 
 - overwrite or modify a supplied source image unexpectedly;
-- write outside an explicitly selected output directory;
-- accept the wrong authenticated source and patch it as if it were supported;
-- silently skip integrity failures while claiming a verified build; or
+- write outside an explicitly selected output location;
+- mis-handle crafted binary input in a way that corrupts unrelated files; or
 - execute unexpected code from crafted input or path names.
 
-Translation wording, reverse-engineering hypotheses, and emulator compatibility
-are project correctness issues rather than security vulnerabilities.
+Translation wording, reverse-engineering hypotheses, false-positive scan
+results, and emulator compatibility are correctness issues rather than security
+vulnerabilities unless they also cross a security boundary.
