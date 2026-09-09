@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
-"""Extract Track 2's 2048-byte Mode 1 payload from the supplied CloneCD IMG.
-
-The CloneCD ``.img`` stores 2352-byte raw sectors.  All other tools in this
-directory expect a flat file containing only the 2048-byte user-data portion
-of each valid Track 2 Mode 1 sector.  This command creates that intermediate
-file without touching the source image.
-
-This is an extractor, not a raw-sector validator or rebuilder.  It verifies the
-12-byte sync pattern and mode byte for every selected sector, but it does not
-recalculate or authenticate EDC/ECC fields.  A future patcher must recalculate
-those fields when reinserting modified payload bytes.
-
-The defaults are specific to this game's supplied disc image.  Override them
-only when deliberately examining another dump or a corrected layout.
-"""
+"""Extract Track 2's 2048-byte Mode 1 payload from a CloneCD IMG."""
 
 from __future__ import annotations
 
@@ -21,15 +7,17 @@ import argparse
 import hashlib
 import pathlib
 import tempfile
+from collections.abc import Sequence
 
-from cdrom_mode1 import MODE1_SYNC
-from game_layout import (
+from cyber_oedo.disc.cdrom_mode1 import MODE1_SYNC
+from cyber_oedo.disc.game_layout import (
     MODE1_USER_DATA_OFFSET,
     RAW_SECTOR_SIZE,
     SECTOR_SIZE,
     TRACK2_SECTOR_COUNT,
     TRACK2_START_LBA,
 )
+
 
 def extract_mode1_payload(
     image_path: pathlib.Path,
@@ -38,41 +26,7 @@ def extract_mode1_payload(
     start_lba: int,
     sector_count: int,
 ) -> tuple[int, str]:
-    """Extract a contiguous range of Mode 1 user-data sectors.
-
-    Output is first written to a temporary file beside the destination and is
-    moved into place only after every source sector passes structural checks.
-    This avoids leaving an apparently valid but truncated payload after an
-    invalid sector or interrupted read.
-
-    Args:
-        image_path: Source CloneCD IMG containing 2352-byte raw sectors.
-        output_path: Destination for concatenated 2048-byte user-data sectors.
-        start_lba: Zero-based raw-sector index at which extraction begins.
-        sector_count: Number of consecutive Mode 1 sectors to extract.
-
-    Returns:
-        A tuple containing the number of payload bytes written and the
-        lowercase hexadecimal SHA-256 digest of those bytes.
-
-    Raises:
-        OSError: If source metadata cannot be read, source or temporary files
-            cannot be opened, bytes cannot be written, or the final atomic
-            replacement fails.
-        ValueError: If ``start_lba`` is negative, ``sector_count`` is not
-            positive, the image is too short, a sector read is incomplete,
-            a sync pattern is invalid, or a selected sector is not Mode 1.
-
-    Side Effects:
-        Creates ``output_path.parent`` when needed. Writes a temporary file
-        in that directory and atomically replaces ``output_path`` only after
-        successful validation. Removes the temporary file after a failure.
-
-    Notes:
-        Structural checks cover the 12-byte sync pattern and mode byte. The
-        routine deliberately does not verify EDC/ECC or BCD address fields.
-        The source image is opened read-only and is never modified.
-    """
+    """Extract contiguous Mode 1 user data with bounded memory use."""
 
     if start_lba < 0:
         raise ValueError("start_lba must be non-negative")
@@ -109,16 +63,15 @@ def extract_mode1_payload(
                         f"expected {RAW_SECTOR_SIZE}, got {len(raw)}"
                     )
                 if raw[: len(MODE1_SYNC)] != MODE1_SYNC:
+                    absolute_lba = start_lba + relative_sector
                     raise ValueError(
                         "invalid raw-sector sync at relative sector "
-                        f"{relative_sector} "
-                        f"(absolute LBA {start_lba + relative_sector})"
+                        f"{relative_sector} (absolute LBA {absolute_lba})"
                     )
                 if raw[15] != 1:
                     raise ValueError(
                         "expected Mode 1 at relative sector "
-                        f"{relative_sector}, "
-                        f"found mode {raw[15]:02X}"
+                        f"{relative_sector}, found mode {raw[15]:02X}"
                     )
                 payload = raw[
                     MODE1_USER_DATA_OFFSET:
@@ -138,21 +91,12 @@ def extract_mode1_payload(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line argument parser.
-
-    Returns:
-        A parser containing the program description and usage example. Input
-        and option arguments are added by ``main``.
-
-    Notes:
-        Keeping parser construction separate allows tests and documentation
-        tools to inspect command metadata without performing file I/O.
-    """
+    """Build the Track 2 extraction command parser."""
 
     return argparse.ArgumentParser(
         description=(
-            "Extract the verified 2048-byte user-data area from this game's "
-            "raw CloneCD Track 2 sectors."
+            "Extract the verified 2048-byte user-data area from this "
+            "game's raw CloneCD Track 2 sectors."
         ),
         epilog=(
             "Example: python extract_track2_mode1.py game.img "
@@ -161,25 +105,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
 
-def main() -> None:
-    """Run the Track 2 extraction command.
-
-    Inputs:
-        Parses a source IMG path, output path, starting LBA, and sector count
-        from command-line arguments.
-
-    Outputs:
-        Prints the resolved output path, byte count, sector count, and SHA-256
-        digest to standard output.
-
-    Side Effects:
-        Calls ``extract_mode1_payload``, which creates directories and writes
-        or replaces the requested output file.
-
-    Failure Conditions:
-        ``argparse`` exits with status 2 for invalid arguments or for any
-        ``OSError`` or ``ValueError`` raised by extraction.
-    """
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run Track 2 extraction with an explicit argument sequence."""
 
     parser = build_parser()
     parser.add_argument(
@@ -196,15 +123,21 @@ def main() -> None:
         "--start-lba",
         type=lambda value: int(value, 0),
         default=TRACK2_START_LBA,
-        help=f"first raw IMG sector to extract (default: {TRACK2_START_LBA})",
+        help=(
+            "first raw IMG sector to extract "
+            f"(default: {TRACK2_START_LBA})"
+        ),
     )
     parser.add_argument(
         "--sector-count",
         type=lambda value: int(value, 0),
         default=TRACK2_SECTOR_COUNT,
-        help=f"number of Mode 1 sectors (default: {TRACK2_SECTOR_COUNT})",
+        help=(
+            "number of Mode 1 sectors "
+            f"(default: {TRACK2_SECTOR_COUNT})"
+        ),
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         bytes_written, digest = extract_mode1_payload(
@@ -220,7 +153,8 @@ def main() -> None:
     print(f"bytes={bytes_written}")
     print(f"sectors={bytes_written // SECTOR_SIZE}")
     print(f"sha256={digest}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
