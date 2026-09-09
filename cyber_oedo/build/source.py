@@ -78,9 +78,9 @@ def copy_authenticated_source_set(
 ) -> tuple[dict[str, pathlib.Path], dict[str, pathlib.Path]]:
     """Copy a CloneCD set and authenticate it in the same read pass.
 
-    No output file is patched by this function. Every source digest is checked
-    after its copy completes, so callers can abort and remove the isolated
-    destination before any mutation when authentication fails.
+    No copied file is considered usable until every source digest matches.
+    Files created by this function are removed if copying or authentication
+    fails, so an unauthenticated partial set cannot be mistaken for build input.
     """
 
     if not output_stem:
@@ -88,18 +88,25 @@ def copy_authenticated_source_set(
     source_paths = resolve_source_paths(source_ccd, source_hashes)
     destination_directory.mkdir(parents=True, exist_ok=True)
     output_paths: dict[str, pathlib.Path] = {}
-    for extension, source in source_paths.items():
-        destination = destination_directory / f"{output_stem}{extension}"
-        actual = _copy_and_hash(
-            source,
-            destination,
-            chunk_size=chunk_size,
-        )
-        expected = source_hashes[extension]
-        if actual != expected:
-            raise ValueError(
-                f"{source.name}: SHA-256 mismatch; expected {expected}, "
-                f"found {actual}"
+    created: list[pathlib.Path] = []
+    try:
+        for extension, source in source_paths.items():
+            destination = destination_directory / f"{output_stem}{extension}"
+            actual = _copy_and_hash(
+                source,
+                destination,
+                chunk_size=chunk_size,
             )
-        output_paths[extension] = destination
+            created.append(destination)
+            expected = source_hashes[extension]
+            if actual != expected:
+                raise ValueError(
+                    f"{source.name}: SHA-256 mismatch; expected {expected}, "
+                    f"found {actual}"
+                )
+            output_paths[extension] = destination
+    except Exception:
+        for destination in created:
+            destination.unlink(missing_ok=True)
+        raise
     return source_paths, output_paths
