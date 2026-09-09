@@ -33,12 +33,15 @@ class ParsedRecord:
     text_only: tuple[str, ...]
     controls: tuple[int, ...]
     sjis_characters: int
+    control_opcodes: tuple[int, ...] = ()
 
 
 def parse_record(
     data: object,
     start: int,
     limit: int = 1024,
+    *,
+    allow_unknown_controls: bool = True,
 ) -> ParsedRecord | None:
     """Parse one dialogue body through the opcode-aware Tier-A parser.
 
@@ -46,13 +49,17 @@ def parse_record(
     extractor surface. Structured command operands are flattened to raw-byte
     tags in ``tokens`` and ``controls``; callers that need command semantics
     should use :mod:`cyber_oedo.script` directly.
+
+    ``allow_unknown_controls`` defaults to the historical forensic behavior
+    for compatibility callers. The normal extraction command disables it so
+    generated inventories use only statically established command shapes.
     """
 
     body = parse_dialogue_body(
         data,
         start,
         limit,
-        allow_unknown_controls=True,
+        allow_unknown_controls=allow_unknown_controls,
     )
     if body is None:
         return None
@@ -72,6 +79,7 @@ def parse_record(
         text_only=tuple(text_only),
         controls=body.legacy_control_bytes,
         sjis_characters=body.sjis_characters,
+        control_opcodes=body.control_opcodes,
     )
 
 
@@ -158,6 +166,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             parsed = parse_record(
                 data,
                 marker_offset + len(DIALOGUE_MARKER),
+                allow_unknown_controls=False,
             )
             search_at = marker_offset + 1
             if parsed is None:
@@ -167,7 +176,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 continue
             if japanese_character_count(text) < 2:
                 continue
-            quality = classify_record(text, parsed.controls)
+            quality = classify_record(
+                text,
+                parsed.control_opcodes,
+            )
             bank = bank_for_offset(marker_offset)
             tagged = "".join(parsed.tokens)
             raw_hex = data[
