@@ -7,14 +7,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class CommandSpec:
-    """Describe one command exposed through the unified command.
-
-    Args:
-        name: Hyphenated command name shown to operators.
-        module: Python module that implements the command.
-        summary: One-line description used by unified help output.
-        group: Help group that communicates the command's intended role.
-    """
+    """Describe one command exposed through the unified command."""
 
     name: str
     module: str
@@ -141,23 +134,23 @@ COMMANDS: tuple[CommandSpec, ...] = (
 
 
 def command_by_name(name: str) -> CommandSpec | None:
-    """Return the command specification matching ``name``.
+    """Return the command specification matching ``name``."""
 
-    Args:
-        name: Hyphenated command name supplied by an operator.
-
-    Returns:
-        Matching command specification, or ``None`` for an unknown name.
-    """
-
-    return next((item for item in COMMANDS if item.name == name), None)
+    return next(
+        (item for item in COMMANDS if item.name == name),
+        None,
+    )
 
 
 def script_modules() -> tuple[str, ...]:
-    """Return unique command modules in deterministic order.
+    """Return legacy top-level script modules in deterministic order."""
 
-    Returns:
-        Sorted module names used by the unified command registry.
-    """
-
-    return tuple(sorted({item.module for item in COMMANDS}))
+    return tuple(
+        sorted(
+            {
+                item.module
+                for item in COMMANDS
+                if "." not in item.module
+            }
+        )
+    )

@@ -11,11 +11,15 @@ from collections.abc import Sequence
 
 from cyber_oedo.disc.game_layout import SECTOR_SIZE
 from cyber_oedo.io import mapped_file
-from cyber_oedo.text.sjis import ScriptMetrics, script_metrics, token_pattern as _token_pattern
+from cyber_oedo.text.sjis import (
+    ScriptMetrics,
+    script_metrics,
+    token_pattern as _token_pattern,
+)
 
 
 def token_pattern(minimum_tokens: int):
-    """Compatibility wrapper around the canonical Shift-JIS token pattern."""
+    """Return the canonical token-run pattern for compatibility callers."""
 
     return _token_pattern(minimum_tokens)
 
@@ -34,6 +38,8 @@ def metrics(text: str) -> tuple[int, int, int, int, int]:
 
 
 def _plausible(text: str, shape: ScriptMetrics) -> bool:
+    """Apply the title-specific natural-language heuristic once."""
+
     if len(text) < 5:
         return False
     counts = collections.Counter(text)
@@ -42,13 +48,20 @@ def _plausible(text: str, shape: ScriptMetrics) -> bool:
     if shape.ascii_printable > 2 and shape.fullwidth < 4:
         return False
     kana = shape.hiragana + shape.katakana
-    natural_sentence = len(text) >= 8 and kana >= 3 and kana / len(text) >= 0.20
+    natural_sentence = (
+        len(text) >= 8
+        and kana >= 3
+        and kana / len(text) >= 0.20
+    )
     japanese_label = (
         len(text) >= 5
         and kana >= 2
         and (kana + shape.kanji) / len(text) >= 0.60
     )
-    fullwidth_label = shape.fullwidth >= 5 and shape.ascii_printable == 0
+    fullwidth_label = (
+        shape.fullwidth >= 5
+        and shape.ascii_printable == 0
+    )
     return natural_sentence or japanese_label or fullwidth_label
 
 
@@ -59,23 +72,40 @@ def plausible(text: str) -> bool:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the broad Shift-JIS discovery command parser."""
+
     return argparse.ArgumentParser(
         description=(
-            "Scan a 2048-byte-sector payload for Shift-JIS runs that resemble "
-            "Japanese sentences or labels."
+            "Scan a 2048-byte-sector payload for Shift-JIS runs that "
+            "resemble Japanese sentences or labels."
         ),
         epilog=(
-            "This is a discovery heuristic. Structured dialogue should come "
-            "from extract-dialogue."
+            "This is a discovery heuristic. Structured dialogue should "
+            "come from extract-dialogue."
         ),
     )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Scan a payload map and stream plausible candidates to TSV."""
+
     parser = build_parser()
-    parser.add_argument("input", type=pathlib.Path, help="Track 2 payload .bin")
-    parser.add_argument("output", type=pathlib.Path, help="destination TSV")
-    parser.add_argument("--minimum-tokens", type=int, default=4, metavar="N")
+    parser.add_argument(
+        "input",
+        type=pathlib.Path,
+        help="Track 2 payload .bin",
+    )
+    parser.add_argument(
+        "output",
+        type=pathlib.Path,
+        help="destination TSV",
+    )
+    parser.add_argument(
+        "--minimum-tokens",
+        type=int,
+        default=4,
+        metavar="N",
+    )
     args = parser.parse_args(argv)
     try:
         pattern = token_pattern(args.minimum_tokens)
@@ -85,7 +115,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     count = 0
     with mapped_file(args.input) as data, args.output.open(
-        "w", encoding="utf-8-sig", newline=""
+        "w",
+        encoding="utf-8-sig",
+        newline="",
     ) as output:
         writer = csv.DictWriter(
             output,
@@ -118,7 +150,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 {
                     "offset": f"0x{offset:08X}",
                     "sector": offset // SECTOR_SIZE,
-                    "within_sector": f"0x{offset % SECTOR_SIZE:03X}",
+                    "within_sector": (
+                        f"0x{offset % SECTOR_SIZE:03X}"
+                    ),
                     "bytes": len(raw),
                     "characters": len(text),
                     "hiragana": shape.hiragana,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the translator inventory without materializing every occurrence."""
+"""Build the translator inventory without retaining every occurrence."""
 
 from __future__ import annotations
 
@@ -18,6 +18,8 @@ OUTPUT_FIELDS = TRANSLATION_INVENTORY_V1.fields
 
 @dataclass(frozen=True, slots=True)
 class Occurrence:
+    """Represent one typed text occurrence before TSV serialization."""
+
     kind: str
     bank: str
     quality: str
@@ -29,6 +31,8 @@ class Occurrence:
     tagged_source: str
 
     def export_base(self) -> dict[str, object]:
+        """Return boundary fields in the external inventory representation."""
+
         return {
             "kind": self.kind,
             "bank": self.bank,
@@ -43,21 +47,41 @@ class Occurrence:
 
 
 def read_tsv(path: pathlib.Path) -> Iterator[dict[str, str]]:
-    with path.open("r", encoding="utf-8-sig", newline="") as source:
+    """Yield one dictionary at a time from a UTF-8 TSV file."""
+
+    with path.open(
+        "r",
+        encoding="utf-8-sig",
+        newline="",
+    ) as source:
         yield from csv.DictReader(source, delimiter="\t")
 
 
 def auxiliary_quality(text: str) -> str:
-    has_halfwidth = any(0xFF61 <= ord(character) <= 0xFF9F for character in text)
-    return "review" if has_halfwidth or text.startswith(("`", "'")) else "likely_text"
+    """Return the retained quality label for auxiliary text."""
+
+    has_halfwidth = any(
+        0xFF61 <= ord(character) <= 0xFF9F
+        for character in text
+    )
+    suspicious_prefix = text.startswith(("`", "'"))
+    if has_halfwidth or suspicious_prefix:
+        return "review"
+    return "likely_text"
 
 
-def _dialogue_occurrences(path: pathlib.Path) -> Iterator[Occurrence]:
+def _dialogue_occurrences(
+    path: pathlib.Path,
+) -> Iterator[Occurrence]:
+    """Yield typed dialogue rows while enforcing offset ordering."""
+
     previous = -1
     for row in read_tsv(path):
         offset = int(row["offset"], 16)
         if offset < previous:
-            raise ValueError(f"{path}: rows are not sorted by offset")
+            raise ValueError(
+                f"{path}: rows are not sorted by offset"
+            )
         previous = offset
         yield Occurrence(
             "dialogue",
@@ -72,12 +96,18 @@ def _dialogue_occurrences(path: pathlib.Path) -> Iterator[Occurrence]:
         )
 
 
-def _auxiliary_occurrences(path: pathlib.Path) -> Iterator[Occurrence]:
+def _auxiliary_occurrences(
+    path: pathlib.Path,
+) -> Iterator[Occurrence]:
+    """Yield typed auxiliary rows while enforcing offset ordering."""
+
     previous = -1
     for row in read_tsv(path):
         offset = int(row["offset"], 16)
         if offset < previous:
-            raise ValueError(f"{path}: rows are not sorted by offset")
+            raise ValueError(
+                f"{path}: rows are not sorted by offset"
+            )
         previous = offset
         yield Occurrence(
             "auxiliary",
@@ -106,6 +136,8 @@ def iter_occurrences(
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the translator-inventory command parser."""
+
     return argparse.ArgumentParser(
         description=(
             "Merge dialogue and auxiliary text TSVs into an editable, "
@@ -115,6 +147,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Count canonical text, then stream the merged inventory to disk."""
+
     parser = build_parser()
     parser.add_argument("dialogue", type=pathlib.Path)
     parser.add_argument("auxiliary", type=pathlib.Path)
@@ -123,36 +157,54 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     occurrence_counts: collections.Counter[str] = collections.Counter(
         occurrence.source_text
-        for occurrence in iter_occurrences(args.dialogue, args.auxiliary)
+        for occurrence in iter_occurrences(
+            args.dialogue,
+            args.auxiliary,
+        )
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     canonical_ids: dict[str, str] = {}
     review_count = 0
     output_count = 0
-    with args.output.open("w", encoding="utf-8-sig", newline="") as output:
-        writer = csv.DictWriter(output, fieldnames=OUTPUT_FIELDS, delimiter="\t")
+    with args.output.open(
+        "w",
+        encoding="utf-8-sig",
+        newline="",
+    ) as output:
+        writer = csv.DictWriter(
+            output,
+            fieldnames=OUTPUT_FIELDS,
+            delimiter="\t",
+        )
         writer.writeheader()
-        for index, occurrence in enumerate(
-            iter_occurrences(args.dialogue, args.auxiliary), start=1
-        ):
+        merged = iter_occurrences(
+            args.dialogue,
+            args.auxiliary,
+        )
+        for index, occurrence in enumerate(merged, start=1):
             source_text = occurrence.source_text
             canonical_id = canonical_ids.get(source_text)
             if canonical_id is None:
-                canonical_id = f"T{len(canonical_ids) + 1:05d}"
+                canonical_id = (
+                    f"T{len(canonical_ids) + 1:05d}"
+                )
                 canonical_ids[source_text] = canonical_id
             writer.writerow(
                 {
                     "entry_id": f"E{index:05d}",
                     "canonical_id": canonical_id,
-                    "occurrence_count": occurrence_counts[source_text],
+                    "occurrence_count": (
+                        occurrence_counts[source_text]
+                    ),
                     **occurrence.export_base(),
                     "english_translation": "",
                     "translator_notes": "",
                 }
             )
             output_count += 1
-            review_count += occurrence.quality == "review"
+            if occurrence.quality == "review":
+                review_count += 1
 
     print(f"occurrences={output_count}")
     print(f"canonical_texts={len(canonical_ids)}")

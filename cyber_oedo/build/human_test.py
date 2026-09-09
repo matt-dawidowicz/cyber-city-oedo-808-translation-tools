@@ -7,15 +7,21 @@ import pathlib
 from collections.abc import Sequence
 
 from cyber_oedo.build import engine as _engine
+from cyber_oedo.build.image_verify import (
+    compare_and_hash_raw_images,
+    verify_output_patches,
+)
 from cyber_oedo.build.pipeline import build_human_test_disc
 from cyber_oedo.build.plan import PatchPlan, build_profile_plan
 from cyber_oedo.build.verification import verify_plan_footprint
+from cyber_oedo.disc.cdrom_mode1 import PayloadPatch
 
 BUILD_PROFILE = _engine.BUILD_PROFILE
 DEFAULT_TITLE_SCREEN_MODE = _engine.DEFAULT_TITLE_SCREEN_MODE
 TITLE_SCREEN_MODES = _engine.TITLE_SCREEN_MODES
 OUTPUT_STEM = _engine.OUTPUT_STEM
 TRACK2_START_LBA = _engine.TRACK2_START_LBA
+TRACK2_SECTOR_COUNT = _engine.TRACK2_SECTOR_COUNT
 HUMAN_TEST_PATCHES = _engine.HUMAN_TEST_PATCHES
 HUMAN_TEST_BINARY_PATCHES = _engine.HUMAN_TEST_BINARY_PATCHES
 BOOT_MENU_PATCHES = _engine.BOOT_MENU_PATCHES
@@ -39,6 +45,31 @@ wrap_ascii_text = _engine.wrap_ascii_text
 optional_title_screen_patches = _engine.optional_title_screen_patches
 profile_relative_sectors = _engine.profile_relative_sectors
 build_parser = _engine.build_parser
+
+
+def compare_raw_images(
+    source_image: pathlib.Path,
+    output_image: pathlib.Path,
+) -> tuple[int, ...]:
+    """Return exact changed LBAs using the optimized chunked comparison."""
+
+    return compare_and_hash_raw_images(
+        source_image,
+        output_image,
+    ).changed_lbas
+
+
+def verify_output_text(
+    output_image: pathlib.Path,
+    patches: tuple[PayloadPatch, ...],
+) -> None:
+    """Verify replacement bytes through the optimized sector readback."""
+
+    verify_output_patches(
+        output_image,
+        patches,
+        start_lba=TRACK2_START_LBA,
+    )
 
 
 def planned_profile(title_screen_mode: str) -> PatchPlan:
@@ -121,6 +152,7 @@ __all__ = [
     "TITLE_SCREEN_MODES",
     "OUTPUT_STEM",
     "TRACK2_START_LBA",
+    "TRACK2_SECTOR_COUNT",
     "HUMAN_TEST_PATCHES",
     "HUMAN_TEST_BINARY_PATCHES",
     "BOOT_MENU_PATCHES",
@@ -141,6 +173,8 @@ __all__ = [
     "wrap_ascii_text",
     "optional_title_screen_patches",
     "profile_relative_sectors",
+    "compare_raw_images",
+    "verify_output_text",
     "build_parser",
     "planned_profile",
     "build_human_test_disc",
