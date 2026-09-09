@@ -15,23 +15,9 @@ from cyber_oedo.build.image_verify import (
     verify_output_patches,
 )
 from cyber_oedo.build.manifest import binary_patch_rows, text_patch_rows
-from cyber_oedo.build.source import resolve_source_set
+from cyber_oedo.build.source import copy_authenticated_source_set
 from cyber_oedo.disc.patching import apply_payload_patches
 from cyber_oedo.io import sha256_file
-
-
-def _copy_clonecd_set(
-    source_paths: dict[str, pathlib.Path],
-    temporary: pathlib.Path,
-) -> dict[str, pathlib.Path]:
-    """Copy the authenticated source set under the test-build stem."""
-
-    outputs: dict[str, pathlib.Path] = {}
-    for extension, source in source_paths.items():
-        destination = temporary / f"{engine.OUTPUT_STEM}{extension}"
-        shutil.copy2(source, destination)
-        outputs[extension] = destination
-    return outputs
 
 
 def build_human_test_disc(
@@ -47,17 +33,6 @@ def build_human_test_disc(
         raise ValueError(
             f"output directory already exists: {output_directory}"
         )
-    source_paths = resolve_source_set(source_ccd, engine.SOURCE_HASHES)
-    title_patches = engine.optional_title_screen_patches(
-        source_paths[".img"],
-        title_screen_mode,
-    )
-    text_patches = tuple(
-        patch.to_payload_patch()
-        for patch in engine.HUMAN_TEST_PATCHES
-    )
-    binary_patches = engine.HUMAN_TEST_BINARY_PATCHES + title_patches
-    payload_patches = text_patches + binary_patches
 
     output_directory.parent.mkdir(parents=True, exist_ok=True)
     temporary = pathlib.Path(
@@ -67,7 +42,25 @@ def build_human_test_disc(
         )
     )
     try:
-        output_paths = _copy_clonecd_set(source_paths, temporary)
+        source_paths, output_paths = copy_authenticated_source_set(
+            source_ccd,
+            temporary,
+            engine.OUTPUT_STEM,
+            engine.SOURCE_HASHES,
+        )
+        title_patches = engine.optional_title_screen_patches(
+            source_paths[".img"],
+            title_screen_mode,
+        )
+        text_patches = tuple(
+            patch.to_payload_patch()
+            for patch in engine.HUMAN_TEST_PATCHES
+        )
+        binary_patches = (
+            engine.HUMAN_TEST_BINARY_PATCHES + title_patches
+        )
+        payload_patches = text_patches + binary_patches
+
         sector_reports = apply_payload_patches(
             output_paths[".img"],
             payload_patches,
