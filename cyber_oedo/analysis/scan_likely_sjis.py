@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract plausible natural-language Shift-JIS runs with bounded memory."""
+"""Extract plausible natural-language Shift-JIS runs with native filtering."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import csv
 import pathlib
 from collections.abc import Sequence
 
+from cyber_oedo.analysis.fast_scan import likely_sjis_runs
 from cyber_oedo.disc.game_layout import SECTOR_SIZE
 from cyber_oedo.io import mapped_file
 from cyber_oedo.text.sjis import (
@@ -87,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Scan a payload map and stream plausible candidates to TSV."""
+    """Scan a payload map and stream deterministic candidates to TSV."""
 
     parser = build_parser()
     parser.add_argument(
@@ -107,10 +108,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         metavar="N",
     )
     args = parser.parse_args(argv)
-    try:
-        pattern = token_pattern(args.minimum_tokens)
-    except ValueError as error:
-        parser.error(str(error))
+    if args.minimum_tokens <= 0:
+        parser.error("--minimum-tokens must be positive")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     count = 0
@@ -136,16 +135,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             delimiter="\t",
         )
         writer.writeheader()
-        for match in pattern.finditer(data):
-            raw = match.group()
+        starts, ends, native_metrics = likely_sjis_runs(
+            data,
+            args.minimum_tokens,
+        )
+        for start, end, shape in zip(
+            starts,
+            ends,
+            native_metrics,
+            strict=True,
+        ):
+            offset = int(start)
+            raw = data[offset:int(end)]  # type: ignore[index]
             try:
                 text = raw.decode("shift_jis")
-            except UnicodeDecodeError:
-                continue
-            shape = script_metrics(text)
-            if not _plausible(text, shape):
-                continue
-            offset = match.start()
+            except UnicodeDecodeError as error:
+                raise AssertionError(
+                    "native scanner admitted undecodable Shift-JIS"
+                ) from error
             writer.writerow(
                 {
                     "offset": f"0x{offset:08X}",
@@ -154,11 +161,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                         f"0x{offset % SECTOR_SIZE:03X}"
                     ),
                     "bytes": len(raw),
-                    "characters": len(text),
-                    "hiragana": shape.hiragana,
-                    "katakana": shape.katakana,
-                    "kanji": shape.kanji,
-                    "fullwidth": shape.fullwidth,
+                    "characters": int(shape[0]),
+                    "hiragana": int(shape[1]),
+                    "katakana": int(shape[2]),
+                    "kanji": int(shape[3]),
+                    "fullwidth": int(shape[4]),
                     "text": text,
                 }
             )
