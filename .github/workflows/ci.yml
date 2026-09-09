@@ -50,6 +50,14 @@ jobs:
       - name: Build source and wheel distributions
         run: python -m build --outdir dist
 
+      - name: Retain built distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Smoke-test installed wheel outside checkout
         run: >-
           python -c "import glob, subprocess, sys, tempfile;
