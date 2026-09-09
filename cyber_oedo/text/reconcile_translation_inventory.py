@@ -25,7 +25,7 @@ REPORT_FIELDS = (
 
 @dataclass(frozen=True, slots=True)
 class OldTranslation:
-    """Store translator-owned fields and occurrence identity for one old row."""
+    """Store translator fields and occurrence identity for one old row."""
 
     entry_id: str
     kind: str

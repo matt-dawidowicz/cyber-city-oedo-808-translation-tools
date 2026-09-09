@@ -54,7 +54,7 @@ class DialogueExtractionTests(unittest.TestCase):
     def test_compatibility_parser_can_still_preserve_unknown_control(
         self,
     ) -> None:
-        """Keep forensic callers able to inspect an unknown one-byte control."""
+        """Keep forensic callers able to inspect an unknown control byte."""
 
         body = (
             "猫犬".encode("shift_jis")
