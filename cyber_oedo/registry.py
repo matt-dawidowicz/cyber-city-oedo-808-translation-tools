@@ -29,6 +29,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Pipeline",
     ),
     CommandSpec(
+        "build-resource-map",
+        "cyber_oedo.analysis.build_resource_map",
+        "Map every sector-aligned candidate resource region.",
+        "Pipeline",
+    ),
+    CommandSpec(
         "scan-likely-sjis",
         "scan_likely_sjis",
         "Find likely natural-language Shift-JIS runs.",
