@@ -2,13 +2,14 @@
 
 from cyber_oedo.analysis import disassemble_huc6280 as _implementation
 from cyber_oedo.analysis.disassemble_huc6280 import *  # noqa: F401,F403
-
-main = _implementation.main
+from cyber_oedo.commands.disassemble_region import main
 
 
 def __getattr__(name: str):
     """Forward compatibility lookups to the packaged implementation."""
 
+    if name == "main":
+        return main
     return getattr(_implementation, name)
 
 
