@@ -1,70 +1,58 @@
-"""Public authenticated human-test build facade and compatibility surface."""
+"""Public, explicit API for the authenticated human-test build."""
 
 from __future__ import annotations
 
 import json
 import pathlib
+from collections.abc import Sequence
 
 from cyber_oedo.build import engine as _engine
+from cyber_oedo.build.pipeline import build_human_test_disc
 from cyber_oedo.build.plan import PatchPlan, build_profile_plan
 from cyber_oedo.build.verification import verify_plan_footprint
 
-
-globals().update(
-    {
-        name: value
-        for name, value in vars(_engine).items()
-        if not name.startswith("__")
-    }
+BUILD_PROFILE = _engine.BUILD_PROFILE
+DEFAULT_TITLE_SCREEN_MODE = _engine.DEFAULT_TITLE_SCREEN_MODE
+TITLE_SCREEN_MODES = _engine.TITLE_SCREEN_MODES
+OUTPUT_STEM = _engine.OUTPUT_STEM
+TRACK2_START_LBA = _engine.TRACK2_START_LBA
+HUMAN_TEST_PATCHES = _engine.HUMAN_TEST_PATCHES
+HUMAN_TEST_BINARY_PATCHES = _engine.HUMAN_TEST_BINARY_PATCHES
+BOOT_MENU_PATCHES = _engine.BOOT_MENU_PATCHES
+MISSION_TITLE_PATCHES = _engine.MISSION_TITLE_PATCHES
+MISSION0_PROLOGUE_PATCHES = _engine.MISSION0_PROLOGUE_PATCHES
+MISSION0_RENDERER_PATCHES = _engine.MISSION0_RENDERER_PATCHES
+OPENING_PROFILE_FIELDS = _engine.OPENING_PROFILE_FIELDS
+OPENING_PROFILE_TEXT_PATCHES = _engine.OPENING_PROFILE_TEXT_PATCHES
+OPENING_PROFILE_LAYOUT_PATCHES = _engine.OPENING_PROFILE_LAYOUT_PATCHES
+INFORMATION_SCREEN_LINES = _engine.INFORMATION_SCREEN_LINES
+INFORMATION_SCREEN_LAYOUT_PATCHES = (
+    _engine.INFORMATION_SCREEN_LAYOUT_PATCHES
 )
+INFORMATION_HIDDEN_ROW = _engine.INFORMATION_HIDDEN_ROW
+PROLOGUE_WRAP_WIDTH = _engine.PROLOGUE_WRAP_WIDTH
+TITLE_ASSET_BYTES = _engine.TITLE_ASSET_BYTES
+TITLE_PALETTE_OFFSET = _engine.TITLE_PALETTE_OFFSET
+TITLE_SCREEN_OFFSET = _engine.TITLE_SCREEN_OFFSET
+ascii_to_fullwidth = _engine.ascii_to_fullwidth
+wrap_ascii_text = _engine.wrap_ascii_text
+optional_title_screen_patches = _engine.optional_title_screen_patches
+profile_relative_sectors = _engine.profile_relative_sectors
+build_parser = _engine.build_parser
 
 
 def planned_profile(title_screen_mode: str) -> PatchPlan:
-    """Return and independently verify the selected hash-only patch plan."""
+    """Return and independently verify one deterministic patch plan."""
 
     plan = build_profile_plan(title_screen_mode)
     verify_plan_footprint(plan)
     return plan
 
 
-def build_human_test_disc(
-    source_ccd: pathlib.Path,
-    output_directory: pathlib.Path,
-    *,
-    title_screen_mode: str = _engine.DEFAULT_TITLE_SCREEN_MODE,
-) -> pathlib.Path:
-    """Preflight the deterministic plan, then run the authenticated engine.
+def main(argv: Sequence[str] | None = None) -> int:
+    """Build an authenticated human-test CloneCD set from CLI arguments."""
 
-    Args:
-        source_ccd: Authenticated source CloneCD descriptor.
-        output_directory: New directory that will receive the completed set.
-        title_screen_mode: ``"clean"`` or ``"original"``.
-
-    Returns:
-        Final output CCD path returned by the unchanged build engine.
-
-    Raises:
-        OSError: Propagated from authenticated source/build operations.
-        ValueError: Propagated from plan or build verification failures.
-
-    Side Effects:
-        Performs the same isolated CloneCD copy, patch, and verification
-        workflow as the preserved build engine after a source-independent plan
-        consistency check.
-    """
-
-    planned_profile(title_screen_mode)
-    return _engine.build_human_test_disc(
-        source_ccd,
-        output_directory,
-        title_screen_mode=title_screen_mode,
-    )
-
-
-def main() -> None:
-    """Run the historical builder CLI through the decomposed facade."""
-
-    parser = _engine.build_parser()
+    parser = build_parser()
     parser.add_argument(
         "source_ccd",
         type=pathlib.Path,
@@ -77,14 +65,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--title-screen",
-        choices=_engine.TITLE_SCREEN_MODES,
-        default=_engine.DEFAULT_TITLE_SCREEN_MODE,
-        help=(
-            "opening graphic variant: antialiased generated title and "
-            "grayscale palette, or untouched original (default: clean)"
-        ),
+        choices=TITLE_SCREEN_MODES,
+        default=DEFAULT_TITLE_SCREEN_MODE,
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         output_ccd = build_human_test_disc(
             args.source_ccd,
@@ -94,22 +78,25 @@ def main() -> None:
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
-    manifest_path = output_ccd.parent / "build_manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (output_ccd.parent / "build_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
     changed_relative = manifest["changed_relative_sectors"]
     guarded_relative = manifest["guarded_relative_sectors"]
     changed_absolute = [
-        _engine.TRACK2_START_LBA + sector
+        TRACK2_START_LBA + sector
         for sector in changed_relative
     ]
     optional_count = 2 if args.title_screen == "clean" else 0
     print(f"output_ccd={output_ccd}")
-    print(f"profile={_engine.BUILD_PROFILE}")
+    print(f"profile={BUILD_PROFILE}")
     print(f"title_screen={args.title_screen}")
-    print(f"text_patches={len(_engine.HUMAN_TEST_PATCHES)}")
+    print(f"text_patches={len(HUMAN_TEST_PATCHES)}")
     print(
         "binary_patches="
-        f"{len(_engine.HUMAN_TEST_BINARY_PATCHES) + optional_count}"
+        f"{len(HUMAN_TEST_BINARY_PATCHES) + optional_count}"
     )
     print(
         "changed_relative_sectors="
@@ -125,3 +112,41 @@ def main() -> None:
     )
     print("structural_validation=passed")
     print("human_emulator_test=pending")
+    return 0
+
+
+__all__ = [
+    "BUILD_PROFILE",
+    "DEFAULT_TITLE_SCREEN_MODE",
+    "TITLE_SCREEN_MODES",
+    "OUTPUT_STEM",
+    "TRACK2_START_LBA",
+    "HUMAN_TEST_PATCHES",
+    "HUMAN_TEST_BINARY_PATCHES",
+    "BOOT_MENU_PATCHES",
+    "MISSION_TITLE_PATCHES",
+    "MISSION0_PROLOGUE_PATCHES",
+    "MISSION0_RENDERER_PATCHES",
+    "OPENING_PROFILE_FIELDS",
+    "OPENING_PROFILE_TEXT_PATCHES",
+    "OPENING_PROFILE_LAYOUT_PATCHES",
+    "INFORMATION_SCREEN_LINES",
+    "INFORMATION_SCREEN_LAYOUT_PATCHES",
+    "INFORMATION_HIDDEN_ROW",
+    "PROLOGUE_WRAP_WIDTH",
+    "TITLE_ASSET_BYTES",
+    "TITLE_PALETTE_OFFSET",
+    "TITLE_SCREEN_OFFSET",
+    "ascii_to_fullwidth",
+    "wrap_ascii_text",
+    "optional_title_screen_patches",
+    "profile_relative_sectors",
+    "build_parser",
+    "planned_profile",
+    "build_human_test_disc",
+    "main",
+]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
