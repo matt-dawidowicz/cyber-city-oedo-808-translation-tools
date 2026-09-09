@@ -14,6 +14,7 @@ from cyber_oedo.build.image_verify import (
     compare_and_hash_raw_images,
     verify_output_patches,
 )
+from cyber_oedo.build.manifest import binary_patch_rows, text_patch_rows
 from cyber_oedo.build.source import resolve_source_set
 from cyber_oedo.disc.patching import apply_payload_patches
 from cyber_oedo.io import sha256_file
@@ -134,11 +135,15 @@ def build_human_test_disc(
                 dataclasses.asdict(report)
                 for report in changed_reports
             ],
-            "text_patches": engine._manifest_patch_rows(
-                engine.HUMAN_TEST_PATCHES
+            "text_patches": text_patch_rows(
+                engine.HUMAN_TEST_PATCHES,
+                sector_size=engine.SECTOR_SIZE,
+                track_start_lba=engine.TRACK2_START_LBA,
             ),
-            "binary_patches": engine._manifest_binary_patch_rows(
-                binary_patches
+            "binary_patches": binary_patch_rows(
+                binary_patches,
+                sector_size=engine.SECTOR_SIZE,
+                track_start_lba=engine.TRACK2_START_LBA,
             ),
             "verification": {
                 "source_hashes_match": True,
