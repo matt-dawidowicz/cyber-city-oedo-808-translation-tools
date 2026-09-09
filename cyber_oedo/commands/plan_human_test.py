@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+from collections.abc import Sequence
 
 from cyber_oedo.build.human_test import planned_profile
 from cyber_oedo.contracts import BUILD_PLAN_V1
@@ -39,8 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Describe the complete guarded human-test patch plan without "
-            "opening or writing a disc image."
+            "Describe the complete guarded human-test patch plan "
+            "without opening or writing a disc image."
         )
     )
     parser.add_argument(
@@ -62,10 +63,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> int:
     """Write or print a deterministic source-independent patch plan."""
 
-    args = build_parser().parse_args()
+    args = build_parser().parse_args(argv)
     indent = None if args.compact else 2
     text = json.dumps(
         build_payload(args.title_screen),
@@ -75,10 +76,11 @@ def main() -> None:
     ) + "\n"
     if args.output is None:
         print(text, end="")
-        return
+        return 0
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(text, encoding="utf-8")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

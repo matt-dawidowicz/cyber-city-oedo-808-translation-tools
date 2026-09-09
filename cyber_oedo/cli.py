@@ -1,21 +1,43 @@
-"""Provide one stable command while preserving every legacy script."""
+"""Provide one stable command without mutating process-global argv."""
 
 from __future__ import annotations
 
-import runpy
+import importlib
+import subprocess
 import sys
 from collections.abc import Sequence
 
 from cyber_oedo import __version__
 from cyber_oedo.registry import COMMANDS, command_by_name
 
+DIRECT_COMMANDS = {
+    "extract-track2-mode1": (
+        "cyber_oedo.disc.extract_track2_mode1"
+    ),
+    "scan-track": "cyber_oedo.analysis.scan_track",
+    "scan-likely-sjis": "cyber_oedo.analysis.scan_likely_sjis",
+    "extract-dialogue": "cyber_oedo.text.extract_dialogue",
+    "extract-auxiliary-text": (
+        "cyber_oedo.text.extract_auxiliary_text"
+    ),
+    "build-translation-inventory": (
+        "cyber_oedo.text.build_translation_inventory"
+    ),
+    "validate-translation-inventory": (
+        "cyber_oedo.text.validate_translation_inventory"
+    ),
+    "analyze-text-slots": (
+        "cyber_oedo.analysis.analyze_text_slots"
+    ),
+    "build-human-test-disc": "cyber_oedo.build.human_test",
+    "describe-contracts": "cyber_oedo.commands.describe_contracts",
+    "plan-human-test": "cyber_oedo.commands.plan_human_test",
+    "inventory-summary": "cyber_oedo.commands.inventory_summary",
+}
+
 
 def help_text() -> str:
-    """Build deterministic top-level help text.
-
-    Returns:
-        Human-readable command overview grouped by operator role.
-    """
+    """Build deterministic top-level help text."""
 
     lines = [
         "Cyber City Oedo 808 translation-analysis toolkit",
@@ -40,47 +62,52 @@ def help_text() -> str:
         [
             "Compatibility:",
             "  Existing 'python script.py ...' invocations remain supported.",
-            "  Subcommand arguments are forwarded unchanged to each script.",
+            "  Pipeline commands dispatch directly into package APIs.",
         ]
     )
     return "\n".join(lines)
 
 
-def run_script(module: str, arguments: Sequence[str]) -> int:
-    """Execute one existing script module with forwarded arguments.
+def _run_direct(
+    module_name: str,
+    arguments: Sequence[str],
+) -> int:
+    """Import a package command and call its explicit argument API."""
 
-    Args:
-        module: Top-level module name registered for the command.
-        arguments: Arguments that should become the script's ``sys.argv``.
+    module = importlib.import_module(module_name)
+    main_function = getattr(module, "main")
+    result = main_function(list(arguments))
+    return 0 if result is None else int(result)
 
-    Returns:
-        Zero when the script returns normally.
 
-    Side Effects:
-        Temporarily replaces ``sys.argv`` and executes the module as
-        ``__main__``. The original argument vector is always restored.
-    """
+def _run_legacy(
+    module_name: str,
+    arguments: Sequence[str],
+) -> int:
+    """Isolate an unchanged legacy diagnostic in a child interpreter."""
 
-    original_argv = sys.argv
-    try:
-        sys.argv = [f"{module}.py", *arguments]
-        runpy.run_module(module, run_name="__main__")
-    finally:
-        sys.argv = original_argv
-    return 0
+    completed = subprocess.run(
+        [sys.executable, "-m", module_name, *arguments],
+        check=False,
+    )
+    return completed.returncode
+
+
+def run_command(
+    command_name: str,
+    module_name: str,
+    arguments: Sequence[str],
+) -> int:
+    """Dispatch directly when an explicit package entry point exists."""
+
+    direct_module = DIRECT_COMMANDS.get(command_name)
+    if direct_module is not None:
+        return _run_direct(direct_module, arguments)
+    return _run_legacy(module_name, arguments)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Dispatch a unified toolkit command.
-
-    Args:
-        argv: Optional argument sequence excluding the executable name.
-
-    Returns:
-        Process-style status code. Script-level ``SystemExit`` exceptions are
-        intentionally allowed to propagate so existing argparse behavior is
-        preserved.
-    """
+    """Dispatch a unified toolkit command and return a process status."""
 
     arguments = list(sys.argv[1:] if argv is None else argv)
     if not arguments or arguments[0] in {"-h", "--help"}:
@@ -97,18 +124,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     command_name = arguments.pop(0)
     command = command_by_name(command_name)
     if command is None:
-        print(f"error: unknown command: {command_name}", file=sys.stderr)
+        print(
+            f"error: unknown command: {command_name}",
+            file=sys.stderr,
+        )
         print("", file=sys.stderr)
         print(help_text(), file=sys.stderr)
         return 2
-    return run_script(command.module, arguments)
+    return run_command(
+        command_name,
+        command.module,
+        arguments,
+    )
 
 
 def console_main() -> int:
-    """Run the console entry point installed by the package.
-
-    Returns:
-        Process-style status code from :func:`main`.
-    """
+    """Run the console entry point installed by the package."""
 
     return main()

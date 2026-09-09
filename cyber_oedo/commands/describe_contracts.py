@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Sequence
 
 from cyber_oedo.contracts import contracts_document
 
@@ -22,10 +23,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None) -> int:
     """Serialize the external contract catalog to standard output."""
 
-    args = build_parser().parse_args()
+    args = build_parser().parse_args(argv)
     indent = None if args.compact else 2
     print(
         json.dumps(
@@ -35,7 +36,8 @@ def main() -> None:
             indent=indent,
         )
     )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

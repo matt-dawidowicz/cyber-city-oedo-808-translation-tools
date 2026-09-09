@@ -1,4 +1,4 @@
-"""Regression tests for the installable package and unified command surface."""
+"""Regression tests for the installable package and command surface."""
 
 from __future__ import annotations
 
@@ -7,11 +7,9 @@ import contextlib
 import importlib.util
 import io
 import pathlib
-import sys
 import tomllib
 import unittest
 from unittest import mock
-
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = REPOSITORY_ROOT / "cyber_oedo"
@@ -24,7 +22,7 @@ def package_python_paths() -> list[pathlib.Path]:
 
 
 class PackageSourceTests(unittest.TestCase):
-    """Keep the new package compatible with the repository style contract."""
+    """Keep the package compatible with the repository style contract."""
 
     def test_package_nodes_have_docstrings(self) -> None:
         """Require module, class, and function docstrings in package files."""
@@ -48,7 +46,7 @@ class PackageSourceTests(unittest.TestCase):
         self.assertEqual([], failures)
 
     def test_package_lines_fit_pep8_limit(self) -> None:
-        """Keep package source lines within the repository's 79-column rule."""
+        """Keep package source lines within the 79-column rule."""
 
         failures: list[str] = []
         for path in package_python_paths():
@@ -57,29 +55,37 @@ class PackageSourceTests(unittest.TestCase):
                 start=1,
             ):
                 if len(line) > 79:
-                    failures.append(f"{path.name}:{number}:{len(line)}")
+                    failures.append(
+                        f"{path.name}:{number}:{len(line)}"
+                    )
         self.assertEqual([], failures)
 
 
 class PackagingMetadataTests(unittest.TestCase):
-    """Keep distribution metadata aligned with the unified command registry."""
+    """Keep distribution metadata aligned with the command registry."""
 
     def test_registered_commands_are_included_as_py_modules(self) -> None:
-        """Require every forwarded legacy command in the built distribution."""
+        """Require every legacy command in the built distribution."""
 
         from cyber_oedo.registry import script_modules
 
         pyproject_path = REPOSITORY_ROOT / "pyproject.toml"
-        metadata = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
-        packaged = set(metadata["tool"]["setuptools"]["py-modules"])
+        metadata = tomllib.loads(
+            pyproject_path.read_text(encoding="utf-8")
+        )
+        packaged = set(
+            metadata["tool"]["setuptools"]["py-modules"]
+        )
         missing = set(script_modules()) - packaged
         self.assertEqual(set(), missing)
 
     def test_package_discovery_accepts_future_subpackages(self) -> None:
-        """Require recursive discovery for planned package namespaces."""
+        """Require recursive discovery for package namespaces."""
 
         pyproject_path = REPOSITORY_ROOT / "pyproject.toml"
-        metadata = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        metadata = tomllib.loads(
+            pyproject_path.read_text(encoding="utf-8")
+        )
         setuptools = metadata["tool"]["setuptools"]
         patterns = setuptools["packages"]["find"]["include"]
         self.assertIn("cyber_oedo*", patterns)
@@ -89,7 +95,7 @@ class UnifiedCommandTests(unittest.TestCase):
     """Verify registry completeness and compatibility dispatch behavior."""
 
     def test_registered_script_modules_are_locatable(self) -> None:
-        """Require every unified script command to resolve to a module."""
+        """Require every legacy command module to remain importable."""
 
         from cyber_oedo.registry import script_modules
 
@@ -123,31 +129,51 @@ class UnifiedCommandTests(unittest.TestCase):
         self.assertEqual(status, 2)
         self.assertIn("unknown command", output.getvalue())
 
-    def test_script_arguments_are_forwarded_unchanged(self) -> None:
-        """Preserve the selected legacy script's complete argument vector."""
+    def test_direct_arguments_are_forwarded_unchanged(self) -> None:
+        """Pass pipeline arguments directly without global argv mutation."""
 
         from cyber_oedo import cli
 
-        original = sys.argv
-        observed: list[str] = []
-
-        def fake_run_module(module: str, *, run_name: str) -> None:
-            """Capture dispatch state without executing the target module."""
-
-            self.assertEqual(module, "extract_dialogue")
-            self.assertEqual(run_name, "__main__")
-            observed.extend(sys.argv)
-
-        with mock.patch.object(cli.runpy, "run_module", fake_run_module):
+        target = mock.Mock()
+        target.main.return_value = 0
+        with mock.patch.object(
+            cli.importlib,
+            "import_module",
+            return_value=target,
+        ) as importer:
             status = cli.main(
-                ["extract-dialogue", "input.bin", "dialogue.tsv"]
+                [
+                    "extract-dialogue",
+                    "input.bin",
+                    "dialogue.tsv",
+                ]
             )
         self.assertEqual(status, 0)
-        self.assertEqual(
-            observed,
-            ["extract_dialogue.py", "input.bin", "dialogue.tsv"],
+        importer.assert_called_once_with(
+            "cyber_oedo.text.extract_dialogue"
         )
-        self.assertIs(sys.argv, original)
+        target.main.assert_called_once_with(
+            ["input.bin", "dialogue.tsv"]
+        )
+
+    def test_legacy_fallback_uses_child_interpreter(self) -> None:
+        """Keep old diagnostics isolated from process-global argv."""
+
+        from cyber_oedo import cli
+
+        completed = mock.Mock(returncode=7)
+        with mock.patch.object(
+            cli.subprocess,
+            "run",
+            return_value=completed,
+        ) as runner:
+            status = cli.main(
+                ["clonecd-cue", "input.ccd"]
+            )
+        self.assertEqual(status, 7)
+        command = runner.call_args.args[0]
+        self.assertEqual(command[-2:], ["clonecd_cue", "input.ccd"])
+        self.assertFalse(runner.call_args.kwargs["check"])
 
 
 if __name__ == "__main__":
