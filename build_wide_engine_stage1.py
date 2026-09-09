@@ -1,6 +1,8 @@
 """Compatibility shim for the packaged Stage 1 wide-engine experiment."""
 
-from cyber_oedo.experimental import build_wide_engine_stage1 as _implementation
+from cyber_oedo.experimental import (
+    build_wide_engine_stage1 as _implementation,
+)
 from cyber_oedo.experimental.build_wide_engine_stage1 import *  # noqa: F401,F403
 
 main = _implementation.main
