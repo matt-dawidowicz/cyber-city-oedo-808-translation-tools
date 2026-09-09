@@ -15,6 +15,7 @@ DIRECT_COMMANDS = {
         "cyber_oedo.disc.extract_track2_mode1"
     ),
     "scan-track": "cyber_oedo.analysis.scan_track",
+    "build-resource-map": "cyber_oedo.analysis.build_resource_map",
     "scan-likely-sjis": "cyber_oedo.analysis.scan_likely_sjis",
     "extract-dialogue": "cyber_oedo.text.extract_dialogue",
     "extract-auxiliary-text": (
