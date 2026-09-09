@@ -9,6 +9,8 @@ import collections
 import csv
 import pathlib
 import re
+
+import numpy as np
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -231,12 +233,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 max(last_record_end, region_start),
                 region_end,
             )
-            tail = data[tail_start:region_end]
-            if tail:
-                fill_byte, fill_count = collections.Counter(
-                    tail
-                ).most_common(1)[0]
-                fill_ratio = fill_count / len(tail)
+            tail_bytes = region_end - tail_start
+            if tail_bytes:
+                tail = np.frombuffer(
+                    data,
+                    dtype=np.uint8,
+                    count=tail_bytes,
+                    offset=tail_start,
+                )
+                counts = np.bincount(tail, minlength=256)
+                fill_byte = int(counts.argmax())
+                fill_count = int(counts[fill_byte])
+                fill_ratio = fill_count / tail_bytes
+                del tail
             else:
                 fill_byte, fill_ratio = 0, 0.0
             region_sectors = next_sector - header.sector
@@ -264,7 +273,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "last_record_end_in_region": (
                         last_record_end - region_start
                     ),
-                    "tail_bytes": len(tail),
+                    "tail_bytes": tail_bytes,
                     "tail_dominant_byte": f"{fill_byte:02X}",
                     "tail_dominant_ratio": f"{fill_ratio:.5f}",
                     "tail_is_likely_padding": (
@@ -276,7 +285,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             crossing_total += crossing
             if bounded:
                 bounded_regions += 1
-                tail_sizes.append(len(tail))
+                tail_sizes.append(tail_bytes)
             if likely_padding:
                 padded_count += 1
 
