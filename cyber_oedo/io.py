@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import mmap
+import os
 import pathlib
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -26,7 +27,7 @@ def mapped_file(path: pathlib.Path) -> Iterator[mmap.mmap | bytes]:
     """
 
     with path.open("rb") as source:
-        size = path.stat().st_size
+        size = os.fstat(source.fileno()).st_size
         if size == 0:
             yield b""
             return
