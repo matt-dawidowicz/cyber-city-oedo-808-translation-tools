@@ -36,6 +36,9 @@ DIRECT_COMMANDS = {
     "plan-human-test": "cyber_oedo.commands.plan_human_test",
     "inventory-summary": "cyber_oedo.commands.inventory_summary",
     "disassemble-huc6280": "cyber_oedo.commands.disassemble_region",
+    "prove-dialogue-runtime": (
+        "cyber_oedo.runtime.dialogue_interpreter"
+    ),
     "scan-reversed-sjis": "cyber_oedo.analysis.scan_reversed_sjis",
 }
 

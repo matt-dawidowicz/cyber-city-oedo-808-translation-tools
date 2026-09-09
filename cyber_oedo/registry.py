@@ -107,6 +107,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "prove-dialogue-runtime",
+        "cyber_oedo.runtime.dialogue_interpreter",
+        "Validate source-guarded Tier-B dialogue runtime evidence.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "clonecd-cue",
         "clonecd_cue",
         "Create a non-destructive CUE view of a CloneCD set.",
