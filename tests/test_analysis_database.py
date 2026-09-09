@@ -192,7 +192,7 @@ class AnalysisDatabaseTests(unittest.TestCase):
             self.assertEqual(database.read_bytes(), b"keep-me")
 
     def test_ingest_failure_removes_partial_database(self) -> None:
-        """Delete a partially initialized database when input validation fails."""
+        """Delete a partial database when input validation fails."""
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

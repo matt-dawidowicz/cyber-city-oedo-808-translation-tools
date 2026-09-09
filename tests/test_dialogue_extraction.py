@@ -13,7 +13,9 @@ from cyber_oedo.text.extract_dialogue import main, parse_record
 class DialogueExtractionTests(unittest.TestCase):
     """Separate insertion-grade extraction from forensic compatibility mode."""
 
-    def test_pipeline_rejects_unknown_controls_but_keeps_3d_operands(self) -> None:
+    def test_pipeline_rejects_unknown_controls_but_keeps_3d_operands(
+        self,
+    ) -> None:
         """Drop unknown bytecode while retaining text after ``3D 00 06``."""
 
         valid = (
@@ -49,8 +51,10 @@ class DialogueExtractionTests(unittest.TestCase):
         self.assertEqual(rows[0]["controls"], "3D 00 06")
         self.assertEqual(rows[0]["quality"], "review")
 
-    def test_compatibility_parser_can_still_preserve_unknown_control(self) -> None:
-        """Keep old forensic callers able to inspect unknown one-byte values."""
+    def test_compatibility_parser_can_still_preserve_unknown_control(
+        self,
+    ) -> None:
+        """Keep forensic callers able to inspect an unknown one-byte control."""
 
         body = (
             "猫犬".encode("shift_jis")

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 
 def _is_sha256(value: str) -> bool:
-    """Return whether *value* is a lowercase or uppercase SHA-256 hex digest."""
+    """Return whether *value* is a 64-digit SHA-256 hex digest."""
 
     if len(value) != 64:
         return False

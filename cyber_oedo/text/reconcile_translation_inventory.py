@@ -25,7 +25,7 @@ REPORT_FIELDS = (
 
 @dataclass(frozen=True, slots=True)
 class OldTranslation:
-    """Store translator-owned fields and occurrence identity from one old row."""
+    """Store translator-owned fields and occurrence identity for one old row."""
 
     entry_id: str
     kind: str
@@ -158,7 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Reconcile old translations while preserving every new structural field."""
+    """Reconcile old translations while preserving new structural fields."""
 
     parser = build_parser()
     parser.add_argument("old_inventory", type=pathlib.Path)

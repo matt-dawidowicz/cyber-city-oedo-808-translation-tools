@@ -38,7 +38,9 @@ def synthetic_payload(
 class ResourceHeaderTests(unittest.TestCase):
     """Exercise direct sector-boundary resource-name discovery."""
 
-    def test_non_text_resource_keeps_neighboring_boundaries_narrow(self) -> None:
+    def test_non_text_resource_keeps_neighboring_boundaries_narrow(
+        self,
+    ) -> None:
         """Keep MARKETT between KURUZER and MAYA01 in the region map."""
 
         payload = synthetic_payload(
@@ -70,7 +72,9 @@ class ResourceHeaderTests(unittest.TestCase):
         self.assertEqual(regions[2].end_sector, 760)
         self.assertEqual(regions[2].boundary_source, "track_end")
 
-    def test_short_candidate_name_is_not_lost_to_four_byte_scan_limit(self) -> None:
+    def test_short_candidate_name_is_not_lost_to_four_byte_scan_limit(
+        self,
+    ) -> None:
         """Recognize a valid short header directly from the sector start."""
 
         payload = synthetic_payload(2, {1: "AF"})
@@ -82,7 +86,9 @@ class ResourceHeaderTests(unittest.TestCase):
         payload = synthetic_payload(1, {0: "UUUUUUUU"})
         self.assertIsNone(read_sector_header_name(payload, 0))
 
-    def test_overlong_identifier_is_not_truncated_into_false_header(self) -> None:
+    def test_overlong_identifier_is_not_truncated_into_false_header(
+        self,
+    ) -> None:
         """Reject a name continuing beyond the 16-byte identifier limit."""
 
         payload = synthetic_payload(1, {0: "ABCDEFGHIJKLMNOPQ"})
@@ -114,8 +120,10 @@ class ResourceHeaderTests(unittest.TestCase):
 class ResourceMapCommandTests(unittest.TestCase):
     """Verify the complete candidate resource-map TSV command."""
 
-    def test_command_emits_every_header_and_marks_ownership_unproven(self) -> None:
-        """Write textless candidate resources instead of filtering by dialogue."""
+    def test_command_emits_every_header_and_marks_ownership_unproven(
+        self,
+    ) -> None:
+        """Write every candidate resource without filtering for dialogue."""
 
         payload = synthetic_payload(
             8,

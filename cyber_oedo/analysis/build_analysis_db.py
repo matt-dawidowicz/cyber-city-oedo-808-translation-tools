@@ -29,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Create one new evidence database and ingest selected source artifacts."""
+    """Create one evidence database and ingest selected source artifacts."""
 
     parser = build_parser()
     parser.add_argument(
