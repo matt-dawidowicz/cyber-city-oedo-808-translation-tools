@@ -79,8 +79,8 @@ def copy_authenticated_source_set(
     """Copy a CloneCD set and authenticate it in the same read pass.
 
     No copied file is considered usable until every source digest matches.
-    Files created by this function are removed if copying or authentication
-    fails, so an unauthenticated partial set cannot be mistaken for build input.
+    Files created here are removed if copying or authentication fails, so an
+    unauthenticated partial set cannot be mistaken for build input.
     """
 
     if not output_stem:
@@ -91,13 +91,15 @@ def copy_authenticated_source_set(
     created: list[pathlib.Path] = []
     try:
         for extension, source in source_paths.items():
-            destination = destination_directory / f"{output_stem}{extension}"
+            destination = (
+                destination_directory / f"{output_stem}{extension}"
+            )
+            created.append(destination)
             actual = _copy_and_hash(
                 source,
                 destination,
                 chunk_size=chunk_size,
             )
-            created.append(destination)
             expected = source_hashes[extension]
             if actual != expected:
                 raise ValueError(
