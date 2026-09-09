@@ -31,6 +31,7 @@ DIRECT_COMMANDS = {
         "cyber_oedo.analysis.analyze_text_slots"
     ),
     "build-human-test-disc": "cyber_oedo.build.human_test",
+    "build-analysis-db": "cyber_oedo.analysis.build_analysis_db",
     "describe-contracts": "cyber_oedo.commands.describe_contracts",
     "plan-human-test": "cyber_oedo.commands.plan_human_test",
     "inventory-summary": "cyber_oedo.commands.inventory_summary",
