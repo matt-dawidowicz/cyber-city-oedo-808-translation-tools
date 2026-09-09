@@ -116,6 +116,31 @@ class AuthenticatedCopyTests(unittest.TestCase):
                     )
             self.assertEqual(list(destination.iterdir()), [])
 
+    def test_existing_output_is_never_overwritten_or_deleted(self) -> None:
+        """Reject a destination collision before opening any output file."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            source_dir = root / "source"
+            source_dir.mkdir()
+            ccd, hashes, _ = self._source_set(source_dir)
+            destination = root / "output"
+            destination.mkdir()
+            existing = destination / "copy.ccd"
+            existing.write_bytes(b"keep me")
+            with self.assertRaisesRegex(FileExistsError, "overwrite"):
+                copy_authenticated_source_set(
+                    ccd,
+                    destination,
+                    "copy",
+                    hashes,
+                )
+            self.assertEqual(existing.read_bytes(), b"keep me")
+            self.assertEqual(
+                sorted(path.name for path in destination.iterdir()),
+                ["copy.ccd"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
