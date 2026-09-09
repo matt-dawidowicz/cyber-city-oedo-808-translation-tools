@@ -9,6 +9,7 @@ import pathlib
 import unicodedata
 from collections.abc import Iterator, Sequence
 
+from cyber_oedo.analysis.fast_scan import reversed_sjis_runs
 from cyber_oedo.disc.game_layout import SECTOR_SIZE
 from cyber_oedo.io import mapped_file
 from cyber_oedo.text.sjis import (
@@ -41,35 +42,30 @@ def is_plausible_japanese(character: str) -> bool:
     )
 
 
+def _decode_reversed_span(data: object, start: int, end: int) -> str:
+    """Decode one known-valid reversed-pair span in bulk."""
+
+    raw = data[start:end]  # type: ignore[index]
+    swapped = bytearray(len(raw))
+    swapped[0::2] = raw[1::2]
+    swapped[1::2] = raw[0::2]
+    return swapped.decode("shift_jis")
+
+
 def scan(
     data: object,
     minimum: int,
 ) -> Iterator[tuple[int, str]]:
     """Yield aligned runs of reversed Shift-JIS pairs."""
 
-    if minimum <= 0:
-        raise ValueError("minimum must be positive")
-    size = len(data)  # type: ignore[arg-type]
-    for alignment in (0, 1):
-        offset = alignment
-        while offset + 1 < size:
-            start = offset
-            characters: list[str] = []
-            while offset + 1 < size:
-                character = decode_reversed_pair(
-                    data[offset],  # type: ignore[index]
-                    data[offset + 1],  # type: ignore[index]
-                )
-                if (
-                    character is None
-                    or not is_plausible_japanese(character)
-                ):
-                    break
-                characters.append(character)
-                offset += 2
-            if len(characters) >= minimum:
-                yield start, "".join(characters)
-            offset = max(offset + 2, start + 2)
+    starts, ends = reversed_sjis_runs(data, minimum)
+    for start, end in zip(starts, ends, strict=True):
+        offset = int(start)
+        yield offset, _decode_reversed_span(
+            data,
+            offset,
+            int(end),
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
