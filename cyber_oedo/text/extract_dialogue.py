@@ -19,18 +19,14 @@ from cyber_oedo.disc.game_layout import (
     bank_for_offset,
 )
 from cyber_oedo.io import mapped_file
-from cyber_oedo.text.sjis import (
-    is_halfwidth_katakana_byte,
-    is_shift_jis_lead,
-    is_shift_jis_trail,
-)
+from cyber_oedo.script import ControlCommand, TextRun, parse_dialogue_body
 
 OUTPUT_FIELDS = DIALOGUE_V1.fields
 
 
 @dataclass(frozen=True, slots=True)
 class ParsedRecord:
-    """Represent one parsed marker body and its control evidence."""
+    """Represent one parsed marker body and its version-1 projection."""
 
     end_offset: int
     tokens: tuple[str, ...]
@@ -44,62 +40,39 @@ def parse_record(
     start: int,
     limit: int = 1024,
 ) -> ParsedRecord | None:
-    """Parse one null-terminated dialogue body after its marker."""
+    """Parse one dialogue body through the opcode-aware Tier-A parser.
 
-    if start < 0:
-        raise ValueError("start must be non-negative")
-    if limit <= 0:
-        raise ValueError("limit must be positive")
-    position = start
-    size = len(data)  # type: ignore[arg-type]
+    The returned shape intentionally preserves the historical version-1
+    extractor surface. Structured command operands are flattened to raw-byte
+    tags in ``tokens`` and ``controls``; callers that need command semantics
+    should use :mod:`cyber_oedo.script` directly.
+    """
+
+    body = parse_dialogue_body(
+        data,
+        start,
+        limit,
+        allow_unknown_controls=True,
+    )
+    if body is None:
+        return None
+
     tokens: list[str] = []
     text_only: list[str] = []
-    controls: list[int] = []
-    sjis_characters = 0
-    while position < size and position - start < limit:
-        value = data[position]  # type: ignore[index]
-        if value == 0:
-            return ParsedRecord(
-                position,
-                tuple(tokens),
-                tuple(text_only),
-                tuple(controls),
-                sjis_characters,
-            )
-        if (
-            is_shift_jis_lead(value)
-            and position + 1 < size
-            and is_shift_jis_trail(
-                data[position + 1]  # type: ignore[index]
-            )
-        ):
-            raw = data[position:position + 2]  # type: ignore[index]
-            try:
-                character = raw.decode("shift_jis")
-            except UnicodeDecodeError:
-                return None
-            tokens.append(character)
-            text_only.append(character)
-            sjis_characters += 1
-            position += 2
-            continue
-        if is_halfwidth_katakana_byte(value):
-            try:
-                character = bytes((value,)).decode("shift_jis")
-            except UnicodeDecodeError:
-                return None
-            tokens.append(character)
-            text_only.append(character)
-            sjis_characters += 1
-            position += 1
-            continue
-        if value < 0x80:
-            controls.append(value)
-            tokens.append(f"<${value:02X}>")
-            position += 1
-            continue
-        return None
-    return None
+    for node in body.nodes:
+        if isinstance(node, TextRun):
+            tokens.extend(node.text)
+            text_only.extend(node.text)
+        elif isinstance(node, ControlCommand):
+            tokens.extend(node.legacy_tags())
+
+    return ParsedRecord(
+        end_offset=body.end_offset,
+        tokens=tuple(tokens),
+        text_only=tuple(text_only),
+        controls=body.legacy_control_bytes,
+        sjis_characters=body.sjis_characters,
+    )
 
 
 def japanese_character_count(text: str) -> int:
@@ -134,7 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     return argparse.ArgumentParser(
         description=(
-            "Extract null-terminated Shift-JIS dialogue candidates "
+            "Extract opcode-aware Shift-JIS dialogue candidates "
             "introduced by the observed 27 28 record marker."
         )
     )
@@ -176,7 +149,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         writer.writeheader()
         search_at = 0
         while True:
-            marker_offset = data.find(  # type: ignore[attr-defined]
+            marker_offset = data.find(
                 DIALOGUE_MARKER,
                 search_at,
             )
@@ -197,7 +170,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             quality = classify_record(text, parsed.controls)
             bank = bank_for_offset(marker_offset)
             tagged = "".join(parsed.tokens)
-            raw_hex = data[  # type: ignore[index]
+            raw_hex = data[
                 marker_offset:parsed.end_offset + 1
             ].hex(" ")
             writer.writerow(
