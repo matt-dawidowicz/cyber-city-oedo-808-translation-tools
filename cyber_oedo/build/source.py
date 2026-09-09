@@ -87,13 +87,25 @@ def copy_authenticated_source_set(
         raise ValueError("output_stem must not be empty")
     source_paths = resolve_source_paths(source_ccd, source_hashes)
     destination_directory.mkdir(parents=True, exist_ok=True)
+    destinations = {
+        extension: destination_directory / f"{output_stem}{extension}"
+        for extension in source_paths
+    }
+    existing = [
+        path
+        for path in destinations.values()
+        if path.exists()
+    ]
+    if existing:
+        names = ", ".join(path.name for path in existing)
+        raise FileExistsError(
+            f"refusing to overwrite existing output file(s): {names}"
+        )
     output_paths: dict[str, pathlib.Path] = {}
     created: list[pathlib.Path] = []
     try:
         for extension, source in source_paths.items():
-            destination = (
-                destination_directory / f"{output_stem}{extension}"
-            )
+            destination = destinations[extension]
             created.append(destination)
             actual = _copy_and_hash(
                 source,
