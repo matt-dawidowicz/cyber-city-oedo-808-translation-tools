@@ -1,14 +1,16 @@
 """Compatibility shim for :mod:`cyber_oedo.graphics.pce_graphics`."""
 
-from __future__ import annotations
-
 from cyber_oedo.graphics import pce_graphics as _implementation
+from cyber_oedo.graphics.pce_graphics import *  # noqa: F401,F403
 
 
-globals().update(
-    {
-        name: value
-        for name, value in vars(_implementation).items()
-        if not name.startswith("__")
-    }
-)
+def __getattr__(name: str):
+    """Forward compatibility lookups to the packaged implementation."""
+
+    return getattr(_implementation, name)
+
+
+def __dir__() -> list[str]:
+    """Expose the union of shim and implementation names."""
+
+    return sorted(set(globals()) | set(dir(_implementation)))
