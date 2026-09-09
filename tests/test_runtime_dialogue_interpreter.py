@@ -10,11 +10,18 @@ import unittest
 from cyber_oedo.runtime.dialogue_interpreter import (
     HISTORICAL_ZERO_REGION_CPU,
     INDEXED_ALTERNATE_TEXT_OFFSET,
+    INDEXED_RECORD_STRIDE,
+    INDEXED_STATE_OFFSET,
+    INDEXED_TABLE_RECORD_COUNT,
+    INDEXED_TABLE_TRANSFER_BYTES,
     MISSION0_MODULE_PAYLOAD_BASE,
     RUNTIME_REGIONS,
     _three_d_patterns,
+    absolute_lba_to_payload_offset,
     cpu_to_payload,
     indexed_record_address,
+    indexed_table_evidence,
+    indexed_table_source_offset,
     indexed_text_field_offset,
     validate_runtime_regions,
 )
@@ -63,6 +70,46 @@ class RuntimeDialogueInterpreterTests(unittest.TestCase):
             indexed_text_field_offset(0),
             INDEXED_ALTERNATE_TEXT_OFFSET,
         )
+
+    def test_loader_lba_maps_to_authenticated_payload_offset(self) -> None:
+        """Resolve absolute LBA 107D to the Mission 0 source-table bytes."""
+
+        self.assertEqual(indexed_table_source_offset(), 0x0013B800)
+        self.assertEqual(
+            absolute_lba_to_payload_offset(0x107D),
+            0x0013B800,
+        )
+
+    def test_table_evidence_parses_fixed_record_slots(self) -> None:
+        """Parse 24 synthetic 32-byte records plus the one-byte trailer."""
+
+        records = []
+        for index in range(INDEXED_TABLE_RECORD_COUNT):
+            record = bytearray(INDEXED_RECORD_STRIDE)
+            primary = f"P{index + 1:02d}".encode("shift_jis")
+            alternate = f"A{index + 1:02d}".encode("shift_jis")
+            record[:len(primary)] = primary
+            start = INDEXED_ALTERNATE_TEXT_OFFSET
+            record[start:start + len(alternate)] = alternate
+            records.append(record)
+        records[5][INDEXED_STATE_OFFSET] = 0x7F
+        table = b"".join(records) + b"\x00"
+        self.assertEqual(len(table), INDEXED_TABLE_TRANSFER_BYTES)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "payload.bin"
+            source_offset = indexed_table_source_offset()
+            payload = bytearray(source_offset + len(table))
+            payload[source_offset:source_offset + len(table)] = table
+            path.write_bytes(payload)
+            evidence = indexed_table_evidence(path)
+
+        self.assertEqual(evidence["record_count"], 24)
+        self.assertEqual(evidence["record_06"]["primary_text"], "P06")
+        self.assertEqual(evidence["record_06"]["alternate_text"], "A06")
+        self.assertEqual(evidence["record_06"]["state_byte"], 0x7F)
+        self.assertTrue(evidence["all_text_slots_null_terminated"])
+        self.assertFalse(evidence["sha256_matched"])
 
     def test_runtime_guards_accept_exact_synthetic_source(self) -> None:
         """Accept a synthetic image containing every exact guard."""

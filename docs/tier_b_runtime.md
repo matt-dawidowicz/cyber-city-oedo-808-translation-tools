@@ -48,6 +48,41 @@ This establishes `3D` as an indexed record-field text insertion command. The
 higher-level identity of the `$A400` table and the meaning of its state byte
 still require loader/runtime correlation before they receive game-facing names.
 
+## B2 static loader and state proof
+
+The authenticated Mission 0 startup path now resolves the source and shape of
+the `$A400` table without relying on an emulator assumption.
+
+At `$64CB`, the game prepares a transfer whose destination is `$A400`, whose
+source is absolute disc LBA `$107D`, and whose byte count is `$0301`. The
+transfer is passed through `$6EA0`; its full-sector path populates the System
+Card argument block and calls the CD-ROM BIOS entry at `$E009`.
+
+Track 2 begins at absolute LBA `$0E06`, so source LBA `$107D` resolves to:
+
+- Track-2-relative sector `$0277`;
+- payload offset `0x0013B800`; and
+- exactly 769 source bytes.
+
+Those bytes are structurally **24 records × 32 bytes plus one trailing byte**.
+Each record contains two 13-byte null-terminated Shift-JIS text slots at
+offsets `$00` and `$0D`, followed by runtime-state bytes. The exact 769-byte
+source region is guarded by SHA-256 rather than committed to the repository.
+
+The state selector at record byte `$1A` is also no longer an isolated
+observation. The outer script dispatch table maps opcode `$2F` to `$94A4`;
+that handler consumes one record index and calls `$66F9`, which computes the
+same `$A400 + (index - 1) * $20` address and writes `$FF` at offset `$1A`.
+The `3D` handler tests that byte to choose the primary field at `$00` or the
+alternate field at `$0D`.
+
+For the authenticated Mission 0 source, record 6 demonstrates why this
+matters: its two fields are a specific identity and a generic descriptor, and
+its initial `$1A` value is zero. That is strong static evidence that this
+field-selection state supports discovery/identification behavior. A live trace
+is still required before assigning the same semantic meaning to every record
+and every later mission.
+
 ## Runtime proof command
 
 Run:
@@ -57,18 +92,19 @@ cyber-oedo prove-dialogue-runtime track02_mode1_2048.bin \
   --dialogue dialogue.tsv --output tier_b_runtime.json
 ```
 
-The command checks the authenticated Track 2 SHA-256, validates every B1 code
-window byte-for-byte, reports the historical zero region without promoting its
-ownership, and correlates `3D` operand pairs from a Tier-A dialogue TSV.
+The command checks the authenticated Track 2 SHA-256, validates every B1/B2
+static code window byte-for-byte, authenticates the Mission 0 indexed-table
+source, reports the historical zero region without promoting its ownership,
+and correlates `3D` operand pairs from a Tier-A dialogue TSV.
 
-## Gates before B2
+## Gates before Tier-B mutation
 
-B2 may design a record-local selector or another engine modification only
-after these remaining runtime facts are captured in an emulator trace:
+A record-local selector or another engine modification may be designed only
+after these remaining live facts are captured in an emulator trace:
 
 - MPR/bank mapping at `$9543` and `$958F`;
 - the live `$7F/$80` stream pointer for representative dialogue;
-- the loaded source and ownership of the `$A400` indexed table;
+- confirmation that `$A400` remains owned for the relevant scene lifetime;
 - the selected record and state byte for at least two distinct `3D` operands;
 - glyph buffer/VDC destination through `$5915` and BIOS font service; and
 - evidence that any proposed injection storage is owned for the full lifetime
