@@ -1,18 +1,8 @@
-"""Compatibility shim for the packaged dialogue extractor."""
+"""Compatibility shim for :mod:`cyber_oedo.text.extract_dialogue`."""
 
-from __future__ import annotations
-
-from cyber_oedo.text import extract_dialogue as _implementation
-
-
-globals().update(
-    {
-        name: value
-        for name, value in vars(_implementation).items()
-        if not name.startswith("__")
-    }
-)
+from cyber_oedo.text.extract_dialogue import *  # noqa: F401,F403
+from cyber_oedo.text.extract_dialogue import main
 
 
 if __name__ == "__main__":
-    _implementation.main()
+    raise SystemExit(main())

@@ -1,18 +1,8 @@
-"""Compatibility shim for the packaged inventory builder."""
+"""Compatibility shim for :mod:`cyber_oedo.text.build_translation_inventory`."""
 
-from __future__ import annotations
-
-from cyber_oedo.text import build_translation_inventory as _implementation
-
-
-globals().update(
-    {
-        name: value
-        for name, value in vars(_implementation).items()
-        if not name.startswith("__")
-    }
-)
+from cyber_oedo.text.build_translation_inventory import *  # noqa: F401,F403
+from cyber_oedo.text.build_translation_inventory import main
 
 
 if __name__ == "__main__":
-    _implementation.main()
+    raise SystemExit(main())
