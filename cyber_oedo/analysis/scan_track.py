@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a structural inventory of Track 2 with bounded memory use."""
+"""Create a structural inventory of Track 2 with native hot-path scans."""
 
 from __future__ import annotations
 
@@ -10,13 +10,9 @@ import pathlib
 import re
 from collections.abc import Iterator, Mapping, Sequence
 
+from cyber_oedo.analysis.fast_scan import broad_sjis_runs, sector_metrics
 from cyber_oedo.disc.game_layout import SECTOR_SIZE
 from cyber_oedo.io import mapped_file, sha256_buffer
-from cyber_oedo.text.sjis import (
-    is_halfwidth_katakana_byte,
-    is_shift_jis_lead,
-    is_shift_jis_trail,
-)
 
 
 def _entropy_from_counts(
@@ -44,7 +40,7 @@ def entropy(data: bytes) -> float:
     )
 
 
-def zero_runs(flags: list[bool]) -> list[tuple[int, int]]:
+def zero_runs(flags: Sequence[bool]) -> list[tuple[int, int]]:
     """Convert Boolean sector flags into half-open zero-sector runs."""
 
     runs: list[tuple[int, int]] = []
@@ -77,51 +73,31 @@ def scan_shift_jis(
     data: object,
     minimum_japanese: int = 3,
 ) -> Iterator[tuple[int, int, str]]:
-    """Yield broad Shift-JIS-compatible runs with Japanese tokens."""
+    """Yield broad Shift-JIS runs using the compiled token state machine."""
 
-    if minimum_japanese <= 0:
-        raise ValueError("minimum_japanese must be positive")
-    offset = 0
-    size = len(data)  # type: ignore[arg-type]
-    while offset < size:
-        start = offset
-        japanese = 0
-        while offset < size:
-            first = data[offset]  # type: ignore[index]
-            if (
-                0x20 <= first <= 0x7E
-                or first in (0x09, 0x0A, 0x0D)
-            ):
-                offset += 1
-            elif is_halfwidth_katakana_byte(first):
-                japanese += 1
-                offset += 1
-            elif (
-                is_shift_jis_lead(first)
-                and offset + 1 < size
-                and is_shift_jis_trail(
-                    data[offset + 1]  # type: ignore[index]
-                )
-            ):
-                japanese += 1
-                offset += 2
-            else:
-                break
-        if japanese >= minimum_japanese and offset > start:
-            raw = data[start:offset]  # type: ignore[index]
-            try:
-                decoded = raw.decode("shift_jis")
-            except UnicodeDecodeError:
-                decoded = ""
-            if decoded:
-                yield (
-                    start,
-                    japanese,
-                    decoded.replace("\r", "\\r")
-                    .replace("\n", "\\n")
-                    .replace("\t", "\\t"),
-                )
-        offset = max(offset + 1, start + 1)
+    starts, ends, japanese_counts = broad_sjis_runs(
+        data,
+        minimum_japanese,
+    )
+    for start, end, japanese in zip(
+        starts,
+        ends,
+        japanese_counts,
+        strict=True,
+    ):
+        offset = int(start)
+        raw = data[offset:int(end)]  # type: ignore[index]
+        try:
+            decoded = raw.decode("shift_jis")
+        except UnicodeDecodeError:
+            continue
+        yield (
+            offset,
+            int(japanese),
+            decoded.replace("\r", "\\r")
+            .replace("\n", "\\n")
+            .replace("\t", "\\t"),
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -182,7 +158,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"remainder {remainder}"
             )
 
-        zero_flags: list[bool] = []
+        nonzero, unique, entropy_values, zero_flags_array = sector_metrics(
+            data,
+            SECTOR_SIZE,
+        )
+        zero_flags = zero_flags_array.tolist()
         sector_map = output_dir / "sector_map.tsv"
         with sector_map.open(
             "w",
@@ -195,19 +175,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             for sector_number in range(sector_count):
                 start = sector_number * SECTOR_SIZE
-                sector = data[start:start + SECTOR_SIZE]
-                counts = collections.Counter(sector)
-                nonzero = SECTOR_SIZE - counts.get(0, 0)
-                zero_flags.append(nonzero == 0)
-                entropy_value = _entropy_from_counts(
-                    counts,
-                    SECTOR_SIZE,
-                )
+                prefix = data[start:start + 16]  # type: ignore[index]
                 output.write(
                     f"{sector_number}\t0x{start:08X}\t"
-                    f"{nonzero}\t{len(counts)}\t"
-                    f"{entropy_value:.5f}\t"
-                    f"{sector[:16].hex(' ')}\n"
+                    f"{int(nonzero[sector_number])}\t"
+                    f"{int(unique[sector_number])}\t"
+                    f"{float(entropy_values[sector_number]):.5f}\t"
+                    f"{prefix.hex(' ')}\n"
                 )
 
         ascii_count = 0
@@ -264,7 +238,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 sjis_count += 1
 
         runs = zero_runs(zero_flags)
-        zero_count = sum(zero_flags)
+        zero_count = int(zero_flags_array.sum())
         digest = sha256_buffer(data)
 
     summary = [
