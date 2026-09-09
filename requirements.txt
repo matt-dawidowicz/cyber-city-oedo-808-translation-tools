@@ -1,4 +1,6 @@
-# Runtime dependency for render_pce_tiles.py and make_contact_sheet.py.
-# The extraction and TSV-analysis tools otherwise use only the Python standard
-# library. Python 3.11 or newer is recommended.
+# Core native accelerators for large binary reconnaissance scans.
+numpy>=2.0
+numba>=0.65
+
+# Graphics commands.
 Pillow>=10
