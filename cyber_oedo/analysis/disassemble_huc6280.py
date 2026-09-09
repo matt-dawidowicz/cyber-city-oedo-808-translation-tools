@@ -336,6 +336,49 @@ def linear_disassemble(
         index += len(instruction.raw)
 
 
+
+def read_binary_region(
+    path: pathlib.Path,
+    offset: int,
+    length: int,
+) -> bytes:
+    """Read exactly one bounded binary region from disk.
+
+    Args:
+        path: Binary file to inspect.
+        offset: Non-negative byte offset.
+        length: Positive number of bytes to return.
+
+    Returns:
+        Exactly ``length`` bytes beginning at ``offset``.
+
+    Raises:
+        ValueError: If coordinates are invalid, exceed the open file, or a
+            short read occurs.
+        OSError: If opening, seeking, or reading the file fails.
+    """
+
+    if offset < 0:
+        raise ValueError("offset must be non-negative")
+    if length <= 0:
+        raise ValueError("length must be positive")
+    with path.open("rb") as source:
+        file_size = source.seek(0, 2)
+        end = offset + length
+        if end > file_size:
+            raise ValueError(
+                f"requested region ends at 0x{end:X}; "
+                f"file size is 0x{file_size:X}"
+            )
+        source.seek(offset)
+        region = source.read(length)
+    if len(region) != length:
+        raise ValueError(
+            f"short read: expected {length} bytes, "
+            f"found {len(region)}"
+        )
+    return region
+
 def parse_int(value: str) -> int:
     """Parse a decimal integer or a hexadecimal value prefixed by `0x`.
 
@@ -414,14 +457,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
 
     args = build_parser().parse_args(argv)
-    binary = args.binary.read_bytes()
-    end = args.offset + args.length
-    if end > len(binary):
-        raise ValueError(
-            f"requested region ends at 0x{end:X}; "
-            f"file size is 0x{len(binary):X}"
-        )
-    region = binary[args.offset:end]
+    region = read_binary_region(
+        args.binary,
+        args.offset,
+        args.length,
+    )
     for instruction in linear_disassemble(
         region,
         args.offset,
