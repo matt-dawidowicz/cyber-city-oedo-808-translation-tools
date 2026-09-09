@@ -77,6 +77,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Pipeline",
     ),
     CommandSpec(
+        "build-analysis-db",
+        "cyber_oedo.analysis.build_analysis_db",
+        "Build a local SQLite database from generated evidence.",
+        "Automation",
+    ),
+    CommandSpec(
         "describe-contracts",
         "cyber_oedo.commands.describe_contracts",
         "Print versioned external data contracts as JSON.",
