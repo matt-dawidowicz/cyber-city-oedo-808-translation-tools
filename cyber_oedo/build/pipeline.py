@@ -40,7 +40,7 @@ def build_human_test_disc(
     *,
     title_screen_mode: str = engine.DEFAULT_TITLE_SCREEN_MODE,
 ) -> pathlib.Path:
-    """Build the guarded stock-renderer image with consolidated verification."""
+    """Build the guarded stock-renderer image with consolidated checks."""
 
     output_directory = output_directory.resolve()
     if output_directory.exists():
