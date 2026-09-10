@@ -31,6 +31,19 @@ Do not add Rust merely to replace working Python. Profile first.
 
 HuC6280 assembly belongs to Tier B and is not part of this layer.
 
+## Canonical operator pipeline
+
+The normal Tier-A operator path is `cyber-oedo analyze`. It maps Track 2 once
+for resource-map discovery, likely Shift-JIS scanning, and structured dialogue
+extraction, then emits the same stable TSV contracts used by the individual
+forensic commands. Auxiliary-text subtraction, inventory generation, validation,
+and the optional SQLite evidence database remain explicit downstream stages.
+
+`scan-track` is broad reconnaissance, not a required translation stage.
+Individual commands remain supported when a researcher needs to isolate or
+debug one stage. `analyze-text-slots` consumes the canonical resource map rather
+than rediscovering resource headers from ASCII scan output.
+
 ## Structural rule
 
 Tier A models game structures before editing them. Every parser intended for

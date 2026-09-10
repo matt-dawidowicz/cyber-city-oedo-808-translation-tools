@@ -44,9 +44,9 @@ second `requirements.txt` dependency surface.
 Run:
 
 ```bash
-python -m ruff check cyber_oedo tests
+python -m ruff check cyber_oedo tests benchmarks
 python -m unittest discover -s tests -v
-python -m compileall -q cyber_oedo tests
+python -m compileall -q cyber_oedo tests benchmarks
 python -m cyber_oedo doctor
 ```
 
@@ -58,6 +58,24 @@ python -m build --outdir dist
 
 Ruff handles generic Python correctness/style checks. Unit tests should encode
 project behavior and architecture, not reimplement a general-purpose linter.
+
+## Performance gate
+
+When a change claims performance or touches a known hot path, run the benchmark
+harnesses against the authenticated Track-2 payload:
+
+```bash
+python benchmarks/bench_scans.py --payload track02_mode1_2048.bin
+python benchmarks/bench_scans.py --payload track02_mode1_2048.bin --samples 1 --cold
+python benchmarks/bench_pipeline.py --payload track02_mode1_2048.bin
+python benchmarks/bench_build.py --payload track02_mode1_2048.bin
+```
+
+Record median wall time, MAD, throughput where meaningful, peak RSS, row counts,
+and exact output hashes. Keep an optimization only when the measurements justify
+it or when approximately neutral performance buys a material architectural
+simplification. A lower loop/pass count by itself is not evidence of a faster
+implementation.
 
 ## CI
 

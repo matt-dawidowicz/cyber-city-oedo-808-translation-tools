@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 import collections
 import csv
-import hashlib
 import json
 import pathlib
 from collections.abc import Sequence
@@ -20,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from cyber_oedo.disc.game_layout import SECTOR_SIZE, TRACK2_START_LBA
+from cyber_oedo.io import sha256_buffer, sha256_file
 
 MISSION0_MODULE_PAYLOAD_BASE = 0x00131800
 DIALOGUE_INTERPRETER_CPU = 0x9543
@@ -278,9 +278,9 @@ def indexed_table_evidence(path: pathlib.Path) -> dict[str, Any]:
         "record_stride": INDEXED_RECORD_STRIDE,
         "trailer_bytes": INDEXED_TABLE_TRAILER_BYTES,
         "trailer_hex": table[-INDEXED_TABLE_TRAILER_BYTES:].hex(),
-        "sha256": hashlib.sha256(table).hexdigest(),
+        "sha256": sha256_buffer(table),
         "sha256_matched": (
-            hashlib.sha256(table).hexdigest() == INDEXED_TABLE_SOURCE_SHA256
+            sha256_buffer(table) == INDEXED_TABLE_SOURCE_SHA256
         ),
         "all_text_slots_null_terminated": slots_terminated,
         "record_06": {
@@ -291,19 +291,15 @@ def indexed_table_evidence(path: pathlib.Path) -> dict[str, Any]:
                 INDEXED_ALTERNATE_TEXT_OFFSET,
             ),
             "state_byte": maya_record[INDEXED_STATE_OFFSET],
-            "sha256": hashlib.sha256(maya_record).hexdigest(),
+            "sha256": sha256_buffer(maya_record),
         },
     }
 
 
 def hash_file(path: pathlib.Path) -> str:
-    """Return the lowercase SHA-256 digest for one file."""
+    """Return the lowercase SHA-256 digest through the canonical I/O layer."""
 
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return sha256_file(path)
 
 
 def validate_runtime_regions(path: pathlib.Path) -> tuple[dict[str, Any], ...]:
@@ -321,7 +317,7 @@ def validate_runtime_regions(path: pathlib.Path) -> tuple[dict[str, Any], ...]:
                     "cpu_address": f"0x{region.cpu_address:04X}",
                     "payload_offset": (f"0x{region.payload_offset:08X}"),
                     "bytes": len(region.expected),
-                    "sha256": hashlib.sha256(actual).hexdigest(),
+                    "sha256": sha256_buffer(actual),
                     "matched": matched,
                     "ownership_proven": region.ownership_proven,
                     "purpose": region.purpose,

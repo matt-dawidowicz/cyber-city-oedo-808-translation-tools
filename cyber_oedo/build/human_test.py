@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import pathlib
 from collections.abc import Sequence
 
@@ -43,7 +42,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        output_ccd = build_human_test_disc(
+        result = build_human_test_disc(
             args.source_ccd,
             args.output_directory,
             title_screen_mode=args.title_screen,
@@ -51,18 +50,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
-    manifest = json.loads(
-        (output_ccd.parent / "build_manifest.json").read_text(encoding="utf-8")
-    )
-    changed = manifest["changed_relative_sectors"]
-    guarded = manifest["guarded_relative_sectors"]
-    print(f"output_ccd={output_ccd}")
-    print(f"profile={profile.BUILD_PROFILE}")
-    print(f"title_screen={args.title_screen}")
-    print(f"text_patches={len(profile.HUMAN_TEST_PATCHES)}")
-    print(f"binary_patches={len(manifest['binary_patches'])}")
-    print("changed_relative_sectors=" + ",".join(map(str, changed)))
-    print("guarded_relative_sectors=" + ",".join(map(str, guarded)))
+    print(f"output_ccd={result.output_ccd}")
+    print(f"profile={result.build_profile}")
+    print(f"title_screen={result.title_screen_mode}")
+    print(f"text_patches={result.text_patch_count}")
+    print(f"binary_patches={result.binary_patch_count}")
+    print("changed_relative_sectors=" + ",".join(map(str, result.changed_relative_sectors)))
+    print("guarded_relative_sectors=" + ",".join(map(str, result.guarded_relative_sectors)))
+    print(f"patch_plan_sha256={result.plan_sha256}")
     print("structural_validation=passed")
     print("human_emulator_test=pending")
     return 0

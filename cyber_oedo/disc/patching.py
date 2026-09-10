@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import pathlib
 from collections import defaultdict
 from collections.abc import Iterable
@@ -14,6 +13,7 @@ from cyber_oedo.disc.cdrom_mode1 import (
     rebuild_mode1_sector,
     validate_mode1_structure,
 )
+from cyber_oedo.io import sha256_buffer
 from cyber_oedo.disc.game_layout import (
     MODE1_USER_DATA_OFFSET,
     RAW_SECTOR_SIZE,
@@ -141,8 +141,8 @@ def apply_payload_patches(
                     relative_sector=relative_sector,
                     absolute_lba=absolute_lba,
                     edited_payload_bytes=edited_bytes,
-                    before_sha256=hashlib.sha256(raw).hexdigest(),
-                    after_sha256=hashlib.sha256(rebuilt).hexdigest(),
+                    before_sha256=sha256_buffer(raw),
+                    after_sha256=sha256_buffer(rebuilt),
                 )
             )
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import collections
-import csv
 import pathlib
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -20,6 +19,7 @@ from cyber_oedo.disc.game_layout import (
 )
 from cyber_oedo.io import mapped_file
 from cyber_oedo.script import ControlCommand, TextRun, parse_dialogue_body
+from cyber_oedo.tabular import tsv_dict_writer
 
 OUTPUT_FIELDS = DIALOGUE_V1.fields
 
@@ -34,6 +34,18 @@ class ParsedRecord:
     controls: tuple[int, ...]
     sjis_characters: int
     control_opcodes: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class DialogueStats:
+    """Summary counters for one structured-dialogue extraction."""
+
+    records: int
+    unique_tagged_texts: int
+    sjis_characters: int
+    likely_text: int
+    review: int
+    bank_counts: tuple[tuple[str, int], ...]
 
 
 def parse_record(
@@ -117,49 +129,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Scan a mapped payload and stream structured dialogue rows to TSV."""
-
-    parser = build_parser()
-    parser.add_argument(
-        "input",
-        type=pathlib.Path,
-        help="Track 2 payload .bin",
-    )
-    parser.add_argument(
-        "output",
-        type=pathlib.Path,
-        help="destination dialogue TSV",
-    )
-    args = parser.parse_args(argv)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+def write_dialogue(data: object, output_path: pathlib.Path) -> DialogueStats:
+    """Write structured dialogue from an already-open payload map."""
 
     bank_counts: collections.Counter[str] = collections.Counter()
     quality_counts: collections.Counter[str] = collections.Counter()
     unique_tagged_texts: set[str] = set()
     record_count = 0
     total_characters = 0
-
-    with (
-        mapped_file(args.input) as data,
-        args.output.open(
-            "w",
-            encoding="utf-8-sig",
-            newline="",
-        ) as output,
-    ):
-        writer = csv.DictWriter(
-            output,
-            fieldnames=OUTPUT_FIELDS,
-            delimiter="\t",
-        )
-        writer.writeheader()
+    with tsv_dict_writer(output_path, OUTPUT_FIELDS) as writer:
         search_at = 0
         while True:
-            marker_offset = data.find(
-                DIALOGUE_MARKER,
-                search_at,
-            )
+            marker_offset = data.find(DIALOGUE_MARKER, search_at)  # type: ignore[attr-defined]
             if marker_offset < 0:
                 break
             parsed = parse_record(
@@ -171,25 +152,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             if parsed is None:
                 continue
             text = "".join(parsed.text_only)
-            if parsed.sjis_characters < 2:
+            if parsed.sjis_characters < 2 or japanese_character_count(text) < 2:
                 continue
-            if japanese_character_count(text) < 2:
-                continue
-            quality = classify_record(
-                text,
-                parsed.control_opcodes,
-            )
+            quality = classify_record(text, parsed.control_opcodes)
             bank = bank_for_offset(marker_offset)
             tagged = "".join(parsed.tokens)
-            raw_hex = data[marker_offset : parsed.end_offset + 1].hex(" ")
+            raw_hex = data[marker_offset : parsed.end_offset + 1].hex(" ")  # type: ignore[index]
             writer.writerow(
                 {
                     "bank": bank,
                     "quality": quality,
                     "offset": f"0x{marker_offset:08X}",
                     "sector": marker_offset // SECTOR_SIZE,
-                    "within_sector": (f"0x{marker_offset % SECTOR_SIZE:03X}"),
-                    "record_bytes": (parsed.end_offset - marker_offset + 1),
+                    "within_sector": f"0x{marker_offset % SECTOR_SIZE:03X}",
+                    "record_bytes": parsed.end_offset - marker_offset + 1,
                     "sjis_characters": parsed.sjis_characters,
                     "controls": " ".join(f"{value:02X}" for value in parsed.controls),
                     "tagged_text": tagged,
@@ -202,25 +178,45 @@ def main(argv: Sequence[str] | None = None) -> int:
             bank_counts[bank] += 1
             quality_counts[quality] += 1
             unique_tagged_texts.add(tagged)
+    return DialogueStats(
+        records=record_count,
+        unique_tagged_texts=len(unique_tagged_texts),
+        sjis_characters=total_characters,
+        likely_text=quality_counts["likely_text"],
+        review=quality_counts["review"],
+        bank_counts=tuple((bank.name, bank_counts[bank.name]) for bank in BANKS),
+    )
 
-    print(f"records={record_count}")
-    print(f"unique_tagged_texts={len(unique_tagged_texts)}")
-    print(f"sjis_characters={total_characters}")
-    print(f"likely_text={quality_counts['likely_text']}")
-    print(f"review={quality_counts['review']}")
-    for bank in BANKS:
-        print(f"{bank.name}={bank_counts[bank.name]}")
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Scan a mapped payload and stream structured dialogue rows to TSV."""
+
+    parser = build_parser()
+    parser.add_argument("input", type=pathlib.Path, help="Track 2 payload .bin")
+    parser.add_argument("output", type=pathlib.Path, help="destination dialogue TSV")
+    args = parser.parse_args(argv)
+    with mapped_file(args.input) as data:
+        stats = write_dialogue(data, args.output)
+    print(f"records={stats.records}")
+    print(f"unique_tagged_texts={stats.unique_tagged_texts}")
+    print(f"sjis_characters={stats.sjis_characters}")
+    print(f"likely_text={stats.likely_text}")
+    print(f"review={stats.review}")
+    for bank, count in stats.bank_counts:
+        print(f"{bank}={count}")
     return 0
 
 
 __all__ = [
     "OUTPUT_FIELDS",
     "ParsedRecord",
+    "DialogueStats",
     "parse_record",
     "japanese_character_count",
     "classify_record",
     "build_parser",
     "main",
+    "write_dialogue",
 ]
 
 

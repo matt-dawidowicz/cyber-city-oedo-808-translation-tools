@@ -3,3 +3,5 @@ include README.md
 include THIRD_PARTY_NOTICE.md
 recursive-include docs *.md
 recursive-include tests *.py
+
+recursive-include benchmarks *.py

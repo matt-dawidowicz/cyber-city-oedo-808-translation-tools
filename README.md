@@ -120,35 +120,30 @@ cyber-oedo extract-track2-mode1
     v
 Track 2 payload
     |
-    +--> scan-track
-    +--> scan-likely-sjis
-    +--> build-resource-map
-    +--> extract-dialogue
-    |       |
-    |       +--> typed dialogue/script evidence
+    v
+cyber-oedo analyze
     |
-    +--> extract-auxiliary-text
-            |
-            v
-      build-translation-inventory
-            |
-            v
-      translation_inventory.tsv
+    +--> resource_map.tsv
+    +--> likely_sjis.tsv
+    +--> dialogue.tsv
+    +--> auxiliary.tsv
+    +--> translation_inventory.tsv
+    +--> analysis.sqlite3
 ```
 
 Typical invocation:
 
 ```bash
 cyber-oedo extract-track2-mode1 source.img track02_mode1_2048.bin
-cyber-oedo scan-track track02_mode1_2048.bin --output-dir scan
-cyber-oedo scan-likely-sjis track02_mode1_2048.bin scan/likely_shift_jis.tsv
-cyber-oedo extract-dialogue track02_mode1_2048.bin dialogue.tsv
-cyber-oedo extract-auxiliary-text \
-  scan/likely_shift_jis.tsv dialogue.tsv auxiliary_text.tsv
-cyber-oedo build-translation-inventory \
-  dialogue.tsv auxiliary_text.tsv translation_inventory.tsv
-cyber-oedo validate-translation-inventory translation_inventory.tsv
+cyber-oedo analyze track02_mode1_2048.bin --output-dir analysis
 ```
+
+`analyze` maps the payload once for the payload-dependent Tier-A stages and
+keeps the established TSV contracts. The individual `build-resource-map`,
+`scan-likely-sjis`, `extract-dialogue`, `extract-auxiliary-text`,
+`build-translation-inventory`, and validation commands remain available for
+forensic/debug use. `scan-track` is optional broad reconnaissance rather than a
+required translation-pipeline stage.
 
 The generated inventory keeps binary occurrences separate even when visible
 Japanese repeats. Translators normally edit only `english_translation` and
@@ -234,9 +229,9 @@ permission.
 Before committing:
 
 ```bash
-python -m ruff check cyber_oedo tests
+python -m ruff check cyber_oedo tests benchmarks
 python -m unittest discover -s tests -v
-python -m compileall -q cyber_oedo tests
+python -m compileall -q cyber_oedo tests benchmarks
 python -m cyber_oedo doctor
 ```
 

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import csv
-import hashlib
 import pathlib
 import sqlite3
 from collections.abc import Mapping
 
 from cyber_oedo.contracts import DIALOGUE_V1, TRANSLATION_INVENTORY_V1
+from cyber_oedo.io import sha256_file
+from cyber_oedo.tabular import tsv_dict_reader
 
 ANALYSIS_DB_SCHEMA_VERSION = 1
 
@@ -115,27 +115,6 @@ def _parse_int(value: str) -> int:
     return int(value, 0)
 
 
-def _sha256_file(path: pathlib.Path) -> str:
-    """Return the SHA-256 identity of one generated input artifact."""
-
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        while chunk := source.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _reader(path: pathlib.Path) -> tuple[csv.DictReader, object]:
-    """Open one UTF-8 TSV and return its reader plus owned file handle."""
-
-    source = path.open(
-        "r",
-        encoding="utf-8-sig",
-        newline="",
-    )
-    return csv.DictReader(source, delimiter="\t"), source
-
-
 def initialize_database(connection: sqlite3.Connection) -> None:
     """Create the version-1 Tier-A analysis schema in an empty database."""
 
@@ -164,8 +143,7 @@ def ingest_resource_map(
 ) -> int:
     """Insert all candidate resource-map rows and record their file digest."""
 
-    reader, source = _reader(path)
-    try:
+    with tsv_dict_reader(path) as reader:
         _require_fields(reader.fieldnames, _RESOURCE_FIELDS)
         rows = [
             (
@@ -182,8 +160,6 @@ def ingest_resource_map(
             )
             for row in reader
         ]
-    finally:
-        source.close()  # type: ignore[attr-defined]
     connection.executemany(
         """
         INSERT INTO resource_candidates VALUES (
@@ -194,7 +170,7 @@ def ingest_resource_map(
     )
     connection.execute(
         "INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)",
-        ("resource_map_sha256", _sha256_file(path)),
+        ("resource_map_sha256", sha256_file(path)),
     )
     return len(rows)
 
@@ -205,8 +181,7 @@ def ingest_dialogue(
 ) -> int:
     """Insert version-1 dialogue rows and record their file digest."""
 
-    reader, source = _reader(path)
-    try:
+    with tsv_dict_reader(path) as reader:
         DIALOGUE_V1.require_compatible_header(reader.fieldnames or ())
         rows = [
             (
@@ -224,8 +199,6 @@ def ingest_dialogue(
             )
             for row in reader
         ]
-    finally:
-        source.close()  # type: ignore[attr-defined]
     connection.executemany(
         """
         INSERT INTO dialogue_records VALUES (
@@ -236,7 +209,7 @@ def ingest_dialogue(
     )
     connection.execute(
         "INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)",
-        ("dialogue_sha256", _sha256_file(path)),
+        ("dialogue_sha256", sha256_file(path)),
     )
     return len(rows)
 
@@ -247,8 +220,7 @@ def ingest_translation_inventory(
 ) -> int:
     """Insert translator inventory rows and record their file digest."""
 
-    reader, source = _reader(path)
-    try:
+    with tsv_dict_reader(path) as reader:
         TRANSLATION_INVENTORY_V1.require_compatible_header(reader.fieldnames or ())
         rows = [
             (
@@ -269,8 +241,6 @@ def ingest_translation_inventory(
             )
             for row in reader
         ]
-    finally:
-        source.close()  # type: ignore[attr-defined]
     connection.executemany(
         """
         INSERT INTO translation_occurrences VALUES (
@@ -281,7 +251,7 @@ def ingest_translation_inventory(
     )
     connection.execute(
         "INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)",
-        ("translation_inventory_sha256", _sha256_file(path)),
+        ("translation_inventory_sha256", sha256_file(path)),
     )
     return len(rows)
 

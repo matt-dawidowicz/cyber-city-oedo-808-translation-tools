@@ -9,7 +9,7 @@ Stage-1/reversed-SJIS commands are retired.
 | Command | Canonical module | Purpose |
 |---|---|---|
 | `extract-track2-mode1` | `cyber_oedo.disc.extract_track2_mode1` | Extract 2048-byte Mode 1 Track 2 payload bytes from the raw IMG. |
-| `scan-track` | `cyber_oedo.analysis.scan_track` | Broad structural/string reconnaissance. |
+| `analyze` | `cyber_oedo.analysis.pipeline` | Run the consolidated Tier-A translation pipeline in process. |
 | `build-resource-map` | `cyber_oedo.analysis.build_resource_map` | Build sector-aligned candidate-resource evidence. |
 | `scan-likely-sjis` | `cyber_oedo.analysis.scan_likely_sjis` | Find likely natural-language Shift-JIS runs. |
 | `extract-dialogue` | `cyber_oedo.text.extract_dialogue` | Extract typed dialogue records. |
@@ -23,16 +23,13 @@ Typical analysis flow:
 
 ```bash
 cyber-oedo extract-track2-mode1 source.img track02_mode1_2048.bin
-cyber-oedo scan-track track02_mode1_2048.bin --output-dir scan
-cyber-oedo build-resource-map track02_mode1_2048.bin --output resource_map.tsv
-cyber-oedo scan-likely-sjis track02_mode1_2048.bin scan/likely_shift_jis.tsv
-cyber-oedo extract-dialogue track02_mode1_2048.bin dialogue.tsv
-cyber-oedo extract-auxiliary-text \
-  scan/likely_shift_jis.tsv dialogue.tsv auxiliary_text.tsv
-cyber-oedo build-translation-inventory \
-  dialogue.tsv auxiliary_text.tsv translation_inventory.tsv
-cyber-oedo validate-translation-inventory translation_inventory.tsv
+cyber-oedo analyze track02_mode1_2048.bin --output-dir analysis
 ```
+
+The individual Tier-A commands remain supported when a researcher needs to
+inspect or rerun one stage. `analyze-text-slots` now consumes the canonical
+`resource_map.tsv` rather than rediscovering resource headers from an ASCII
+scan.
 
 All post-extraction offsets are 2048-byte Track 2 payload coordinates unless a
 command explicitly documents another coordinate system.
@@ -54,6 +51,7 @@ footprint are part of the build contract.
 
 | Command | Purpose |
 |---|---|
+| `scan-track` | Optional broad ASCII/Shift-JIS/sector reconnaissance. |
 | `disassemble-huc6280` | Diagnostic linear HuC6280 disassembly at caller-proven coordinates. |
 | `prove-dialogue-runtime` | Validate source-guarded Tier-B interpreter/table evidence. |
 | `prove-live-dialogue-snapshot` | Validate a bank-aware frozen Mission 0 debugger snapshot. |

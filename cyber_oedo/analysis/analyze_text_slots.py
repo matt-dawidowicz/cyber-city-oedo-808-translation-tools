@@ -6,21 +6,19 @@ from __future__ import annotations
 import argparse
 import bisect
 import collections
-import csv
 import pathlib
-import re
 
 import numpy as np
 from collections.abc import Sequence
-from dataclasses import dataclass
 
 from cyber_oedo.disc.game_layout import (
     LIKELY_PADDING_BYTES,
     SECTOR_SIZE,
 )
 from cyber_oedo.io import mapped_file
+from cyber_oedo.resources import ResourceHeader
+from cyber_oedo.tabular import tsv_dict_reader, tsv_dict_writer
 
-RESOURCE_NAME = re.compile(r"^[A-Z][A-Z0-9_]{1,15}$")
 OUTPUT_FIELDS = (
     "resource_sector",
     "resource_name",
@@ -38,49 +36,21 @@ OUTPUT_FIELDS = (
 )
 
 
-@dataclass(frozen=True, slots=True)
-class ResourceHeader:
-    """Represent a candidate named resource at a sector boundary."""
-
-    sector: int
-    name: str
-
-
 def parse_hex(value: str) -> int:
     """Parse a hexadecimal payload offset from an upstream TSV."""
 
     return int(value, 16)
 
 
-def looks_like_resource_name(text: str) -> bool:
-    """Return whether an ASCII run resembles a resource name."""
+def read_resource_headers(resource_map: pathlib.Path) -> list[ResourceHeader]:
+    """Read canonical Tier-A resource candidates without rediscovering headers."""
 
-    if RESOURCE_NAME.fullmatch(text) is None:
-        return False
-    return len(text) < 4 or len(set(text)) > 1
-
-
-def read_resource_headers(
-    ascii_scan: pathlib.Path,
-) -> list[ResourceHeader]:
-    """Read sector-aligned resource-name candidates from an ASCII scan."""
-
-    by_sector: dict[int, str] = {}
-    with ascii_scan.open(
-        "r",
-        encoding="utf-8-sig",
-        newline="",
-    ) as source:
-        for row in csv.DictReader(source, delimiter="\t"):
-            if row["within_sector"] != "0x000":
-                continue
-            text = row["text"]
-            if looks_like_resource_name(text):
-                by_sector[int(row["sector"])] = text
-    return [
-        ResourceHeader(sector=sector, name=name)
-        for sector, name in sorted(by_sector.items())
-    ]
+    with tsv_dict_reader(resource_map) as reader:
+        headers = [
+            ResourceHeader(sector=int(row["resource_sector"]), name=row["resource_name"])
+            for row in reader
+        ]
+    return sorted(headers)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -113,9 +83,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="TSV produced by extract_dialogue.py",
     )
     parser.add_argument(
-        "ascii_scan",
+        "resource_map",
         type=pathlib.Path,
-        help="ascii_strings.tsv produced by scan_track.py",
+        help="resource_map.tsv produced by build-resource-map or analyze",
     )
     parser.add_argument(
         "output",
@@ -141,7 +111,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.max_region_sectors <= 0:
         parser.error("--max-region-sectors must be positive")
 
-    headers = read_resource_headers(args.ascii_scan)
+    headers = read_resource_headers(args.resource_map)
     if not headers:
         parser.error("no candidate sector-aligned resource headers were found")
     header_sectors = [header.sector for header in headers]
@@ -151,12 +121,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         list[tuple[str, int, int]],
     ] = collections.defaultdict(list)
     unassigned_records = 0
-    with args.dialogue.open(
-        "r",
-        encoding="utf-8-sig",
-        newline="",
-    ) as source:
-        for row in csv.DictReader(source, delimiter="\t"):
+    with tsv_dict_reader(args.dialogue) as reader:
+        for row in reader:
             if not args.include_review and row["quality"] != "likely_text":
                 continue
             record_offset = parse_hex(row["offset"])
@@ -188,11 +154,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     with (
         mapped_file(args.track) as data,
-        args.output.open(
-            "w",
-            encoding="utf-8-sig",
-            newline="",
-        ) as output,
+        tsv_dict_writer(args.output, OUTPUT_FIELDS) as writer,
     ):
         sector_count, remainder = divmod(len(data), SECTOR_SIZE)
         if remainder:
@@ -201,13 +163,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"{SECTOR_SIZE}-byte sectors "
                 f"(remainder: {remainder})"
             )
-        writer = csv.DictWriter(
-            output,
-            fieldnames=OUTPUT_FIELDS,
-            delimiter="\t",
-        )
-        writer.writeheader()
-
         for header_index in sorted(grouped):
             region_records = grouped[header_index]
             header = headers[header_index]

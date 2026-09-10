@@ -54,6 +54,4 @@ def sha256_file(
 def sha256_buffer(data: object) -> str:
     """Return SHA-256 for a contiguous bytes-like object such as an mmap."""
 
-    digest = hashlib.sha256()
-    digest.update(data)  # type: ignore[arg-type]
-    return digest.hexdigest()
+    return hashlib.sha256(data).hexdigest()  # type: ignore[arg-type]
