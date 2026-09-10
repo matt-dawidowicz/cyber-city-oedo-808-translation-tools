@@ -27,7 +27,28 @@ jobs:
         run: python -m pip install -e ".[dev]"
 
       - name: Apply mechanical package refactor
-        run: python tools/refactor_cleanup.py
+        run: |
+          python tools/refactor_cleanup.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("cyber_oedo/text/relocation.py")
+          text = path.read_text(encoding="utf-8")
+          needle = "from cyber_oedo.disc.cdrom_mode1 import PayloadPatch\n"
+          replacement = (
+              needle
+              + "from cyber_oedo.text.layout import (\n"
+              + "    DIALOGUE_MARKER,\n"
+              + "    DIALOGUE_TERMINATOR,\n"
+              + ")\n"
+          )
+          if needle not in text:
+              raise SystemExit("generated relocation import anchor missing")
+          path.write_text(
+              text.replace(needle, replacement, 1),
+              encoding="utf-8",
+          )
+          PY
 
       - name: Reinstall refactored package
         run: python -m pip install -e ".[dev]"
