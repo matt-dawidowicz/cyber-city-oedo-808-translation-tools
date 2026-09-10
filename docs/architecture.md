@@ -2,443 +2,218 @@
 
 ## Design goals
 
-The toolkit is intentionally a set of small command-line programs rather than a
-single opaque application. Each stage writes an inspectable file, and later
-stages consume only documented columns. This makes false positives, coordinate
-mistakes, and heuristic changes easier to audit.
+This toolkit is designed for auditable reverse engineering rather than fast,
+opaque patch production. Each layer should make its evidence and coordinate
+system explicit so a future translation change can be traced back to the
+original authenticated bytes and, where necessary, live runtime behavior.
 
 Core principles:
 
-1. preserve the source image;
-2. name every coordinate system;
-3. separate confirmed format facts from heuristics;
-4. retain raw evidence next to decoded text;
-5. distinguish discovery confidence from reachability and patch safety;
-6. keep exploratory hypotheses out of the canonical pipeline; and
-7. fail on structural damage instead of silently producing partial output.
+1. never modify authenticated source media in place;
+2. name every coordinate system and bank mapping;
+3. separate format facts from discovery heuristics;
+4. preserve raw evidence next to decoded interpretations;
+5. distinguish occurrence, reachability, ownership, and patch safety;
+6. keep abandoned experiments out of the maintained command surface;
+7. prefer deterministic plans and fail-closed mutations; and
+8. require stronger evidence as a change gets closer to modifying the game.
 
-## Module responsibilities
+## Why the game requires this architecture
 
-### Operator and package boundary
+The original game is not organized around one script container or renderer.
+CD-loaded overlays reuse HuC6280 logical addresses under different MPR mappings,
+text appears in multiple unrelated formats, resource-local tables mix visible
+strings with state, and apparently spare bytes may have unobserved lifetime or
+ownership constraints.
 
-`cyber_oedo/` owns the stable installed command surface. `cyber_oedo.cli`
-dispatches documented subcommands to the established root modules without
-changing their argument parsers, and `cyber_oedo.registry` is the one inventory
-of root scripts intentionally exposed through that command.
+That means several tempting shortcuts are invalid:
 
-The root scripts remain compatibility entry points during the package migration.
-Moving implementation code must therefore be a two-step operation: move one
-coherent dependency cluster under `cyber_oedo/`, then leave a thin root wrapper
-or compatibility import until a documented deprecation permits removal.
+- scanning a string does not prove it is used in play;
+- seeing the same CPU address twice does not prove the same code is mapped;
+- finding repeated fill does not prove free space;
+- identifying a byte pattern in dialogue does not make it globally reserved;
+- successfully booting a patched image does not prove that unrelated resources
+  remain safe.
 
-`cyber_oedo.doctor` checks only environment prerequisites and command-module
-availability. It must not authenticate a source disc or claim that runtime
-validation has passed.
+The Tier A/B/C model exists to restore boundaries that the original game does
+not provide cleanly itself. See `game_architecture_and_translation_strategy.md`.
 
-### Confirmed shared model
+## Layer ownership
 
-`game_layout.py` owns title-specific geometry, bank ranges, the observed record
-marker, and common opaque control values.
+### Operator boundary
 
-It must not accumulate speculative meanings. A constant belongs there only when
-it is used by more than one tool and supported by disc or runtime evidence.
+`cyber_oedo.cli` and `cyber_oedo.registry` expose one package-native command
+surface. Registry entries point directly to `cyber_oedo.*` modules; there is no
+legacy subprocess dispatch or parallel root-script API.
 
-### Lossless extraction boundary
+### Disc layer
 
-`extract_track2_mode1.py` transforms raw-sector coordinates into payload
-coordinates. All later tools operate exclusively on payload bytes.
+`cyber_oedo.disc` owns:
 
-This boundary prevents scanners from repeatedly reimplementing `2352`-byte
-sector math and accidentally treating EDC/ECC bytes as game data.
+- CloneCD geometry and companion-file handling;
+- raw 2352-byte Mode 1 structure;
+- 2048-byte payload extraction;
+- payload/LBA coordinate conversion;
+- EDC/P-Q ECC validation and rebuilding; and
+- guarded same-size payload patch primitives.
 
-### Guarded raw-sector patch boundary
+The low-level patcher is deliberately not responsible for deciding whether a
+game-specific region is semantically safe to modify.
 
-`cdrom_mode1.py` owns standard Mode 1 EDC/ECC generation and payload-coordinate
-patch application. It must remain game-agnostic and requires exact source bytes
-for every same-size replacement.
+### Script layer
 
-`build_human_test_disc.py` owns the title-specific trust boundary:
+`cyber_oedo.script` owns typed dialogue bytecode. Commands have explicit operand
+widths, source offsets, and round-trip serialization. This layer fixes the old
+class of bugs where an operand value of `00` was mistaken for a record
+terminator.
 
-- authenticate the complete source set;
-- copy before modification;
-- define the limited fullwidth text profile;
-- select or omit the generated cosmetic title patch;
-- compare all raw sectors;
-- preserve CCD and SUB data; and
-- write a machine-readable manifest.
+### Text layer
 
-`InPlaceTextPatch` owns same-size fullwidth text conversion.
-`InformationScreenLine` composes that text rule with the Media Mix
-interpreter's adjacent `00 01 RR` row command. It derives both the text patch
-and any row-operand patch from one immutable record. Keep those fields together
-when editing the merchandise translation; parallel hand-maintained text and
-layout tables would allow them to drift.
+`cyber_oedo.text` owns:
 
-Do not move source authentication into the low-level sector module. Keeping
-those layers separate allows synthetic sector tests without weakening the
-release-specific guardrails.
+- structured dialogue extraction;
+- auxiliary text extraction;
+- translation inventory generation/validation;
+- stock-renderer fullwidth encoding and page layout; and
+- relocation models.
 
-`read_payload_range()` is the one game-agnostic exception needed by large
-generated patches. It validates raw sector structure and EDC/ECC while
-returning only a requested payload slice. The high-level builder still owns the
-release hash, title-block hash, source offset, and interpretation.
+Layout is independent of storage ownership. A page can be compiled and reviewed
+without implying that a destination exists. Relocation requires explicit
+pointer sites, owned destination bytes, and source guards.
 
-### Broad discovery
+### Resource and allocation layers
 
-`scan_track.py` and `scan_likely_sjis.py` find structures worth inspecting.
-Their outputs are intentionally over-inclusive.
+`cyber_oedo.resources` records candidate boundaries and evidence.
+`cyber_oedo.allocation` operates only on explicit owned regions.
 
-Broad scanners should:
+Neither layer may promote a candidate tail or zero-filled span into writable
+space merely because it has capacity.
 
-- expose thresholds as arguments when useful;
-- write address and evidence columns;
-- document false-positive modes; and
-- never label a candidate as safe to patch.
+### Runtime layer
 
-### Format-aware extraction
+`cyber_oedo.runtime` owns Tier-B claims about what the loaded game actually does.
+Source-guarded static proof models known interpreter/table code, while live
+snapshot validation records PC, registers, memory, and all HuC6280 MPRs needed
+to disambiguate overlays.
 
-`extract_dialogue.py` implements the strongest current record model. It retains:
+A live proof artifact must be self-identifying and reproducible. Runtime tooling
+is read-only until a separate mutation design has passed its ownership gates.
 
-- marker address;
-- marker and terminator in raw/length evidence;
-- decoded glyphs;
-- control order;
-- raw bytes;
-- mission grouping; and
-- a conservative confidence label.
+### Build layer
 
-If runtime tracing changes the record model, update its tests and format
-documentation before regenerating the inventory.
-
-### Set subtraction and presentation
-
-`extract_auxiliary_text.py` removes intervals already owned by structured
-dialogue. `build_translation_inventory.py` presents both sources in one schema.
-
-This design avoids double-counting the same dialogue as broad Shift-JIS while
-keeping the original stage outputs available for audit.
-
-### Validation
-
-`validate_translation_inventory.py` checks the editable artifact without
-rewriting it. Validation rules are separated from generation so translators can
-run them after any editor or spreadsheet.
-
-### Visual diagnostics
-
-`render_pce_tiles.py` and `make_contact_sheet.py` are independent from text
-extraction. They share the payload coordinate model but make no claim that an
-offset is a font or tile bank.
-
-`pce_graphics.py` is the dependency-free hardware codec shared by visual
-diagnostics and generated art. It knows only the 32-byte planar representation
-of one tile.
-
-`title_screen.py` owns the optional opening graphic. It generates a complete
-256-by-240 palette-index image, encodes its 960 tiles in screen order, and
-generates the replacement seven-frame grayscale palette cycle. The generator
-reserves indexes 0 through 5 as black and remaps logo coverage into indexes 6
-through 15; this hides residual upper-border pixels from the original routine
-without disabling its timing. It does not contain original game art, know disc
-offsets, or decide whether the patch is enabled. `title_logo_mask.py` stores
-only the compressed four-bit coverage mask derived from approved replacement
-artwork. These separations allow downstream projects to:
-
-- use the exact approved reference composition;
-- import another master image and retain all builder guardrails;
-- replace the generator with another same-size asset; or
-- select `--title-screen original` and keep every translation patch.
-
-Do not place the source game title block in either module. The builder reads it
-and the original 224-byte title palette cycle from the authenticated IMG at
-runtime so expected bytes remain exact patch guards without redistributing
-game data. The portrait palette immediately before the cycle is deliberately
-outside the optional patch.
-
-### Executable-code diagnostics
-
-`disassemble_huc6280.py` owns deterministic single-instruction decoding and
-linear presentation. It requires the analyst to supply both the payload/file
-offset and logical CPU address because the disc does not encode the runtime
-MPR mapping beside each code block.
-
-The disassembler must not decide that bytes are code. Record the evidence for
-the module load address separately, and stop a listing before an embedded table
-unless the table is itself under investigation. Payload offsets remain the
-patch coordinate; logical addresses remain the control-flow coordinate.
-
-## Evidence levels
-
-Use these labels in future notes and code comments:
-
-### Confirmed from bytes
-
-Examples:
-
-- raw sector sync/mode;
-- Shift-JIS decode;
-- null terminator;
-- exact record offset;
-- exact repeated anchor.
-
-### Confirmed from code path
-
-Examples:
-
-- boot code calls `$E060`;
-- a parser branch treats a byte as a command;
-- a pointer is module-relative.
-
-### Confirmed at runtime
-
-Examples:
-
-- `40` starts a new page;
-- a record is reachable;
-- a line has a specific pixel width;
-- a region is copied before display.
-
-### Heuristic
-
-Examples:
-
-- a Shift-JIS run resembles natural language;
-- a sector-aligned uppercase string is a resource header;
-- a constant-fill tail is padding.
-
-### Hypothesis
-
-Examples:
-
-- a particular tail is available for relocation;
-- a byte could serve as a Latin escape;
-- a pointer table has an inferred entry size.
-
-Do not promote a heuristic or hypothesis by changing its variable name alone.
-Add the supporting code/runtime evidence.
-
-## Python documentation standard
-
-Every Python module, class, method, nested function, and top-level function
-must have a PEP 257-compatible docstring.
-
-Use this structure when a section is relevant:
+`cyber_oedo.build` separates immutable profile data from mechanisms:
 
 ```text
-"""Perform one clearly stated action.
-
-Explain context, assumptions, and non-obvious behavior.
-
-Args:
-    name: Meaning, coordinate system, accepted range, or ownership.
-
-Returns:
-    Exact return shape and sentinel behavior.
-
-Raises:
-    Exceptions intentionally exposed to callers.
-
-Side Effects:
-    Files, directories, streams, memory, or external state affected.
-
-Design Decisions:
-    Why behavior that may look surprising is intentional.
-
-Notes:
-    Limits that do not fit the sections above.
-"""
+build/
+|-- profiles/
+|   |-- models.py
+|   |-- startup.py
+|   |-- dossiers.py
+|   |-- media_mix.py
+|   `-- mission0_stock.py
+|-- plan.py
+|-- source.py
+|-- pipeline.py
+|-- manifest.py
+|-- image_verify.py
+`-- verification.py
 ```
 
-Do not add empty sections merely for uniformity. A small pure predicate may
-need only `Args`, `Returns`, and a design note; CLI entry points should document
-inputs, outputs, side effects, and failure conditions explicitly.
+The old build engine mixed translation data, source hashes, layout rules,
+graphics, patch definitions, verification helpers, and CLI behavior in one
+large module. The decomposed architecture makes each concern independently
+reviewable.
 
-Explanatory comments follow PEP 8:
+`build.plan` creates a source-independent deterministic plan.
+`build.pipeline` authenticates/copies source media, applies the selected profile,
+verifies outputs, and writes the manifest.
 
-- use `# ` and complete sentences;
-- explain *why* a binary rule, cursor movement, or safety check exists;
-- do not narrate obvious assignments or repeat the docstring; and
-- keep every Python source line at or below 79 characters.
+### Graphics layer
 
-`tests/test_documentation.py` enforces docstring presence and summary shape,
-the 79-character limit, and comment prefixes without third-party lint tools.
-It scans the maintained root programs, `cyber_oedo/`, and `tests/` recursively.
+`cyber_oedo.graphics` owns tile codecs, title generation, diagnostic rendering,
+and related image helpers. Graphics tooling must not become a second binary
+patch layer.
 
-## Adding a new scanner
+## Tier boundaries
 
-1. Decide whether it consumes the raw IMG or extracted payload. Prefer the
-   payload unless raw-sector metadata is the subject.
-2. Import address constants from `game_layout.py`.
-3. Put a complete statement of assumptions and false positives in the module
-   docstring.
-4. Give every CLI argument useful `--help` text.
-5. Write stable TSV headers even for zero results.
-6. Include offsets, lengths, and raw evidence needed to reproduce a candidate.
-7. Add a synthetic unit test for the parsing rule.
-8. Mark the output canonical or exploratory in both its docstring and
-   `tool_reference.md`.
-9. Compare a regenerated inventory against the prior one.
+### Tier A: structure
 
-## Changing the dialogue parser
+Allowed:
 
-Before accepting a parser change:
+- authenticate/extract;
+- identify formats and candidate resources;
+- parse/serialize bytecode;
+- build inventories and databases;
+- measure candidates conservatively.
 
-1. Add a synthetic record that demonstrates the new behavior.
-2. Retain an invalid example that must still be rejected.
-3. Regenerate `dialogue.tsv`.
-4. Compare:
-   - total records;
-   - `likely_text`/`review` counts;
-   - bank counts;
-   - unique tagged text count;
-   - every added/removed offset.
-5. Manually inspect raw bytes for a sample of differences.
-6. Update `text_format.md`.
-7. Generate a new inventory filename and migrate translations deliberately.
+Not sufficient for:
 
-A larger record count is not inherently an improvement.
+- claiming runtime reachability;
+- naming every control semantically;
+- claiming free space.
 
-## TSV compatibility contract
+### Tier B: runtime semantics
 
-Downstream tools identify columns by name, not position. New informational
-columns can be added carefully, but renaming or changing the meaning of an
-existing column is a schema change.
+Allowed:
 
-For schema changes:
+- source-guarded disassembly;
+- overlay/MPR mapping;
+- loader/state/pointer proof;
+- debugger snapshots and traces;
+- renderer/font/VDC observation;
+- inactive mutation plans.
 
-- update every reader;
-- update `OUTPUT_FIELDS`;
-- update the validator;
-- update documentation;
-- add a migration note;
-- regenerate to a new file; and
-- do not overwrite a translator's master inventory.
+Required before active engine/storage changes:
 
-## Transitional package structure
+- relevant access path and lifetime;
+- pointer/reachability model;
+- destination ownership;
+- exact hook/source guards;
+- renderer behavior at the target context.
 
-The project has crossed the threshold described by the original architecture:
-shared disc, text, graphics, relocation, and build logic now justify an
-installable package. Phase 1 therefore adds a deliberately thin package shell
-without moving the verified implementation modules in the same change.
+### Tier C: safe translation mutation
 
-Current boundary:
+Tier C may activate relocation or renderer/storage work only after Tier B has
+proved the contracts it relies on. Every patch remains bounded, source-guarded,
+and independently verifiable.
 
-```text
-cyber_oedo/
-|-- __init__.py
-|-- __main__.py
-|-- cli.py
-|-- doctor.py
-`-- registry.py
+## Performance policy
 
-root *.py
-`-- verified implementation modules and compatibility entry points
-```
+Optimize measured hot paths, not every loop indiscriminately.
 
-A later internal target is organized by responsibility rather than by command:
+The full-payload reconnaissance scans use NumPy/Numba because tens of millions
+of byte-level iterations dominate runtime. Small metadata transforms and
+bounded record operations remain straightforward Python for readability.
 
-```text
-cyber_oedo/
-|-- disc/
-|   |-- layout.py
-|   |-- mode1.py
-|   `-- clonecd.py
-|-- text/
-|   |-- dialogue.py
-|   |-- inventory.py
-|   |-- validation.py
-|   `-- relocation.py
-|-- graphics/
-|   |-- pce.py
-|   `-- title.py
-|-- analysis/
-|   |-- resources.py
-|   `-- disassembly.py
-`-- build/
-    `-- human_test.py
-```
+Large-file comparisons and patch verification should stream or operate by
+changed sectors rather than repeatedly loading full images into memory.
 
-Move one dependency cluster at a time. A structural move must not change patch
-bytes, translation strings, parser decisions, coordinate constants, or output
-schemas merely to make the package look cleaner. See
-`docs/modernization_roadmap.md` for migration order and explicit non-goals.
+## Testing policy
 
-The flat `cdrom_mode1.py` module continues to supply the verified rebuild layer,
-while `dialogue_relocation.py` supplies a guarded but inactive pointer/page
-model. Do not activate relocation merely as part of moving those modules.
+Use tests for behavior and project-specific architecture:
 
-## Testing strategy
+- exact parsing/serialization;
+- coordinate math;
+- source-guard failures;
+- patch overlap/capacity rules;
+- deterministic plan identity;
+- known profile footprint;
+- package command resolution;
+- prohibition on retired root-module imports.
 
-### Synthetic unit tests
+Use Ruff for generic Python correctness/style rather than encoding formatting
+preferences as bespoke unit tests.
 
-Fast and redistributable:
+## Extension rule
 
-- bank boundary/address math;
-- Shift-JIS/control parsing;
-- invalid/unterminated record rejection;
-- interval merging;
-- resource-name filtering;
-- 4bpp bitplane order;
-- raw Mode 1 payload extraction;
-- CD-ROM EDC check vector and Mode 1 ECC regeneration;
-- stale-integrity detection and repair;
-- guarded cross-sector payload patching;
-- fullwidth startup-profile encoding and capacity;
-- two-bank opening-profile coverage and non-overlapping row layout;
-- four-bit title coverage and stable grayscale palette frames;
-- fixed-cell English word wrapping and invalid-input rejection;
-- explicit stock-renderer page compilation and added-page opt-in;
-- guarded pointer arithmetic and relocation-area containment;
-- refusal to relocate without a proven pointer;
-- invalid parser-bound validation;
-- package command registry and argument forwarding;
-- docstrings on every documentable Python syntax node;
-- PEP 257 summary shape; and
-- PEP 8 line length and comment prefixes.
+When adding a new discovery or translation feature, ask in order:
 
-### Golden inventory checks
+1. What bytes or runtime state are the evidence?
+2. Which coordinate system applies?
+3. Is the claim structural, runtime, or mutation-level?
+4. Which module owns that claim?
+5. What source guard makes failure explicit?
+6. What test proves the tool did not broaden its authority?
 
-Local only because they depend on the disc:
-
-- expected payload hash;
-- expected total record counts;
-- selected known offsets and decoded text;
-- no records crossing detected resource boundaries unexpectedly;
-- deterministic TSV output.
-
-### Runtime tests
-
-Required for behavior:
-
-- control semantics;
-- renderer widths and page flow;
-- pointer updates;
-- relocation;
-- EDC/ECC rebuilt image;
-- save/load and audio-track transitions.
-
-The local real-disc build adds a middle validation layer:
-
-- source CCD/IMG/SUB hashes;
-- source text at every patch coordinate;
-- affected original-sector EDC/ECC;
-- exact changed raw-sector set;
-- unchanged CCD/SUB; and
-- output image and sector hashes.
-
-## Review checklist
-
-For any code change:
-
-- [ ] Source disc remains unmodified.
-- [ ] Coordinate system is explicit.
-- [ ] Confirmed facts and heuristics remain separate.
-- [ ] `--help` explains inputs and outputs.
-- [ ] Empty outputs do not crash.
-- [ ] Synthetic tests cover the changed rule.
-- [ ] PEP 257/PEP 8 documentation checks pass.
-- [ ] `python -m compileall -q .` passes.
-- [ ] `python -m cyber_oedo doctor` reports no core failures.
-- [ ] Inventory differences are explained.
-- [ ] Documentation matches actual CLI behavior.
-- [ ] Reinsertion claims distinguish raw-sector proof from runtime proof.
+If those questions do not have clear answers, the feature belongs in research
+notes first, not the production patch pipeline.

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import unittest
 
-from cyber_oedo.build import engine, human_test
+from cyber_oedo.build import human_test
 from cyber_oedo.build.plan import build_profile_plan
+from cyber_oedo.build.profiles import mission0_stock as profile
 
 
 class BuildPlanTests(unittest.TestCase):
@@ -33,11 +34,11 @@ class BuildPlanTests(unittest.TestCase):
     def test_plan_matches_independent_sector_footprint(self) -> None:
         """Keep plan spans equal to the profile's reviewed footprint."""
 
-        for mode in engine.TITLE_SCREEN_MODES:
+        for mode in profile.TITLE_SCREEN_MODES:
             plan = human_test.planned_profile(mode)
             self.assertEqual(
                 plan.guarded_relative_sectors,
-                engine.profile_relative_sectors(mode),
+                profile.profile_relative_sectors(mode),
             )
 
     def test_plan_does_not_serialize_source_bytes(self) -> None:

@@ -28,10 +28,14 @@ RETIRED_ROOT_MODULES = {
     "title_screen",
     "validate_translation_inventory",
 }
+RETIRED_PACKAGE_FACADES = (
+    ROOT / "cyber_oedo" / "build" / "engine.py",
+    ROOT / "cyber_oedo" / "text" / "dialogue_relocation.py",
+)
 
 
 class PackageArchitectureTests(unittest.TestCase):
-    """Prevent the transitional root-module architecture from returning."""
+    """Prevent the transitional compatibility architecture from returning."""
 
     def test_package_does_not_import_retired_root_modules(self) -> None:
         """Require every internal import to resolve through cyber_oedo."""
@@ -57,6 +61,12 @@ class PackageArchitectureTests(unittest.TestCase):
         remaining = sorted(
             name for name in RETIRED_ROOT_MODULES if (ROOT / f"{name}.py").exists()
         )
+        self.assertEqual([], remaining)
+
+    def test_retired_package_facades_are_absent(self) -> None:
+        """Keep decomposition boundaries direct rather than re-exported."""
+
+        remaining = [str(path.relative_to(ROOT)) for path in RETIRED_PACKAGE_FACADES if path.exists()]
         self.assertEqual([], remaining)
 
 

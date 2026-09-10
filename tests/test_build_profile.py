@@ -6,9 +6,10 @@ import hashlib
 import pathlib
 import unittest
 
-from cyber_oedo.build import engine
+from cyber_oedo.build.profiles import dossiers, media_mix, mission0_stock as profile, models, startup
 from cyber_oedo.graphics.title_screen import (
     BACKGROUND_INDEX,
+    TITLE_ASSET_BYTES,
     TITLE_FIRST_VISIBLE_INDEX,
     TITLE_PALETTE_BYTES,
     TITLE_PALETTE_COLORS,
@@ -29,29 +30,29 @@ class HumanTestProfileTests(unittest.TestCase):
     def test_text_patch_count_and_size_contract(self) -> None:
         """Keep all existing profile text replacements same-size."""
 
-        self.assertEqual(len(engine.HUMAN_TEST_PATCHES), 271)
-        for text_patch in engine.HUMAN_TEST_PATCHES:
+        self.assertEqual(len(profile.HUMAN_TEST_PATCHES), 271)
+        for text_patch in profile.HUMAN_TEST_PATCHES:
             patch = text_patch.to_payload_patch()
             self.assertEqual(len(patch.expected), len(patch.replacement))
 
     def test_profile_has_no_dialogue_renderer_code_patch(self) -> None:
         """Keep the failed renderer experiment out of the stock profile."""
 
-        self.assertEqual(engine.MISSION0_RENDERER_PATCHES, ())
+        self.assertEqual(profile.MISSION0_RENDERER_PATCHES, ())
         self.assertEqual(
-            len(engine.HUMAN_TEST_BINARY_PATCHES),
-            len(engine.OPENING_PROFILE_LAYOUT_PATCHES)
-            + len(engine.INFORMATION_SCREEN_LAYOUT_PATCHES),
+            len(profile.HUMAN_TEST_BINARY_PATCHES),
+            len(dossiers.OPENING_PROFILE_LAYOUT_PATCHES)
+            + len(media_mix.INFORMATION_SCREEN_LAYOUT_PATCHES),
         )
 
     def test_opening_profiles_cover_both_banks(self) -> None:
         """Keep both copies of all seven opening dossiers translated."""
 
-        self.assertEqual(len(engine.OPENING_PROFILE_FIELDS), 80)
-        self.assertEqual(len(engine.OPENING_PROFILE_TEXT_PATCHES), 160)
-        self.assertEqual(len(engine.OPENING_PROFILE_LAYOUT_PATCHES), 46)
+        self.assertEqual(len(dossiers.OPENING_PROFILE_FIELDS), 80)
+        self.assertEqual(len(dossiers.OPENING_PROFILE_TEXT_PATCHES), 160)
+        self.assertEqual(len(dossiers.OPENING_PROFILE_LAYOUT_PATCHES), 46)
         self.assertEqual(
-            {field.profile for field in engine.OPENING_PROFILE_FIELDS},
+            {field.profile for field in dossiers.OPENING_PROFILE_FIELDS},
             {
                 "chris",
                 "kenichi",
@@ -66,12 +67,12 @@ class HumanTestProfileTests(unittest.TestCase):
     def test_media_mix_rows_are_nonoverlapping(self) -> None:
         """Keep visible 16-pixel lines separated by two tile rows."""
 
-        self.assertEqual(len(engine.INFORMATION_SCREEN_LINES), 43)
-        self.assertEqual(len(engine.INFORMATION_SCREEN_LAYOUT_PATCHES), 34)
+        self.assertEqual(len(media_mix.INFORMATION_SCREEN_LINES), 43)
+        self.assertEqual(len(media_mix.INFORMATION_SCREEN_LAYOUT_PATCHES), 34)
         for screen in {"video", "novel", "music"}:
             rows = [
                 line.display_row
-                for line in engine.INFORMATION_SCREEN_LINES
+                for line in media_mix.INFORMATION_SCREEN_LINES
                 if line.screen == screen and line.english
             ]
             self.assertEqual(len(rows), len(set(rows)))
@@ -80,8 +81,8 @@ class HumanTestProfileTests(unittest.TestCase):
     def test_profile_sector_footprints_remain_stable(self) -> None:
         """Keep original/clean title variants on reviewed sectors."""
 
-        original = set(engine.profile_relative_sectors("original"))
-        clean = set(engine.profile_relative_sectors("clean"))
+        original = set(profile.profile_relative_sectors("original"))
+        clean = set(profile.profile_relative_sectors("clean"))
         self.assertEqual(len(original), 21)
         self.assertEqual(len(clean), 37)
         self.assertTrue(original < clean)
@@ -89,17 +90,17 @@ class HumanTestProfileTests(unittest.TestCase):
     def test_fullwidth_encoder_rejects_control_characters(self) -> None:
         """Keep replacement glyph bytes out of the low-byte control range."""
 
-        self.assertEqual(engine.ascii_to_fullwidth("A 1!"), "Ａ　１！")
-        self.assertEqual(engine.ascii_to_fullwidth("A-B'S"), "Ａ−Ｂ’Ｓ")
+        self.assertEqual(models.ascii_to_fullwidth("A 1!"), "Ａ　１！")
+        self.assertEqual(models.ascii_to_fullwidth("A-B'S"), "Ａ−Ｂ’Ｓ")
         with self.assertRaises(ValueError):
-            engine.ascii_to_fullwidth("line\nbreak")
+            models.ascii_to_fullwidth("line\nbreak")
 
     def test_word_wrap_is_stable(self) -> None:
         """Keep the confirmed 11-cell stock-renderer wrapping behavior."""
 
-        wrapped = engine.wrap_ascii_text(
+        wrapped = models.wrap_ascii_text(
             "I hunt crooks and turn them in.",
-            engine.PROLOGUE_WRAP_WIDTH,
+            startup.PROLOGUE_WRAP_WIDTH,
         )
         self.assertEqual(
             [wrapped[:11], wrapped[11:22], wrapped[22:33], wrapped[33:]],
@@ -115,7 +116,7 @@ class TitleScreenTests(unittest.TestCase):
 
         pixels = build_clean_title_pixels()
         asset = build_clean_title_asset()
-        self.assertEqual(len(asset), engine.TITLE_ASSET_BYTES)
+        self.assertEqual(len(asset), TITLE_ASSET_BYTES)
         self.assertEqual(
             hashlib.sha256(asset).hexdigest(),
             "f8e91ad827040796ea63a80541e06f71159ca18121b10ab5128347ad6206e8f1",
@@ -151,7 +152,7 @@ class TitleScreenTests(unittest.TestCase):
 
         nonexistent = pathlib.Path("source-image-is-not-needed.img")
         self.assertEqual(
-            engine.optional_title_screen_patches(nonexistent, "original"),
+            profile.optional_title_screen_patches(nonexistent, "original"),
             (),
         )
         self.assertEqual(title_palette_index(0), BACKGROUND_INDEX)

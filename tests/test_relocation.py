@@ -4,19 +4,21 @@ from __future__ import annotations
 
 import unittest
 
-from cyber_oedo.text.dialogue_relocation import (
+from cyber_oedo.text.extract_dialogue import parse_record
+from cyber_oedo.text.layout import (
     DIALOGUE_MARKER,
     DialoguePage,
-    DialogueRelocationPlan,
     PageBreakPlan,
     PageGeometry,
-    PointerSite,
-    RelocationArea,
     ascii_to_fullwidth_sjis,
-    find_u16_pointer_candidates,
     wrap_dialogue_page,
 )
-from cyber_oedo.text.extract_dialogue import parse_record
+from cyber_oedo.text.relocation import (
+    DialogueRelocationPlan,
+    PointerSite,
+    RelocationArea,
+    find_u16_pointer_candidates,
+)
 
 
 class DialogueRelocationTests(unittest.TestCase):
