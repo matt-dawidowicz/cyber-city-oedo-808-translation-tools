@@ -15,10 +15,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quick-check:
+  pull-request:
     if: github.event_name != 'workflow_dispatch'
-    name: Ubuntu / Python 3.13
+    name: Ubuntu / Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.13"
 
     steps:
       - name: Check out repository
@@ -27,7 +33,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install package and development dependencies
@@ -35,11 +41,14 @@ jobs:
           python -m pip install --upgrade pip &&
           python -m pip install -e ".[dev]"
 
+      - name: Run Ruff correctness checks
+        run: python -m ruff check cyber_oedo tests
+
       - name: Run synthetic regression suite
         run: python -m unittest discover -s tests -v
 
       - name: Compile all Python sources
-        run: python -m compileall -q .
+        run: python -m compileall -q cyber_oedo tests
 
       - name: Smoke-test editable command
         run: python -m cyber_oedo --help
@@ -53,7 +62,7 @@ jobs:
       - name: Retain built distributions
         uses: actions/upload-artifact@v4
         with:
-          name: python-distributions
+          name: python-distributions-${{ matrix.python-version }}
           path: dist/*
           if-no-files-found: error
           retention-days: 7
@@ -98,11 +107,14 @@ jobs:
           python -m pip install --upgrade pip &&
           python -m pip install -e ".[dev]"
 
+      - name: Run Ruff correctness checks
+        run: python -m ruff check cyber_oedo tests
+
       - name: Run synthetic regression suite
         run: python -m unittest discover -s tests -v
 
       - name: Compile all Python sources
-        run: python -m compileall -q .
+        run: python -m compileall -q cyber_oedo tests
 
       - name: Smoke-test editable command
         run: python -m cyber_oedo --help

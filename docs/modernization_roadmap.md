@@ -2,117 +2,110 @@
 
 ## Goal
 
-Turn the research repository into a durable engineering toolkit without losing
-the properties that make the current reverse-engineering work trustworthy:
-explicit coordinates, source authentication, inspectable intermediate files,
-synthetic regression tests, and conservative runtime claims.
+Keep the repository small, reproducible, and evidence-driven while the game is
+reverse-engineered into a translation-safe model. Software cleanup must not
+change authenticated game bytes merely for architectural neatness.
 
-Modernization should reduce maintenance cost without changing game bytes merely
-for architectural neatness.
+## Current state
 
-## Phase 1: stable tooling foundation
+| Area | Status | Purpose |
+|---|---|---|
+| Package migration | In cleanup | One canonical `cyber_oedo` implementation surface |
+| Tier A | Complete | Structural extraction, bytecode, resources, inventory |
+| Tier B1 | Complete | Mission 0 dialogue interpreter proof |
+| Tier B2 | Complete | Indexed table loader and state-selector proof |
+| Tier B2.5 | Complete | Bank-aware frozen live-snapshot validator |
+| Tier B live certification | In progress | Runtime state, glyph and VDC evidence |
+| Tier B3 | Gated | Translation-safe runtime/storage architecture |
+| Tier C | Future | Complete compiler, relocation and release build |
 
-Status: implemented by the tooling-foundation modernization.
+## Maintenance track
 
-- Add `pyproject.toml` and an installable package boundary.
-- Preserve every root script as a compatibility entry point.
-- Add one `cyber-oedo` command that forwards to maintained scripts.
-- Add an environment doctor for Python, command modules, and Pillow.
-- Run synthetic tests and packaging smoke tests in CI on Windows and Linux.
-- Add dependency-update, contribution, security, and release-process metadata.
+### 1. Remove transitional architecture
 
-This phase intentionally avoids touching verified parser and patch behavior.
+- retire root-level compatibility scripts after package imports are canonical;
+- remove subprocess command fallback and duplicated command registries;
+- remove failed Stage-1 wide-renderer implementation code;
+- remove completed/disproven exploratory scanners from the shipped surface;
+- keep historical failure evidence in documentation and Git history.
 
-## Phase 2: move shared libraries into the package
+### 2. Decompose build profiles
 
-Move reusable implementation modules into clear namespaces while leaving thin
-root wrappers in place. A likely target is:
+The legacy `build/engine.py` accumulated translation data, layout rules,
+encoding, graphics integration, source identity, and profile assembly in one
+large module. Split those responsibilities into typed profile/data modules and
+small mechanisms while preserving the exact patch plan.
+
+Target shape:
 
 ```text
 cyber_oedo/
-|-- disc/
-|   |-- layout.py
-|   |-- mode1.py
-|   `-- clonecd.py
+|-- build/
+|   |-- pipeline.py
+|   |-- plan.py
+|   |-- source.py
+|   |-- manifest.py
+|   |-- verification.py
+|   `-- profiles/
+|       |-- mission0_stock.py
+|       |-- startup.py
+|       |-- dossiers.py
+|       `-- media_mix.py
 |-- text/
-|   |-- dialogue.py
-|   |-- inventory.py
-|   |-- validation.py
-|   `-- relocation.py
-|-- graphics/
-|   |-- pce.py
-|   `-- title.py
-|-- analysis/
-|   |-- resources.py
-|   `-- disassembly.py
-`-- build/
-    `-- human_test.py
+|   |-- fullwidth.py
+|   `-- layout.py
+|-- runtime/
+|-- script/
+|-- resources/
+`-- disc/
 ```
 
-Migration rules:
+### 3. Keep public contracts narrow
 
-1. Move one dependency cluster at a time.
-2. Keep compatibility imports or wrappers at the old module path.
-3. Require the synthetic suite to pass before and after each move.
-4. Do not change constants, translation strings, or patch bytes during moves.
-5. Compare generated artifacts when an import move touches executable paths.
+The supported operator interface is `cyber-oedo` / `python -m cyber_oedo` plus
+versioned generated schemas. Internal Python module paths may evolve while the
+reverse engineering is active; avoid promising broad compatibility aliases.
 
-## Phase 3: decompose the human-test builder
+### 4. Use modern quality tooling
 
-`build_human_test_disc.py` is now large enough that unrelated responsibilities
-are difficult to review independently. Split it only after Phase 2 establishes
-stable shared namespaces.
+Use Ruff for generic Python correctness/style checks and unit tests for
+project-specific invariants. CI should test the minimum supported Python and a
+current Python on every pull request, with the Windows/Linux matrix available
+for release or manual validation.
 
-Separate at least these concerns:
+## Reverse-engineering track
 
-- authenticated source-set discovery;
-- immutable translation profile data;
-- text encoding and wrapping;
-- row-layout transformations;
-- optional title graphics;
-- patch planning;
-- raw-sector application;
-- output manifest generation; and
-- post-build verification.
+The technical rationale and translation policy are documented in
+`game_architecture_and_translation_strategy.md`.
 
-The split should produce identical patch plans for the same authenticated input.
-A golden local patch-plan snapshot is preferable to relying only on final image
-hashes because it makes accidental scope expansion easier to diagnose.
+### Tier A — structure
 
-## Phase 4: formalize schemas and reusable APIs
+Authenticate source media, model formats conservatively, preserve offsets and
+controls, and make extraction round-trip where possible.
 
-Once the internal package layout stabilizes:
+### Tier B — runtime meaning
 
-- version TSV schemas explicitly;
-- expose typed records for dialogue and inventory rows;
-- centralize TSV read/write rules;
-- add machine-readable build-profile metadata;
-- expose a dry-run patch-plan command;
-- expose a JSON summary mode for automation; and
-- define which Python APIs, if any, are supported for third-party callers.
+Prove overlay mappings, interpreter behavior, state tables, pointers, glyph
+paths, and resource lifetime. Live evidence must include the MPR context needed
+to disambiguate reused HuC6280 logical addresses.
 
-Avoid promising a public Python API before the module boundaries stop moving.
-The command line and documented file schemas should remain the durable public
-contract in the meantime.
+### Tier C — translation mutation
 
-## Phase 5: release engineering
+Activate longer-text storage, relocation, or renderer work only after the
+relevant Tier-B ownership and reachability gates are satisfied. Every mutation
+must remain source-guarded and bounded to an explicit patch plan.
 
-When runtime validation is strong enough for wider distribution of the tools:
+## Release gate
 
-- tag toolkit releases separately from translation build-profile names;
-- generate release notes from `CHANGELOG.md`;
-- build and verify wheel and source distributions in CI;
-- publish hashes for release artifacts;
-- document supported Python versions per release; and
-- retain the no-game-data packaging boundary.
+Before any cleanup or refactor is promoted as behavior-preserving:
 
-## Explicit non-goals
+1. synthetic regression tests pass;
+2. packaging and command smoke tests pass;
+3. authenticated analysis artifacts retain their expected identities where the
+   changed code is not intended to alter them;
+4. the stock-renderer patch plan is byte-equivalent; and
+5. any deliberate output change is separately documented and reviewed.
 
-Modernization alone must not:
-
-- change translation wording;
-- reinterpret unknown control bytes;
-- promote heuristics into confirmed facts;
-- broaden patch ranges without evidence;
-- change generated game bytes as a side effect of moving code; or
-- make emulator success a substitute for structural verification.
+Modernization is successful when it reduces the amount of code a maintainer
+must understand without reducing the amount of evidence required to change the
+game.

@@ -38,6 +38,7 @@ graphics = [
 dev = [
     "Pillow>=10",
     "build>=1.2",
+    "ruff>=0.12",
 ]
 
 [project.scripts]
@@ -51,7 +52,6 @@ py-modules = [
     "analyze_text_slots",
     "build_human_test_disc",
     "build_translation_inventory",
-    "build_wide_engine_stage1",
     "cdrom_mode1",
     "clonecd_cue",
     "dialogue_relocation",
@@ -64,15 +64,19 @@ py-modules = [
     "pce_graphics",
     "render_pce_tiles",
     "scan_likely_sjis",
-    "scan_reversed_sjis",
     "scan_track",
     "title_logo_mask",
     "title_screen",
     "validate_translation_inventory",
-    "wide_runtime_stage1",
-    "wide_text",
 ]
 include-package-data = true
 
 [tool.setuptools.packages.find]
 include = ["cyber_oedo*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]
