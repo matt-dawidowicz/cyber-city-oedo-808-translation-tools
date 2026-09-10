@@ -10,6 +10,7 @@ import unittest
 from cyber_oedo.analysis.disassemble_huc6280 import read_binary_region
 from cyber_oedo.analysis.fast_scan import (
     broad_sjis_runs,
+    decodable_broad_sjis_runs,
     likely_sjis_runs,
     sector_metrics,
 )
@@ -42,6 +43,16 @@ class NativeScanTests(unittest.TestCase):
         self.assertEqual(japanese.tolist(), [3])
         rows = list(scan_shift_jis(data, 3))
         self.assertEqual(rows, [(0, 3, "あいうABC")])
+
+    def test_decodable_broad_filter_rejects_invalid_structural_pairs(self) -> None:
+        """Reject broad pair shapes that Python Shift-JIS cannot decode."""
+
+        data = bytes.fromhex("81 AD 81 AD 81 AD") + b"\x00"
+        starts, _, _ = broad_sjis_runs(data, 3)
+        self.assertEqual(starts.tolist(), [0])
+        filtered, _, _ = decodable_broad_sjis_runs(data, 3)
+        self.assertEqual(filtered.size, 0)
+        self.assertEqual(list(scan_shift_jis(data, 3)), [])
 
     def test_likely_scanner_rejects_trail_byte_false_positive(self) -> None:
         """Do not restart discovery inside a previously consumed pair."""

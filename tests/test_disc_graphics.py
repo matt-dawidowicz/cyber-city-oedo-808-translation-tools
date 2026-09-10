@@ -13,13 +13,13 @@ from cyber_oedo.analysis.disassemble_huc6280 import (
 )
 from cyber_oedo.disc.cdrom_mode1 import (
     MODE1_SYNC,
-    apply_payload_patches,
     mode1_integrity_matches,
     read_payload_range,
     rebuild_mode1_sector,
     PayloadPatch,
 )
 from cyber_oedo.disc.extract_track2_mode1 import extract_mode1_payload
+from cyber_oedo.disc.patching import apply_payload_patches
 from cyber_oedo.disc.game_layout import (
     MODE1_USER_DATA_OFFSET,
     RAW_SECTOR_SIZE,

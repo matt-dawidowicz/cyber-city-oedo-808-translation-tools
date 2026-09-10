@@ -10,7 +10,7 @@ import pathlib
 import re
 from collections.abc import Iterator, Mapping, Sequence
 
-from cyber_oedo.analysis.fast_scan import broad_sjis_runs, sector_metrics
+from cyber_oedo.analysis.fast_scan import decodable_broad_sjis_runs, sector_metrics
 from cyber_oedo.disc.game_layout import SECTOR_SIZE
 from cyber_oedo.io import mapped_file, sha256_buffer
 
@@ -74,7 +74,7 @@ def scan_shift_jis(
 ) -> Iterator[tuple[int, int, str]]:
     """Yield broad Shift-JIS runs using the compiled token state machine."""
 
-    starts, ends, japanese_counts = broad_sjis_runs(
+    starts, ends, japanese_counts = decodable_broad_sjis_runs(
         data,
         minimum_japanese,
     )
@@ -88,8 +88,10 @@ def scan_shift_jis(
         raw = data[offset : int(end)]  # type: ignore[index]
         try:
             decoded = raw.decode("shift_jis")
-        except UnicodeDecodeError:
-            continue
+        except UnicodeDecodeError as error:
+            raise AssertionError(
+                "native broad scanner admitted undecodable Shift-JIS"
+            ) from error
         yield (
             offset,
             int(japanese),

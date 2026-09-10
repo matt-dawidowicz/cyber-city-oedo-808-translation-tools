@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import pathlib
 
+from cyber_oedo.io import sha256_buffer
 from cyber_oedo.build.profiles.dossiers import (
     OPENING_PROFILE_FIELDS,
     OPENING_PROFILE_LAYOUT_PATCHES,
@@ -146,7 +146,7 @@ def optional_title_screen_patches(
         start_lba=TRACK2_START_LBA,
         sector_count=TRACK2_SECTOR_COUNT,
     )
-    palette_digest = hashlib.sha256(original_palette).hexdigest()
+    palette_digest = sha256_buffer(original_palette)
     if palette_digest != TITLE_PALETTE_SOURCE_SHA256:
         raise ValueError(
             f"opening title palette differs from the analyzed release: expected {TITLE_PALETTE_SOURCE_SHA256}, found {palette_digest}"
@@ -158,7 +158,7 @@ def optional_title_screen_patches(
         start_lba=TRACK2_START_LBA,
         sector_count=TRACK2_SECTOR_COUNT,
     )
-    digest = hashlib.sha256(original).hexdigest()
+    digest = sha256_buffer(original)
     if digest != TITLE_SCREEN_SOURCE_SHA256:
         raise ValueError(
             f"opening title graphic differs from the analyzed release: expected {TITLE_SCREEN_SOURCE_SHA256}, found {digest}"

@@ -23,18 +23,21 @@ The former monolithic `build/engine.py` has been retired. No single build module
 should again combine translation data, binary I/O, CLI behavior, and output
 verification.
 
-### Planning
+### Prepared recipe and planning
 
-`cyber_oedo.build.plan` creates a deterministic source-independent patch plan.
-Each entry records category, label, payload offset, byte count, source SHA-256,
-and replacement SHA-256 without serializing copyrighted source bytes.
+`cyber_oedo.build.recipe` prepares one typed `BuildRecipe`. Its prepared patch
+records feed source-independent hash-only planning, manifest serialization, and
+actual mutation. Source-dependent clean-title expected bytes are materialized
+only after an authenticated source IMG is available.
 
-`cyber_oedo.build.verification` independently checks plan shape and guarded
-sector footprint against the selected profile.
+`cyber_oedo.build.plan` projects that recipe to a deterministic hash-only patch
+plan. Each entry records category, label, payload offset, byte count, source
+SHA-256, and replacement SHA-256 without serializing copyrighted source bytes.
 
-This planning boundary makes architectural refactors reviewable before a disc is
-opened: a supposedly behavior-preserving change should retain the intended
-profile entries and footprint.
+`cyber_oedo.build.verification` remains independent: it checks plan shape and
+guarded sector footprint against the separately maintained profile evidence.
+The shared recipe removes duplicate construction of intended mutations without
+turning the producer into its own verifier.
 
 ### Source authentication and copy isolation
 
@@ -45,9 +48,12 @@ Authenticated input is evidence and must remain immutable.
 
 ### Mutation
 
-`cyber_oedo.disc.patching` applies guarded payload patches to the copied IMG and
-rebuilds every affected raw Mode 1 sector. The patch layer operates from exact
-expected bytes; it does not infer game-specific free space or ownership.
+`cyber_oedo.disc.patching` owns the single maintained
+`apply_payload_patches()` implementation. It applies guarded payload patches to
+the copied IMG and rebuilds every affected raw Mode 1 sector.
+`cyber_oedo.disc.cdrom_mode1` contains the Mode-1 structure/EDC/ECC primitives
+but no competing patch scheduler. The patch layer operates from exact expected
+bytes; it does not infer game-specific free space or ownership.
 
 ### Pipeline
 
@@ -61,7 +67,7 @@ expected bytes; it does not infer game-specific free space or ownership.
 6. replacement readback;
 7. complete raw-image comparison;
 8. CCD/SUB preservation checks;
-9. manifest generation; and
+9. manifest generation from the already-prepared recipe; and
 10. atomic installation of the finished output directory.
 
 A failure removes the temporary build rather than leaving a partially patched
@@ -80,7 +86,8 @@ embedded wholesale in generated evidence.
 
 `cyber_oedo.build.human_test` is intentionally thin. It owns argument parsing and
 human-readable command output, then delegates the actual build to the package
-pipeline.
+pipeline. The pipeline returns a typed `BuildResult`, so the CLI does not reread
+the manifest merely to print values already available in memory.
 
 Use:
 

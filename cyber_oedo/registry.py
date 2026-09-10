@@ -23,9 +23,9 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Pipeline",
     ),
     CommandSpec(
-        "scan-track",
-        "cyber_oedo.analysis.scan_track",
-        "Build broad structural and string reconnaissance output.",
+        "analyze",
+        "cyber_oedo.analysis.pipeline",
+        "Run the consolidated Tier-A translation analysis pipeline.",
         "Pipeline",
     ),
     CommandSpec(
@@ -99,6 +99,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "cyber_oedo.commands.inventory_summary",
         "Summarize a translator inventory as stable JSON.",
         "Automation",
+    ),
+    CommandSpec(
+        "scan-track",
+        "cyber_oedo.analysis.scan_track",
+        "Build optional broad ASCII/SJIS/sector reconnaissance output.",
+        "Diagnostics",
     ),
     CommandSpec(
         "disassemble-huc6280",

@@ -69,6 +69,17 @@ class PackageArchitectureTests(unittest.TestCase):
         remaining = [str(path.relative_to(ROOT)) for path in RETIRED_PACKAGE_FACADES if path.exists()]
         self.assertEqual([], remaining)
 
+    def test_payload_patch_mutation_has_one_implementation(self) -> None:
+        """Keep Mode-1 primitives separate from one patch orchestrator."""
+
+        definitions: list[str] = []
+        for path in (ROOT / "cyber_oedo").rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "apply_payload_patches":
+                    definitions.append(str(path.relative_to(ROOT)))
+        self.assertEqual(["cyber_oedo/disc/patching.py"], definitions)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,12 +8,12 @@ sufficient evidence in the HuC6280's bank-switched address space.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import pathlib
 from dataclasses import dataclass
 from typing import Any
 
+from cyber_oedo.io import sha256_buffer
 from cyber_oedo.runtime.dialogue_interpreter import (
     INDEXED_ALTERNATE_TEXT_OFFSET,
     INDEXED_STATE_OFFSET,
@@ -119,7 +119,7 @@ def stream_pointer_from_memory(memory: bytes) -> int:
 
 
 def _decode_slot(memory: bytes, address: int) -> str:
-    """Decode one null-terminated 13-byte Shift-JIS record slot."""
+    """Decode one null-terminated 13-byte Shift-JIS record slot from an indexed record."""
     data = bytes(
         memory[(address + offset) & 0xFFFF] for offset in range(INDEXED_TEXT_SLOT_BYTES)
     )
@@ -165,7 +165,7 @@ def prove_three_d_snapshot(snapshot: LiveSnapshot) -> dict[str, Any]:
     return {
         "proof": "mission0-3d-live-snapshot",
         "validated": True,
-        "memory_sha256": hashlib.sha256(snapshot.memory).hexdigest(),
+        "memory_sha256": sha256_buffer(snapshot.memory),
         "pc": f"0x{snapshot.pc:04X}",
         "a": f"0x{snapshot.a:02X}",
         "pc_physical": format_physical(snapshot.pc, snapshot.mprs),

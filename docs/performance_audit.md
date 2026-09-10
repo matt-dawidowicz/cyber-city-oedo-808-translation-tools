@@ -1,5 +1,11 @@
 # Performance and architecture audit
 
+The current benchmark-driven consolidation results are recorded in
+[`benchmark_consolidation_20260909.md`](benchmark_consolidation_20260909.md).
+That pass adds reproducible scan/pipeline/build harnesses, a single prepared
+build recipe, one patch-mutation implementation, the in-process Tier-A
+`analyze` command, and exact-output benchmark checks.
+
 This document records the modernization campaign from the restored pre-reset
 baseline. It distinguishes measured algorithmic/I/O problems from structural
 debt that does not materially slow normal builds.
@@ -115,24 +121,11 @@ engine. Responsibilities now have explicit modules:
 The prior dynamic `globals().update(...)` facade and duplicate private dialogue
 and inventory implementation copies have been removed.
 
-## Deliberately retained compatibility debt
+## Previously retained compatibility debt now retired
 
-`cyber_oedo.build.engine` still contains the historical stock-renderer profile:
-hand-audited source strings, English test text, exact offsets, row coordinates,
-and patch definitions. Moving thousands of literal profile values to TSV/JSON
-would improve editability, but it is not a runtime bottleneck and is high risk
-without an authenticated real-disc equivalence check. The active orchestration,
-I/O, verification, and manifest code have already been moved out of that module.
-
-A future mechanical profile-data migration should be accepted only if both title
-variants produce the identical deterministic patch-plan SHA-256, identical
-source/replacement hashes, and identical guarded-sector footprints before and
-after the move. It should not be mixed with translation or renderer changes.
-
-Root-level modules also remain installed as thin compatibility shims for old
-`python script.py ...` workflows. Canonical normal-pipeline execution goes
-through `cyber_oedo.*`; preserving the shims costs little and prevents an
-unnecessary breaking release.
+The historical `build/engine.py` monolith, root-level compatibility shims,
+failed Stage-1 renderer implementation, and reversed-SJIS exploration have
+been removed from the maintained architecture. Git history remains the archive.
 
 ## Safety rules retained
 

@@ -5,13 +5,13 @@ from __future__ import annotations
 
 import argparse
 import collections
-import csv
 import pathlib
 from collections.abc import Sequence
 
 from cyber_oedo.analysis.fast_scan import likely_sjis_runs
 from cyber_oedo.disc.game_layout import SECTOR_SIZE
 from cyber_oedo.io import mapped_file
+from cyber_oedo.tabular import tsv_dict_writer
 from cyber_oedo.text.sjis import (
     ScriptMetrics,
     script_metrics,
@@ -78,67 +78,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Scan a payload map and stream deterministic candidates to TSV."""
+OUTPUT_FIELDS = (
+    "offset",
+    "sector",
+    "within_sector",
+    "bytes",
+    "characters",
+    "hiragana",
+    "katakana",
+    "kanji",
+    "fullwidth",
+    "text",
+)
 
-    parser = build_parser()
-    parser.add_argument(
-        "input",
-        type=pathlib.Path,
-        help="Track 2 payload .bin",
-    )
-    parser.add_argument(
-        "output",
-        type=pathlib.Path,
-        help="destination TSV",
-    )
-    parser.add_argument(
-        "--minimum-tokens",
-        type=int,
-        default=4,
-        metavar="N",
-    )
-    args = parser.parse_args(argv)
-    if args.minimum_tokens <= 0:
-        parser.error("--minimum-tokens must be positive")
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+def write_likely_sjis(
+    data: object,
+    output_path: pathlib.Path,
+    minimum_tokens: int = 4,
+) -> int:
+    """Write likely Shift-JIS rows from an already-open payload map."""
+
+    if minimum_tokens <= 0:
+        raise ValueError("minimum_tokens must be positive")
+    starts, ends, native_metrics = likely_sjis_runs(data, minimum_tokens)
     count = 0
-    with (
-        mapped_file(args.input) as data,
-        args.output.open(
-            "w",
-            encoding="utf-8-sig",
-            newline="",
-        ) as output,
-    ):
-        writer = csv.DictWriter(
-            output,
-            fieldnames=(
-                "offset",
-                "sector",
-                "within_sector",
-                "bytes",
-                "characters",
-                "hiragana",
-                "katakana",
-                "kanji",
-                "fullwidth",
-                "text",
-            ),
-            delimiter="\t",
-        )
-        writer.writeheader()
-        starts, ends, native_metrics = likely_sjis_runs(
-            data,
-            args.minimum_tokens,
-        )
-        for start, end, shape in zip(
-            starts,
-            ends,
-            native_metrics,
-            strict=True,
-        ):
+    with tsv_dict_writer(output_path, OUTPUT_FIELDS) as writer:
+        for start, end, shape in zip(starts, ends, native_metrics, strict=True):
             offset = int(start)
             raw = data[offset : int(end)]  # type: ignore[index]
             try:
@@ -151,7 +117,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 {
                     "offset": f"0x{offset:08X}",
                     "sector": offset // SECTOR_SIZE,
-                    "within_sector": (f"0x{offset % SECTOR_SIZE:03X}"),
+                    "within_sector": f"0x{offset % SECTOR_SIZE:03X}",
                     "bytes": len(raw),
                     "characters": int(shape[0]),
                     "hiragana": int(shape[1]),
@@ -162,6 +128,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                 }
             )
             count += 1
+    return count
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Scan a payload map and stream deterministic candidates to TSV."""
+
+    parser = build_parser()
+    parser.add_argument("input", type=pathlib.Path, help="Track 2 payload .bin")
+    parser.add_argument("output", type=pathlib.Path, help="destination TSV")
+    parser.add_argument("--minimum-tokens", type=int, default=4, metavar="N")
+    args = parser.parse_args(argv)
+    if args.minimum_tokens <= 0:
+        parser.error("--minimum-tokens must be positive")
+    with mapped_file(args.input) as data:
+        count = write_likely_sjis(data, args.output, args.minimum_tokens)
     print(f"strings={count}")
     return 0
 

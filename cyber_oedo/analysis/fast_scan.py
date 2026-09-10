@@ -159,6 +159,99 @@ def broad_sjis_runs(data: object, minimum_japanese: int):
         del view
 
 
+@njit(cache=True)
+def _scan_decodable_broad_sjis_native(
+    data,
+    minimum_japanese,
+    pair_codepoint,
+    starts,
+    ends,
+    japanese_counts,
+    write_output,
+):
+    """Filter structurally valid but undecodable broad runs in native code."""
+
+    offset = 0
+    size = data.size
+    output_index = 0
+    while offset < size:
+        start = offset
+        japanese = 0
+        decodable = True
+        while offset < size:
+            first = data[offset]
+            if (
+                0x20 <= first <= 0x7E
+                or first == 0x09
+                or first == 0x0A
+                or first == 0x0D
+            ):
+                offset += 1
+            elif 0xA1 <= first <= 0xDF:
+                japanese += 1
+                offset += 1
+            elif (
+                (0x81 <= first <= 0x9F or 0xE0 <= first <= 0xEF)
+                and offset + 1 < size
+                and (
+                    0x40 <= data[offset + 1] <= 0x7E
+                    or 0x80 <= data[offset + 1] <= 0xFC
+                )
+            ):
+                key = data[offset + 1] | (first << 8)
+                if pair_codepoint[key] < 0:
+                    decodable = False
+                japanese += 1
+                offset += 2
+            else:
+                break
+        if japanese >= minimum_japanese and offset > start and decodable:
+            if write_output:
+                starts[output_index] = start
+                ends[output_index] = offset
+                japanese_counts[output_index] = japanese
+            output_index += 1
+        offset = max(offset + 1, start + 1)
+    return output_index
+
+
+def decodable_broad_sjis_runs(data: object, minimum_japanese: int):
+    """Return broad Shift-JIS runs already proven decodable by lookup table."""
+
+    if minimum_japanese <= 0:
+        raise ValueError("minimum_japanese must be positive")
+    view = np.frombuffer(data, dtype=np.uint8)  # type: ignore[arg-type]
+    dummy_offsets = np.empty(1, dtype=np.int64)
+    dummy_counts = np.empty(1, dtype=np.int32)
+    try:
+        count = _scan_decodable_broad_sjis_native(
+            view,
+            minimum_japanese,
+            _PAIR_CODEPOINT,
+            dummy_offsets,
+            dummy_offsets,
+            dummy_counts,
+            False,
+        )
+        starts = np.empty(count, dtype=np.int64)
+        ends = np.empty(count, dtype=np.int64)
+        japanese = np.empty(count, dtype=np.int32)
+        filled = _scan_decodable_broad_sjis_native(
+            view,
+            minimum_japanese,
+            _PAIR_CODEPOINT,
+            starts,
+            ends,
+            japanese,
+            True,
+        )
+        if filled != count:
+            raise AssertionError("decodable broad Shift-JIS run count changed")
+        return starts, ends, japanese
+    finally:
+        del view
+
+
 def _build_sjis_codepoint_tables():
     """Build strict Shift-JIS token-to-codepoint lookup tables once."""
 

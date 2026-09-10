@@ -6,6 +6,7 @@ import unittest
 
 from cyber_oedo.build import human_test
 from cyber_oedo.build.plan import build_profile_plan
+from cyber_oedo.build.recipe import prepare_build_recipe
 from cyber_oedo.build.profiles import mission0_stock as profile
 
 
@@ -19,6 +20,25 @@ class BuildPlanTests(unittest.TestCase):
         second = human_test.planned_profile("original")
         self.assertEqual(first, second)
         self.assertEqual(first.sha256(), second.sha256())
+
+    def test_refactor_preserves_reviewed_plan_identities(self) -> None:
+        """Pin both title variants across behavior-preserving refactors."""
+
+        self.assertEqual(
+            build_profile_plan("original").sha256(),
+            "7372c5ee7dc54d30bf2545a5ca9eaa8ad9231e03ecf2cb3faaf723d0cbad3de5",
+        )
+        self.assertEqual(
+            build_profile_plan("clean").sha256(),
+            "3255c65bbd3dd8ec37daf05d315894ad3a1b7af5815228bcf9034b046367b4bb",
+        )
+
+    def test_clean_recipe_is_hash_only_without_source_image(self) -> None:
+        """Require source bytes before materializing guarded clean-title edits."""
+
+        recipe = prepare_build_recipe("clean")
+        with self.assertRaisesRegex(ValueError, "hash-only"):
+            recipe.payload_patches()
 
     def test_clean_plan_adds_exactly_two_title_entries(self) -> None:
         """Represent only the isolated palette and title additions."""
