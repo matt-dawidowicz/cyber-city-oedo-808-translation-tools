@@ -83,6 +83,48 @@ field-selection state supports discovery/identification behavior. A live trace
 is still required before assigning the same semantic meaning to every record
 and every later mission.
 
+## B2.5 bank-aware live snapshot validation
+
+The static model is now sufficient to validate a frozen emulator stop without
+confusing a reused logical address with the Mission 0 interpreter. The live
+snapshot validator requires:
+
+- a 64 KiB logical CPU-memory dump from the stopped emulator;
+- `PC`, accumulator `A`, and all eight HuC6280 MPR values;
+- `PC == $9593`, the success path after `CMP #$3D`;
+- `A == $3D`; and
+- MPR4 == `$82`, proving that logical `$9593` maps to the authenticated
+  Mission 0 interpreter bank rather than another overlay.
+
+It reads the stream pointer from HuC6280 direct page `$7F/$80`, which appears
+at logical `$207F/$2080`, decodes the two live operands, reproduces the `$6694`
+record calculation, reads record byte `+$1A`, and reports both text fields and
+the field selected by the live state. The report also records the SHA-256 of
+the exact 64 KiB memory snapshot so the evidence is self-identifying. No
+emulated memory or disc bytes are changed.
+
+Run:
+
+```text
+cyber-oedo prove-live-dialogue-snapshot registers.json memory.bin \
+  --output live_3d_proof.json
+```
+
+The metadata file accepts integer or base-prefixed string values, for example:
+
+```json
+{
+  "pc": "0x9593",
+  "a": "0x3D",
+  "mprs": ["0xFF", "0xF8", "0x00", "0x81", "0x82", "0x83", "0x84", "0x00"]
+}
+```
+
+This does not complete the live gate by itself. It makes the gate reproducible:
+a captured stop is either rejected for the wrong PC/opcode/bank or converted
+into deterministic evidence for the stream, indexed record, state byte, and
+selected field.
+
 ## Runtime proof command
 
 Run:

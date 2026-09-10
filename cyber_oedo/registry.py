@@ -113,6 +113,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "prove-live-dialogue-snapshot",
+        "cyber_oedo.runtime.live_snapshot",
+        "Validate a bank-aware frozen Mission 0 3D debugger snapshot.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "clonecd-cue",
         "clonecd_cue",
         "Create a non-destructive CUE view of a CloneCD set.",

@@ -39,6 +39,9 @@ DIRECT_COMMANDS = {
     "prove-dialogue-runtime": (
         "cyber_oedo.runtime.dialogue_interpreter"
     ),
+    "prove-live-dialogue-snapshot": (
+        "cyber_oedo.runtime.live_snapshot"
+    ),
     "scan-reversed-sjis": "cyber_oedo.analysis.scan_reversed_sjis",
 }
 
