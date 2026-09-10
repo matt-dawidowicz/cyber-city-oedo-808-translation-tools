@@ -6,7 +6,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass
 
-from cyber_oedo.build import engine
+from cyber_oedo.build.profiles import mission0_stock as profile
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +41,7 @@ class PatchPlan:
     """Describe one complete stock-renderer build profile.
 
     Args:
-        build_profile: Stable profile identifier from the build engine.
+        build_profile: Stable profile identifier from the build profile.
         title_screen_mode: Selected title-screen variant.
         entries: Ordered hash-only patch descriptions.
         guarded_relative_sectors: Complete payload-sector footprint.
@@ -103,23 +103,23 @@ def _entry_from_payload_patch(
 def _title_entries() -> tuple[PatchPlanEntry, PatchPlanEntry]:
     """Return source-independent identities for the optional title patches."""
 
-    palette = engine.build_grayscale_title_palette_cycle()
-    title = engine.build_clean_title_asset()
+    palette = profile.build_grayscale_title_palette_cycle()
+    title = profile.build_clean_title_asset()
     return (
         PatchPlanEntry(
             category="title",
             label="optional antialiased opening title palette",
-            offset=engine.TITLE_PALETTE_OFFSET,
-            byte_count=engine.TITLE_PALETTE_BYTES,
-            expected_sha256=engine.TITLE_PALETTE_SOURCE_SHA256,
+            offset=profile.TITLE_PALETTE_OFFSET,
+            byte_count=profile.TITLE_PALETTE_BYTES,
+            expected_sha256=profile.TITLE_PALETTE_SOURCE_SHA256,
             replacement_sha256=hashlib.sha256(palette).hexdigest(),
         ),
         PatchPlanEntry(
             category="title",
             label="optional antialiased opening title graphic",
-            offset=engine.TITLE_SCREEN_OFFSET,
-            byte_count=engine.TITLE_ASSET_BYTES,
-            expected_sha256=engine.TITLE_SCREEN_SOURCE_SHA256,
+            offset=profile.TITLE_SCREEN_OFFSET,
+            byte_count=profile.TITLE_ASSET_BYTES,
+            expected_sha256=profile.TITLE_SCREEN_SOURCE_SHA256,
             replacement_sha256=hashlib.sha256(title).hexdigest(),
         ),
     )
@@ -132,8 +132,8 @@ def _sectors_for_entries(
 
     sectors: set[int] = set()
     for entry in entries:
-        first = entry.offset // engine.SECTOR_SIZE
-        last = (entry.end_offset - 1) // engine.SECTOR_SIZE
+        first = entry.offset // profile.SECTOR_SIZE
+        last = (entry.end_offset - 1) // profile.SECTOR_SIZE
         sectors.update(range(first, last + 1))
     return tuple(sorted(sectors))
 
@@ -152,17 +152,17 @@ def build_profile_plan(title_screen_mode: str) -> PatchPlan:
             footprint disagrees with the build engine's independent helper.
     """
 
-    expected_sectors = engine.profile_relative_sectors(title_screen_mode)
+    expected_sectors = profile.profile_relative_sectors(title_screen_mode)
     text_patches = tuple(
         item.to_payload_patch()
-        for item in engine.HUMAN_TEST_PATCHES
+        for item in profile.HUMAN_TEST_PATCHES
     )
     entries = tuple(
         _entry_from_payload_patch("text", patch)
         for patch in text_patches
     ) + tuple(
         _entry_from_payload_patch("layout", patch)
-        for patch in engine.HUMAN_TEST_BINARY_PATCHES
+        for patch in profile.HUMAN_TEST_BINARY_PATCHES
     )
     if title_screen_mode == "clean":
         entries += _title_entries()
@@ -172,7 +172,7 @@ def build_profile_plan(title_screen_mode: str) -> PatchPlan:
             "derived patch plan disagrees with profile sector footprint"
         )
     return PatchPlan(
-        build_profile=engine.BUILD_PROFILE,
+        build_profile=profile.BUILD_PROFILE,
         title_screen_mode=title_screen_mode,
         entries=entries,
         guarded_relative_sectors=sectors,

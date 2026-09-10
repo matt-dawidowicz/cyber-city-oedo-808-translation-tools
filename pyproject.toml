@@ -47,17 +47,7 @@ cyber-oedo = "cyber_oedo.cli:console_main"
 [project.urls]
 Repository = "https://github.com/matt-dawidowicz/cyber-city-oedo-808-translation-tools"
 
-# Temporary shims still required by package modules that predate the package
-# migration. The cleanup branch removes this list once those modules are split.
 [tool.setuptools]
-py-modules = [
-    "cdrom_mode1",
-    "extract_dialogue",
-    "game_layout",
-    "pce_graphics",
-    "title_logo_mask",
-    "title_screen",
-]
 include-package-data = true
 
 [tool.setuptools.packages.find]

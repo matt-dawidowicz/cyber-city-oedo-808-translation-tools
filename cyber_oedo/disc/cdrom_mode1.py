@@ -21,7 +21,7 @@ import pathlib
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from game_layout import (
+from cyber_oedo.disc.game_layout import (
     MODE1_USER_DATA_OFFSET,
     RAW_SECTOR_SIZE,
     SECTOR_SIZE,

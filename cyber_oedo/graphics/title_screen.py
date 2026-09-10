@@ -27,8 +27,8 @@ import pathlib
 import zlib
 from collections.abc import Sequence
 
-from pce_graphics import encode_tile
-from title_logo_mask import (
+from cyber_oedo.graphics.pce_graphics import encode_tile
+from cyber_oedo.graphics.title_logo_mask import (
     LOGO_MASK_B85,
     LOGO_MASK_BITS_PER_PIXEL,
     LOGO_MASK_HEIGHT,
