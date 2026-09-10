@@ -69,12 +69,7 @@ def _count_broad_sjis_runs(data, minimum_japanese):
         japanese = 0
         while offset < size:
             first = data[offset]
-            if (
-                0x20 <= first <= 0x7E
-                or first == 0x09
-                or first == 0x0A
-                or first == 0x0D
-            ):
+            if 0x20 <= first <= 0x7E or first == 0x09 or first == 0x0A or first == 0x0D:
                 offset += 1
             elif 0xA1 <= first <= 0xDF:
                 japanese += 1
@@ -83,8 +78,7 @@ def _count_broad_sjis_runs(data, minimum_japanese):
                 (0x81 <= first <= 0x9F or 0xE0 <= first <= 0xEF)
                 and offset + 1 < size
                 and (
-                    0x40 <= data[offset + 1] <= 0x7E
-                    or 0x80 <= data[offset + 1] <= 0xFC
+                    0x40 <= data[offset + 1] <= 0x7E or 0x80 <= data[offset + 1] <= 0xFC
                 )
             ):
                 japanese += 1
@@ -115,12 +109,7 @@ def _fill_broad_sjis_runs(
         japanese = 0
         while offset < size:
             first = data[offset]
-            if (
-                0x20 <= first <= 0x7E
-                or first == 0x09
-                or first == 0x0A
-                or first == 0x0D
-            ):
+            if 0x20 <= first <= 0x7E or first == 0x09 or first == 0x0A or first == 0x0D:
                 offset += 1
             elif 0xA1 <= first <= 0xDF:
                 japanese += 1
@@ -129,8 +118,7 @@ def _fill_broad_sjis_runs(
                 (0x81 <= first <= 0x9F or 0xE0 <= first <= 0xEF)
                 and offset + 1 < size
                 and (
-                    0x40 <= data[offset + 1] <= 0x7E
-                    or 0x80 <= data[offset + 1] <= 0xFC
+                    0x40 <= data[offset + 1] <= 0x7E or 0x80 <= data[offset + 1] <= 0xFC
                 )
             ):
                 japanese += 1
@@ -239,8 +227,7 @@ def _scan_likely_sjis_native(
                 (0x81 <= first <= 0x9F or 0xE0 <= first <= 0xEF)
                 and offset + 1 < size
                 and (
-                    0x40 <= data[offset + 1] <= 0x7E
-                    or 0x80 <= data[offset + 1] <= 0xFC
+                    0x40 <= data[offset + 1] <= 0x7E or 0x80 <= data[offset + 1] <= 0xFC
                 )
             ):
                 key = data[offset + 1] | (first << 8)
@@ -282,23 +269,13 @@ def _scan_likely_sjis_native(
             if not (ascii_printable > 2 and fullwidth < 4):
                 kana = hiragana + katakana
                 natural_sentence = (
-                    tokens >= 8
-                    and kana >= 3
-                    and 100 * kana >= 20 * tokens
+                    tokens >= 8 and kana >= 3 and 100 * kana >= 20 * tokens
                 )
                 japanese_label = (
-                    tokens >= 5
-                    and kana >= 2
-                    and 100 * (kana + kanji) >= 60 * tokens
+                    tokens >= 5 and kana >= 2 and 100 * (kana + kanji) >= 60 * tokens
                 )
-                fullwidth_label = (
-                    fullwidth >= 5 and ascii_printable == 0
-                )
-                plausible = (
-                    natural_sentence
-                    or japanese_label
-                    or fullwidth_label
-                )
+                fullwidth_label = fullwidth >= 5 and ascii_printable == 0
+                plausible = natural_sentence or japanese_label or fullwidth_label
         if plausible:
             if write_output:
                 starts[output_index] = start

@@ -37,11 +37,9 @@ def synthetic_mode1_sector(payload: bytes) -> bytes:
     if len(payload) != SECTOR_SIZE:
         raise ValueError("synthetic payload must contain 2048 bytes")
     raw = bytearray(RAW_SECTOR_SIZE)
-    raw[:len(MODE1_SYNC)] = MODE1_SYNC
+    raw[: len(MODE1_SYNC)] = MODE1_SYNC
     raw[15] = 1
-    raw[
-        MODE1_USER_DATA_OFFSET:MODE1_USER_DATA_OFFSET + SECTOR_SIZE
-    ] = payload
+    raw[MODE1_USER_DATA_OFFSET : MODE1_USER_DATA_OFFSET + SECTOR_SIZE] = payload
     return rebuild_mode1_sector(raw)
 
 

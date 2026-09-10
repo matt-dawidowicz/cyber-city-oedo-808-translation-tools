@@ -24,7 +24,7 @@ class DialogueStructureTests(unittest.TestCase):
         source = (
             b"\x27\x28"
             + "猫".encode("shift_jis")
-            + b"\x3D\x00\x06"
+            + b"\x3d\x00\x06"
             + "犬".encode("shift_jis")
             + b"\x40"
             + "終".encode("shift_jis")
@@ -52,9 +52,9 @@ class DialogueStructureTests(unittest.TestCase):
 
         source = (
             "前".encode("shift_jis")
-            + b"\x2A\x00"
+            + b"\x2a\x00"
             + "中".encode("shift_jis")
-            + b"\x7E\x00"
+            + b"\x7e\x00"
             + "後".encode("shift_jis")
             + b"\x00"
         )
@@ -74,7 +74,7 @@ class DialogueStructureTests(unittest.TestCase):
 
         source = (
             "猫".encode("shift_jis")
-            + b"\x21\x2F\x40\x5C"
+            + b"\x21\x2f\x40\x5c"
             + "犬".encode("shift_jis")
             + b"\x00"
         )
@@ -90,12 +90,7 @@ class DialogueStructureTests(unittest.TestCase):
     def test_unknown_control_is_strict_by_default(self) -> None:
         """Reject unknown command shapes unless forensic mode opts in."""
 
-        source = (
-            "猫".encode("shift_jis")
-            + b"\x33"
-            + "犬".encode("shift_jis")
-            + b"\x00"
-        )
+        source = "猫".encode("shift_jis") + b"\x33" + "犬".encode("shift_jis") + b"\x00"
         self.assertIsNone(parse_dialogue_body(source, 0))
         permissive = parse_dialogue_body(
             source,
@@ -112,25 +107,19 @@ class DialogueStructureTests(unittest.TestCase):
     def test_truncated_operand_is_rejected(self) -> None:
         """Reject commands whose declared operands are incomplete."""
 
-        self.assertIsNone(parse_dialogue_body(b"\x3D\x00", 0))
-        self.assertIsNone(parse_dialogue_body(b"\x2A", 0))
+        self.assertIsNone(parse_dialogue_body(b"\x3d\x00", 0))
+        self.assertIsNone(parse_dialogue_body(b"\x2a", 0))
 
     def test_missing_or_wrong_marker_is_rejected(self) -> None:
         """Require the complete, exact two-byte dialogue marker."""
 
         self.assertIsNone(parse_dialogue_record(b"\x27", 0))
-        self.assertIsNone(
-            parse_dialogue_record(b"\x27\x29\x00", 0)
-        )
+        self.assertIsNone(parse_dialogue_record(b"\x27\x29\x00", 0))
 
     def test_semantic_and_legacy_tags_keep_operand_evidence(self) -> None:
         """Expose typed and legacy audit views from the same parsed command."""
 
-        source = (
-            b"\x3D\x00\x06"
-            + "猫".encode("shift_jis")
-            + b"\x00"
-        )
+        source = b"\x3d\x00\x06" + "猫".encode("shift_jis") + b"\x00"
         body = parse_dialogue_body(source, 0)
         self.assertIsNotNone(body)
         assert body is not None
@@ -165,12 +154,7 @@ class DialogueStructureTests(unittest.TestCase):
     def test_legacy_projection_keeps_existing_page_control_shape(self) -> None:
         """Keep the v1 extractor token shape for ordinary page controls."""
 
-        data = (
-            "猫".encode("shift_jis")
-            + b"\x40"
-            + "犬".encode("shift_jis")
-            + b"\x00"
-        )
+        data = "猫".encode("shift_jis") + b"\x40" + "犬".encode("shift_jis") + b"\x00"
         parsed = parse_record(data, 0)
         self.assertIsNotNone(parsed)
         assert parsed is not None
@@ -181,11 +165,7 @@ class DialogueStructureTests(unittest.TestCase):
     def test_legacy_projection_recovers_text_after_3d_zero(self) -> None:
         """Expose text after a zero-valued operand through the old API."""
 
-        data = (
-            b"\x3D\x00\x06"
-            + "猫犬".encode("shift_jis")
-            + b"\x00"
-        )
+        data = b"\x3d\x00\x06" + "猫犬".encode("shift_jis") + b"\x00"
         parsed = parse_record(data, 0)
         self.assertIsNotNone(parsed)
         assert parsed is not None

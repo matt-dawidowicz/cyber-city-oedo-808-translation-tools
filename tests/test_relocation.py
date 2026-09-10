@@ -52,8 +52,8 @@ class DialogueRelocationTests(unittest.TestCase):
         assert parsed is not None
         self.assertEqual(parsed.controls, (0x40,))
         self.assertIn(ascii_to_fullwidth_sjis("Accurate"), compiled)
-        self.assertNotIn(b"\xFF", compiled)
-        self.assertNotIn(b"\xFE", compiled)
+        self.assertNotIn(b"\xff", compiled)
+        self.assertNotIn(b"\xfe", compiled)
 
     def test_added_pages_require_explicit_opt_in(self) -> None:
         """Reject silent paging expansion."""

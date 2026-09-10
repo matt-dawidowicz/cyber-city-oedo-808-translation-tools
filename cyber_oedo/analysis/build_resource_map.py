@@ -65,10 +65,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     with mapped_file(args.track) as data:
         sector_count, remainder = divmod(len(data), SECTOR_SIZE)
         if remainder:
-            parser.error(
-                "track length is not aligned to "
-                f"{SECTOR_SIZE}-byte sectors"
-            )
+            parser.error(f"track length is not aligned to {SECTOR_SIZE}-byte sectors")
         headers = discover_resource_headers(data)
         regions = build_candidate_regions(headers, sector_count)
 
@@ -87,14 +84,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             writer.writerow(
                 {
                     "resource_sector": region.start_sector,
-                    "resource_offset": (
-                        f"0x{region.start_offset:08X}"
-                    ),
+                    "resource_offset": (f"0x{region.start_offset:08X}"),
                     "resource_name": region.header.name,
                     "end_sector_exclusive": region.end_sector,
-                    "end_offset_exclusive": (
-                        f"0x{region.end_offset:08X}"
-                    ),
+                    "end_offset_exclusive": (f"0x{region.end_offset:08X}"),
                     "sector_count": region.sector_count,
                     "byte_count": region.byte_count,
                     "bank": region.bank,

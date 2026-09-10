@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from cyber_oedo.text.extract_dialogue import parse_record
 
 
-DIALOGUE_MARKER = bytes.fromhex('27 28')
+DIALOGUE_MARKER = bytes.fromhex("27 28")
 
 
 DIALOGUE_TERMINATOR = 0
@@ -39,20 +39,20 @@ def ascii_to_fullwidth_sjis(text: str) -> bytes:
     converted: list[str] = []
     for character in text:
         codepoint = ord(character)
-        if character == ' ':
-            converted.append('\u3000')
-        elif character == '-':
-            converted.append('−')
+        if character == " ":
+            converted.append("\u3000")
+        elif character == "-":
+            converted.append("−")
         elif character == "'":
-            converted.append('’')
+            converted.append("’")
         elif 33 <= codepoint <= 126:
             converted.append(chr(codepoint + 65248))
         else:
-            raise ValueError(f'unsupported ASCII character {character!r}')
+            raise ValueError(f"unsupported ASCII character {character!r}")
     try:
-        return ''.join(converted).encode('shift_jis')
+        return "".join(converted).encode("shift_jis")
     except UnicodeEncodeError as error:
-        raise ValueError('fullwidth text is not strict Shift-JIS') from error
+        raise ValueError("fullwidth text is not strict Shift-JIS") from error
 
 
 def wrap_english_lines(text: str, width: int) -> tuple[str, ...]:
@@ -70,18 +70,18 @@ def wrap_english_lines(text: str, width: int) -> tuple[str, ...]:
             unsupported, or a word exceeds the selected width.
     """
     if width <= 0:
-        raise ValueError('line width must be positive')
-    words = text.split(' ')
+        raise ValueError("line width must be positive")
+    words = text.split(" ")
     if not text or text.strip() != text or any((not word for word in words)):
-        raise ValueError('English must use single spaces without outer space')
+        raise ValueError("English must use single spaces without outer space")
     ascii_to_fullwidth_sjis(text)
     too_wide = [word for word in words if len(word) > width]
     if too_wide:
-        raise ValueError(f'word exceeds {width}-cell line: {too_wide[0]!r}')
+        raise ValueError(f"word exceeds {width}-cell line: {too_wide[0]!r}")
     lines: list[str] = []
     current = words[0]
     for word in words[1:]:
-        candidate = f'{current} {word}'
+        candidate = f"{current} {word}"
         if len(candidate) <= width:
             current = candidate
             continue
@@ -100,6 +100,7 @@ class PageGeometry:
         maximum_lines: Maximum lines allowed before a page control.
         page_control: Existing interpreter command used between pages.
     """
+
     width: int
     maximum_lines: int
     page_control: int = PAGE_CONTROL
@@ -107,11 +108,11 @@ class PageGeometry:
     def __post_init__(self) -> None:
         """Validate display bounds and the low-byte page command."""
         if self.width <= 0:
-            raise ValueError('page width must be positive')
+            raise ValueError("page width must be positive")
         if self.maximum_lines <= 0:
-            raise ValueError('maximum page lines must be positive')
+            raise ValueError("maximum page lines must be positive")
         if not 0 < self.page_control < 128:
-            raise ValueError('page control must be a nonzero low byte')
+            raise ValueError("page control must be a nonzero low byte")
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +122,7 @@ class DialoguePage:
     Attributes:
         lines: Explicit English lines in display order.
     """
+
     lines: tuple[str, ...]
 
     def compile(self, geometry: PageGeometry) -> bytes:
@@ -138,18 +140,20 @@ class DialoguePage:
                 or over-width line.
         """
         if not self.lines:
-            raise ValueError('dialogue page must contain at least one line')
+            raise ValueError("dialogue page must contain at least one line")
         if len(self.lines) > geometry.maximum_lines:
-            raise ValueError('dialogue page exceeds its visible line count')
+            raise ValueError("dialogue page exceeds its visible line count")
         compiled = bytearray()
         for index, line in enumerate(self.lines):
             if not line or line.strip() != line:
-                raise ValueError('page lines must not be empty or padded')
-            if '  ' in line:
-                raise ValueError('page lines must use single spaces')
+                raise ValueError("page lines must not be empty or padded")
+            if "  " in line:
+                raise ValueError("page lines must use single spaces")
             if len(line) > geometry.width:
-                raise ValueError('page line exceeds the stock cell width')
-            displayed = line.ljust(geometry.width) if index < len(self.lines) - 1 else line
+                raise ValueError("page line exceeds the stock cell width")
+            displayed = (
+                line.ljust(geometry.width) if index < len(self.lines) - 1 else line
+            )
             compiled.extend(ascii_to_fullwidth_sjis(displayed))
         return bytes(compiled)
 
@@ -169,7 +173,7 @@ def wrap_dialogue_page(text: str, geometry: PageGeometry) -> DialoguePage:
     """
     lines = wrap_english_lines(text, geometry.width)
     if len(lines) > geometry.maximum_lines:
-        raise ValueError('wrapped English exceeds one dialogue page')
+        raise ValueError("wrapped English exceeds one dialogue page")
     return DialoguePage(lines)
 
 
@@ -188,6 +192,7 @@ class PageBreakPlan:
         are all the selected page command. Mixed pause, input, or audio
         controls require a record-specific control template instead.
     """
+
     pages: tuple[DialoguePage, ...]
     source_page_breaks: int
     geometry: PageGeometry
@@ -196,14 +201,16 @@ class PageBreakPlan:
     def __post_init__(self) -> None:
         """Validate page counts before source bytes are inspected."""
         if not self.pages:
-            raise ValueError('page-break plan must contain at least one page')
+            raise ValueError("page-break plan must contain at least one page")
         if self.source_page_breaks < 0:
-            raise ValueError('source page-break count must not be negative')
+            raise ValueError("source page-break count must not be negative")
         replacement_breaks = len(self.pages) - 1
         if replacement_breaks < self.source_page_breaks:
-            raise ValueError('page-break plan must not remove source pages')
-        if replacement_breaks > self.source_page_breaks and (not self.allow_added_page_breaks):
-            raise ValueError('additional page breaks require explicit opt-in')
+            raise ValueError("page-break plan must not remove source pages")
+        if replacement_breaks > self.source_page_breaks and (
+            not self.allow_added_page_breaks
+        ):
+            raise ValueError("additional page breaks require explicit opt-in")
 
     def compile_record(self, source_record: bytes) -> bytes:
         """Compile fullwidth English after validating source controls.
@@ -219,14 +226,16 @@ class PageBreakPlan:
             ValueError: If the source is malformed, has mixed controls, has a
                 different page count, or a page fails geometry validation.
         """
-        parsed = parse_record(source_record, len(DIALOGUE_MARKER), limit=max(1, len(source_record)))
+        parsed = parse_record(
+            source_record, len(DIALOGUE_MARKER), limit=max(1, len(source_record))
+        )
         if not source_record.startswith(DIALOGUE_MARKER):
-            raise ValueError('source record is missing its dialogue marker')
+            raise ValueError("source record is missing its dialogue marker")
         if parsed is None or parsed.end_offset != len(source_record) - 1:
-            raise ValueError('source record is malformed or has trailing data')
+            raise ValueError("source record is malformed or has trailing data")
         expected_controls = (self.geometry.page_control,) * self.source_page_breaks
         if parsed.controls != expected_controls:
-            raise ValueError('source record is not a page-only control stream')
+            raise ValueError("source record is not a page-only control stream")
         body = bytearray()
         for index, page in enumerate(self.pages):
             body.extend(page.compile(self.geometry))

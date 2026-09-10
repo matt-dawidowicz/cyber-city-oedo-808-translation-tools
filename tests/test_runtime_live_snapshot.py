@@ -27,9 +27,9 @@ def _snapshot(*, state: int = 0) -> LiveSnapshot:
     record = 0xA4A0
     primary = "魔矢".encode("shift_jis")
     alternate_text = "女".encode("shift_jis")
-    memory[record:record + len(primary)] = primary
+    memory[record : record + len(primary)] = primary
     alternate = record + 0x0D
-    memory[alternate:alternate + len(alternate_text)] = alternate_text
+    memory[alternate : alternate + len(alternate_text)] = alternate_text
     memory[record + 0x1A] = state
     return LiveSnapshot(
         pc=0x9593,

@@ -46,9 +46,7 @@ class NativeScanTests(unittest.TestCase):
     def test_likely_scanner_rejects_trail_byte_false_positive(self) -> None:
         """Do not restart discovery inside a previously consumed pair."""
 
-        garbage = bytes.fromhex(
-            "88 8c 8f 2e 20 4b 67 80 b4 a5 05 48 a5"
-        )
+        garbage = bytes.fromhex("88 8c 8f 2e 20 4b 67 80 b4 a5 05 48 a5")
         starts, ends, metrics = likely_sjis_runs(garbage, 4)
         self.assertEqual(starts.size, 0)
         self.assertEqual(ends.size, 0)

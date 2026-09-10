@@ -36,13 +36,9 @@ def _ordered_patches(
     previous_end = 0
     for index, patch in enumerate(ordered):
         if patch.end_offset > payload_size:
-            raise ValueError(
-                f"{patch.label}: patch ends beyond the payload"
-            )
+            raise ValueError(f"{patch.label}: patch ends beyond the payload")
         if index and patch.offset < previous_end:
-            raise ValueError(
-                f"{patch.label}: patch overlaps the previous replacement"
-            )
+            raise ValueError(f"{patch.label}: patch overlaps the previous replacement")
         previous_end = patch.end_offset
     return ordered
 
@@ -58,10 +54,7 @@ def _index_by_sector(
         last = (patch.end_offset - 1) // SECTOR_SIZE
         for relative_sector in range(first, last + 1):
             indexed[relative_sector].append(patch)
-    return {
-        sector: tuple(items)
-        for sector, items in indexed.items()
-    }
+    return {sector: tuple(items) for sector, items in indexed.items()}
 
 
 def _patch_sector(
@@ -89,12 +82,9 @@ def _patch_sector(
         expected = patch.expected[patch_start:patch_end]
         if bytes(edited[raw_start:raw_end]) != expected:
             raise ValueError(
-                f"{patch.label}: source bytes differ at payload "
-                f"0x{overlap_start:08X}"
+                f"{patch.label}: source bytes differ at payload 0x{overlap_start:08X}"
             )
-        edited[raw_start:raw_end] = patch.replacement[
-            patch_start:patch_end
-        ]
+        edited[raw_start:raw_end] = patch.replacement[patch_start:patch_end]
         edited_bytes += overlap_end - overlap_start
     return rebuild_mode1_sector(edited), edited_bytes
 
@@ -134,14 +124,11 @@ def apply_payload_patches(
             image.seek(absolute_lba * RAW_SECTOR_SIZE)
             raw = image.read(RAW_SECTOR_SIZE)
             if len(raw) != RAW_SECTOR_SIZE:
-                raise ValueError(
-                    f"short read at absolute LBA {absolute_lba}"
-                )
+                raise ValueError(f"short read at absolute LBA {absolute_lba}")
             validate_mode1_structure(raw)
             if not mode1_integrity_matches(raw):
                 raise ValueError(
-                    "original EDC/ECC mismatch at absolute LBA "
-                    f"{absolute_lba}"
+                    f"original EDC/ECC mismatch at absolute LBA {absolute_lba}"
                 )
             rebuilt, edited_bytes = _patch_sector(
                 raw,

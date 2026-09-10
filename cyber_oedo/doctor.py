@@ -33,10 +33,7 @@ def module_check() -> DoctorCheck:
     """Check that every registered package command can be located."""
 
     modules = command_modules()
-    missing = [
-        module for module in modules
-        if importlib.util.find_spec(module) is None
-    ]
+    missing = [module for module in modules if importlib.util.find_spec(module) is None]
     if not missing:
         return DoctorCheck(
             "ok",

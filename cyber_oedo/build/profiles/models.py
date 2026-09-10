@@ -22,6 +22,7 @@ class InPlaceTextPatch:
         ``english`` may be shorter than ``source_text`` and is right-padded
         with fullwidth spaces. It may never be longer.
     """
+
     offset: int
     source_text: str
     english: str
@@ -63,8 +64,10 @@ class InPlaceTextPatch:
         replacement = ascii_to_fullwidth(self.formatted_english)
         available = len(self.source_text)
         if len(replacement) > available:
-            raise ValueError(f'{self.purpose}: English uses {len(replacement)} characters; capacity is {available}')
-        return replacement + '\u3000' * (available - len(replacement))
+            raise ValueError(
+                f"{self.purpose}: English uses {len(replacement)} characters; capacity is {available}"
+            )
+        return replacement + "\u3000" * (available - len(replacement))
 
     def to_payload_patch(self) -> PayloadPatch:
         """Encode and validate this text patch for the raw-sector layer.
@@ -78,11 +81,18 @@ class InPlaceTextPatch:
                 as Shift-JIS.
             ValueError: If encoded byte lengths differ.
         """
-        expected = self.source_text.encode('shift_jis')
-        replacement = self.replacement_text.encode('shift_jis')
+        expected = self.source_text.encode("shift_jis")
+        replacement = self.replacement_text.encode("shift_jis")
         if len(expected) != len(replacement):
-            raise ValueError(f'{self.purpose}: Shift-JIS byte lengths differ ({len(expected)} != {len(replacement)})')
-        return PayloadPatch(offset=self.offset, expected=expected, replacement=replacement, label=self.purpose)
+            raise ValueError(
+                f"{self.purpose}: Shift-JIS byte lengths differ ({len(expected)} != {len(replacement)})"
+            )
+        return PayloadPatch(
+            offset=self.offset,
+            expected=expected,
+            replacement=replacement,
+            label=self.purpose,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +140,7 @@ class InformationScreenLine:
         one source record. Moving a late decorative record upward would make
         its line appear after lower lines.
     """
+
     screen: str
     text_offset: int
     source_row: int
@@ -147,11 +158,15 @@ class InformationScreenLine:
                 ``0x1F``.
         """
         if self.text_offset < 3:
-            raise ValueError(f'{self.purpose}: text offset has no preceding row command')
+            raise ValueError(
+                f"{self.purpose}: text offset has no preceding row command"
+            )
         if not 0 <= self.source_row <= 31:
-            raise ValueError(f'{self.purpose}: invalid source row {self.source_row:#x}')
+            raise ValueError(f"{self.purpose}: invalid source row {self.source_row:#x}")
         if not 0 <= self.display_row <= 31:
-            raise ValueError(f'{self.purpose}: invalid target row {self.display_row:#x}')
+            raise ValueError(
+                f"{self.purpose}: invalid target row {self.display_row:#x}"
+            )
 
     @property
     def command_offset(self) -> int:
@@ -167,7 +182,12 @@ class InformationScreenLine:
 
     def to_text_patch(self) -> InPlaceTextPatch:
         """Return the guarded, same-size text replacement for this line."""
-        return InPlaceTextPatch(offset=self.text_offset, source_text=self.source_text, english=self.english, purpose=self.purpose)
+        return InPlaceTextPatch(
+            offset=self.text_offset,
+            source_text=self.source_text,
+            english=self.english,
+            purpose=self.purpose,
+        )
 
     def to_layout_patch(self) -> PayloadPatch | None:
         """Return a guarded row-command edit, or ``None`` when unchanged.
@@ -179,7 +199,12 @@ class InformationScreenLine:
         """
         if self.display_row == self.source_row:
             return None
-        return PayloadPatch(offset=self.command_offset, expected=bytes((0, 1, self.source_row)), replacement=bytes((0, 1, self.display_row)), label=f'{self.purpose} row')
+        return PayloadPatch(
+            offset=self.command_offset,
+            expected=bytes((0, 1, self.source_row)),
+            replacement=bytes((0, 1, self.display_row)),
+            label=f"{self.purpose} row",
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +249,7 @@ class OpeningProfileField:
         the original one-row overlap without relocating records or altering
         portrait data.
     """
+
     profile: str
     offsets: tuple[int, int]
     source_row: int
@@ -241,13 +267,13 @@ class OpeningProfileField:
                 falls outside ``0x00`` through ``0x1F``.
         """
         if len(self.offsets) != 2:
-            raise ValueError(f'{self.profile} {self.purpose}: expected two copies')
+            raise ValueError(f"{self.profile} {self.purpose}: expected two copies")
         if any((offset < 3 for offset in self.offsets)):
-            raise ValueError(f'{self.profile} {self.purpose}: invalid text offset')
+            raise ValueError(f"{self.profile} {self.purpose}: invalid text offset")
         if not 0 <= self.source_row <= 31:
-            raise ValueError(f'{self.profile} {self.purpose}: invalid source row')
+            raise ValueError(f"{self.profile} {self.purpose}: invalid source row")
         if not 0 <= self.display_row <= 31:
-            raise ValueError(f'{self.profile} {self.purpose}: invalid target row')
+            raise ValueError(f"{self.profile} {self.purpose}: invalid target row")
 
     @property
     def display_row(self) -> int:
@@ -269,15 +295,25 @@ class OpeningProfileField:
             IndexError: If ``copy_index`` is not zero or one.
         """
         if copy_index not in (0, 1):
-            raise IndexError('opening profile copy index must be zero or one')
+            raise IndexError("opening profile copy index must be zero or one")
         if copy_index == 1 and self.repeated_source_text is not None:
             return self.repeated_source_text
         return self.source_text
 
     def to_text_patches(self) -> tuple[InPlaceTextPatch, InPlaceTextPatch]:
         """Return same-size fullwidth patches for both dossier copies."""
-        copy_labels = ('primary', 'repeated')
-        return tuple((InPlaceTextPatch(offset=offset, source_text=self.source_for_copy(copy_index), english=self.english, purpose=f'opening profile {self.profile} {self.purpose} ({copy_labels[copy_index]})') for copy_index, offset in enumerate(self.offsets)))
+        copy_labels = ("primary", "repeated")
+        return tuple(
+            (
+                InPlaceTextPatch(
+                    offset=offset,
+                    source_text=self.source_for_copy(copy_index),
+                    english=self.english,
+                    purpose=f"opening profile {self.profile} {self.purpose} ({copy_labels[copy_index]})",
+                )
+                for copy_index, offset in enumerate(self.offsets)
+            )
+        )
 
     def to_layout_patches(self) -> tuple[PayloadPatch, ...]:
         """Return guarded row-command edits for both copies when required.
@@ -293,7 +329,17 @@ class OpeningProfileField:
         """
         if self.display_row == self.source_row:
             return ()
-        return tuple((PayloadPatch(offset=offset - 3, expected=bytes((0, 12, self.source_row)), replacement=bytes((0, 12, self.display_row)), label=f'opening profile {self.profile} {self.purpose} copy {copy_index + 1} row') for copy_index, offset in enumerate(self.offsets)))
+        return tuple(
+            (
+                PayloadPatch(
+                    offset=offset - 3,
+                    expected=bytes((0, 12, self.source_row)),
+                    replacement=bytes((0, 12, self.display_row)),
+                    label=f"opening profile {self.profile} {self.purpose} copy {copy_index + 1} row",
+                )
+                for copy_index, offset in enumerate(self.offsets)
+            )
+        )
 
 
 def wrap_ascii_text(text: str, width: int) -> str:
@@ -323,24 +369,24 @@ def wrap_ascii_text(text: str, width: int) -> str:
         explicit page breaks.
     """
     if width <= 0:
-        raise ValueError('wrap width must be positive')
-    words = text.split(' ')
+        raise ValueError("wrap width must be positive")
+    words = text.split(" ")
     if not text or text.strip() != text or any((not word for word in words)):
-        raise ValueError('wrapped English must use single internal spaces')
+        raise ValueError("wrapped English must use single internal spaces")
     too_wide = [word for word in words if len(word) > width]
     if too_wide:
-        raise ValueError(f'word exceeds {width}-cell line: {too_wide[0]!r}')
+        raise ValueError(f"word exceeds {width}-cell line: {too_wide[0]!r}")
     lines: list[str] = []
     current = words[0]
     for word in words[1:]:
-        candidate = f'{current} {word}'
+        candidate = f"{current} {word}"
         if len(candidate) <= width:
             current = candidate
             continue
         lines.append(current.ljust(width))
         current = word
     lines.append(current)
-    return ''.join(lines)
+    return "".join(lines)
 
 
 def ascii_to_fullwidth(text: str) -> str:
@@ -366,14 +412,14 @@ def ascii_to_fullwidth(text: str) -> str:
     converted: list[str] = []
     for character in text:
         codepoint = ord(character)
-        if character == ' ':
-            converted.append('\u3000')
-        elif character == '-':
-            converted.append('−')
+        if character == " ":
+            converted.append("\u3000")
+        elif character == "-":
+            converted.append("−")
         elif character == "'":
-            converted.append('’')
+            converted.append("’")
         elif 33 <= codepoint <= 126:
             converted.append(chr(codepoint + 65248))
         else:
-            raise ValueError(f'unsupported non-printable ASCII character {character!r}')
-    return ''.join(converted)
+            raise ValueError(f"unsupported non-printable ASCII character {character!r}")
+    return "".join(converted)

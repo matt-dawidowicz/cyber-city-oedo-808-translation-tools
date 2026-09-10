@@ -115,18 +115,11 @@ def decode_embedded_logo_mask() -> list[int]:
     except (ValueError, zlib.error) as error:
         raise ValueError("embedded title-logo mask is invalid") from error
     if len(packed) != LOGO_MASK_PACKED_BYTES:
-        raise ValueError(
-            "embedded title-logo mask has the wrong packed size"
-        )
+        raise ValueError("embedded title-logo mask has the wrong packed size")
     digest = hashlib.sha256(packed).hexdigest()
     if digest != LOGO_MASK_PACKED_SHA256:
-        raise ValueError(
-            "embedded title-logo mask failed its SHA-256 guard"
-        )
-    if (
-        LOGO_MASK_WIDTH != SCREEN_WIDTH
-        or LOGO_MASK_HEIGHT != SCREEN_HEIGHT
-    ):
+        raise ValueError("embedded title-logo mask failed its SHA-256 guard")
+    if LOGO_MASK_WIDTH != SCREEN_WIDTH or LOGO_MASK_HEIGHT != SCREEN_HEIGHT:
         raise ValueError("embedded title-logo dimensions are incompatible")
     if LOGO_MASK_BITS_PER_PIXEL != 4:
         raise ValueError("embedded title-logo packing is incompatible")
@@ -203,9 +196,7 @@ def build_title_pixels_from_image(
         for x in range(width):
             value = luminance[y * width + x]
             coverage = quantize_title_luminance(value)
-            pixels[(top + y) * SCREEN_WIDTH + left + x] = (
-                title_palette_index(coverage)
-            )
+            pixels[(top + y) * SCREEN_WIDTH + left + x] = title_palette_index(coverage)
 
     if not any(pixels):
         raise ValueError("source image produced no title foreground")
@@ -318,8 +309,7 @@ def encode_title_pixels(pixels: Sequence[int]) -> bytes:
 
     if len(pixels) != SCREEN_WIDTH * SCREEN_HEIGHT:
         raise ValueError("title frame must contain exactly 61,440 pixels")
-    if any(not isinstance(pixel, int) or not 0 <= pixel <= 15
-           for pixel in pixels):
+    if any(not isinstance(pixel, int) or not 0 <= pixel <= 15 for pixel in pixels):
         raise ValueError("title pixels must be palette indexes 0-15")
 
     encoded = bytearray()
@@ -329,7 +319,7 @@ def encode_title_pixels(pixels: Sequence[int]) -> bytes:
             for pixel_y in range(TILE_HEIGHT):
                 row = (tile_y * TILE_HEIGHT + pixel_y) * SCREEN_WIDTH
                 start = row + tile_x * TILE_WIDTH
-                tile.extend(pixels[start:start + TILE_WIDTH])
+                tile.extend(pixels[start : start + TILE_WIDTH])
             encoded.extend(encode_tile(tile))
     if len(encoded) != TITLE_ASSET_BYTES:
         raise AssertionError("generated title asset has an invalid size")
@@ -349,10 +339,7 @@ def build_clean_title_pixels() -> list[int]:
         claim that its artwork is generic or independently redrawn.
     """
 
-    return [
-        title_palette_index(coverage)
-        for coverage in decode_embedded_logo_mask()
-    ]
+    return [title_palette_index(coverage) for coverage in decode_embedded_logo_mask()]
 
 
 def build_clean_title_asset() -> bytes:
@@ -377,9 +364,7 @@ def build_parser() -> argparse.ArgumentParser:
     """
 
     return argparse.ArgumentParser(
-        description=(
-            "Generate the optional 256x240 PC Engine title graphic."
-        ),
+        description=("Generate the optional 256x240 PC Engine title graphic."),
     )
 
 

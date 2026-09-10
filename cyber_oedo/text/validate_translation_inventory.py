@@ -68,15 +68,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         reader = csv.DictReader(source, delimiter="\t")
         actual_fields = tuple(reader.fieldnames or ())
         missing_fields = [
-            field
-            for field in OUTPUT_FIELDS
-            if field not in actual_fields
+            field for field in OUTPUT_FIELDS if field not in actual_fields
         ]
         if missing_fields:
-            parser.error(
-                "missing required columns: "
-                + ", ".join(missing_fields)
-            )
+            parser.error("missing required columns: " + ", ".join(missing_fields))
 
         for row_number, row in enumerate(reader, start=2):
             row_count += 1
@@ -88,39 +83,29 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not entry_id:
                 errors.append(f"row {row_number}: blank entry_id")
             elif entry_id in entry_ids:
-                errors.append(
-                    f"row {row_number}: duplicate entry_id {entry_id!r}"
-                )
+                errors.append(f"row {row_number}: duplicate entry_id {entry_id!r}")
             entry_ids.add(entry_id)
 
             if not canonical_id:
-                errors.append(
-                    f"row {row_number}: blank canonical_id"
-                )
+                errors.append(f"row {row_number}: blank canonical_id")
             source_by_canonical[canonical_id].add(source_text)
             canonical_by_source[source_text].add(canonical_id)
             if translation:
                 translated_rows += 1
-                translations_by_canonical[canonical_id].add(
-                    translation
-                )
+                translations_by_canonical[canonical_id].add(translation)
             elif args.require_translations:
-                errors.append(
-                    f"row {row_number}: blank english_translation"
-                )
+                errors.append(f"row {row_number}: blank english_translation")
 
             try:
                 offset = int(row["offset"], 16)
             except ValueError:
                 errors.append(
-                    f"row {row_number}: invalid hexadecimal offset "
-                    f"{row['offset']!r}"
+                    f"row {row_number}: invalid hexadecimal offset {row['offset']!r}"
                 )
             else:
                 if offset < previous_offset:
                     errors.append(
-                        f"row {row_number}: offset "
-                        f"{row['offset']} is out of order"
+                        f"row {row_number}: offset {row['offset']} is out of order"
                     )
                 previous_offset = offset
 
@@ -128,14 +113,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 source_bytes = int(row["source_bytes"])
             except ValueError:
                 errors.append(
-                    f"row {row_number}: invalid source_bytes "
-                    f"{row['source_bytes']!r}"
+                    f"row {row_number}: invalid source_bytes {row['source_bytes']!r}"
                 )
             else:
                 if source_bytes <= 0:
-                    errors.append(
-                        f"row {row_number}: source_bytes must be positive"
-                    )
+                    errors.append(f"row {row_number}: source_bytes must be positive")
 
     for canonical_id, source_texts in source_by_canonical.items():
         if len(source_texts) > 1:
@@ -158,8 +140,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
     translated_canonical = sum(
-        bool(values)
-        for values in translations_by_canonical.values()
+        bool(values) for values in translations_by_canonical.values()
     )
     print(f"rows={row_count}")
     print(f"canonical_ids={len(source_by_canonical)}")
@@ -172,16 +153,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"WARNING: {warning}", file=sys.stderr)
     if len(warnings) > 50:
         print(
-            "WARNING: "
-            f"{len(warnings) - 50} additional warnings suppressed",
+            f"WARNING: {len(warnings) - 50} additional warnings suppressed",
             file=sys.stderr,
         )
     for error in errors[:50]:
         print(f"ERROR: {error}", file=sys.stderr)
     if len(errors) > 50:
         print(
-            "ERROR: "
-            f"{len(errors) - 50} additional errors suppressed",
+            f"ERROR: {len(errors) - 50} additional errors suppressed",
             file=sys.stderr,
         )
     if errors:

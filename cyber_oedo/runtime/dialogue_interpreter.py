@@ -47,12 +47,10 @@ INDEXED_TABLE_TRANSFER_BYTES = 0x0301
 INDEXED_TABLE_RECORD_COUNT = 0x18
 INDEXED_TABLE_TRAILER_BYTES = 1
 INDEXED_TABLE_SOURCE_SHA256 = (
-    "385fe67174f28f54787e9372b5ef865a"
-    "34ab7f040ed46affd95c425f35d54576"
+    "385fe67174f28f54787e9372b5ef865a34ab7f040ed46affd95c425f35d54576"
 )
 TRACK2_PAYLOAD_SHA256 = (
-    "0817cfa03fedc7b33c52f9bd9423b414"
-    "80fa385cff3693262732b8768e7ca223"
+    "0817cfa03fedc7b33c52f9bd9423b41480fa385cff3693262732b8768e7ca223"
 )
 
 
@@ -77,9 +75,7 @@ RUNTIME_REGIONS = (
     RuntimeRegion(
         "parser_entry",
         DIALOGUE_INTERPRETER_CPU,
-        bytes.fromhex(
-            "20 11 9F 20 14 9F A8 D0 01 60"
-        ),
+        bytes.fromhex("20 11 9F 20 14 9F A8 D0 01 60"),
         "Read one stream byte, advance the pointer, and stop on zero.",
     ),
     RuntimeRegion(
@@ -123,9 +119,7 @@ RUNTIME_REGIONS = (
     RuntimeRegion(
         "stream_helpers",
         STREAM_READ_CPU,
-        bytes.fromhex(
-            "B2 7F 60 E6 7F D0 02 E6 80 60"
-        ),
+        bytes.fromhex("B2 7F 60 E6 7F D0 02 E6 80 60"),
         "Read from ($7F) and advance the 16-bit stream pointer.",
     ),
     RuntimeRegion(
@@ -135,21 +129,13 @@ RUNTIME_REGIONS = (
             "A9 00 85 00 A9 A4 85 01 A9 00 85 02 A9 7D 85 04 "
             "A9 10 85 05 A9 01 85 06 A9 03 85 07 20 A0 6E 60"
         ),
-        (
-            "Request a 0x301-byte CD transfer into $A400 from absolute "
-            "LBA $107D."
-        ),
+        ("Request a 0x301-byte CD transfer into $A400 from absolute LBA $107D."),
     ),
     RuntimeRegion(
         "cd_read_orchestrator",
         CD_READ_ORCHESTRATOR_CPU,
-        bytes.fromhex(
-            "A5 07 4A 4A 4A 85 08 A5 08 F0 03 20 50 6F 20 73 6F"
-        ),
-        (
-            "Split a byte count into 0x800-byte CD blocks and a "
-            "remainder path."
-        ),
+        bytes.fromhex("A5 07 4A 4A 4A 85 08 A5 08 F0 03 20 50 6F 20 73 6F"),
+        ("Split a byte count into 0x800-byte CD blocks and a remainder path."),
     ),
     RuntimeRegion(
         "cd_read_transfer",
@@ -159,10 +145,7 @@ RUNTIME_REGIONS = (
             "A5 00 85 FA A5 01 85 FB A5 08 85 F8 20 09 E0 "
             "A8 D0 DE 60"
         ),
-        (
-            "Populate the System Card CD_READ argument block and call "
-            "$E009."
-        ),
+        ("Populate the System Card CD_READ argument block and call $E009."),
     ),
     RuntimeRegion(
         "indexed_state_dispatch",
@@ -173,17 +156,13 @@ RUNTIME_REGIONS = (
     RuntimeRegion(
         "indexed_state_setter",
         INDEXED_STATE_SETTER_CPU,
-        bytes.fromhex(
-            "20 11 9F 20 14 9F 85 00 20 F9 66 60"
-        ),
+        bytes.fromhex("20 11 9F 20 14 9F 85 00 20 F9 66 60"),
         "Read one record index and call the state-byte write helper.",
     ),
     RuntimeRegion(
         "indexed_state_write",
         INDEXED_STATE_WRITE_CPU,
-        bytes.fromhex(
-            "20 94 66 A0 1A A9 FF 91 00 60"
-        ),
+        bytes.fromhex("20 94 66 A0 1A A9 FF 91 00 60"),
         "Write FF to byte 1A of one indexed 32-byte record.",
     ),
     RuntimeRegion(
@@ -217,9 +196,7 @@ def indexed_record_address(index: int) -> int:
     if not 0 <= index <= 0xFF:
         raise ValueError("record index must fit in one byte")
     normalized = (index - 1) & 0xFF
-    return (
-        INDEXED_RECORD_BASE + normalized * INDEXED_RECORD_STRIDE
-    ) & 0xFFFF
+    return (INDEXED_RECORD_BASE + normalized * INDEXED_RECORD_STRIDE) & 0xFFFF
 
 
 def indexed_text_field_offset(state_byte: int) -> int:
@@ -273,14 +250,12 @@ def indexed_table_evidence(path: pathlib.Path) -> dict[str, Any]:
         raise ValueError("indexed table source is truncated")
 
     records_blob = table[:-INDEXED_TABLE_TRAILER_BYTES]
-    expected_records_bytes = (
-        INDEXED_TABLE_RECORD_COUNT * INDEXED_RECORD_STRIDE
-    )
+    expected_records_bytes = INDEXED_TABLE_RECORD_COUNT * INDEXED_RECORD_STRIDE
     if len(records_blob) != expected_records_bytes:
         raise ValueError("indexed table source has an unexpected size")
 
     records = tuple(
-        records_blob[index:index + INDEXED_RECORD_STRIDE]
+        records_blob[index : index + INDEXED_RECORD_STRIDE]
         for index in range(0, len(records_blob), INDEXED_RECORD_STRIDE)
     )
     slots_terminated = True
@@ -305,8 +280,7 @@ def indexed_table_evidence(path: pathlib.Path) -> dict[str, Any]:
         "trailer_hex": table[-INDEXED_TABLE_TRAILER_BYTES:].hex(),
         "sha256": hashlib.sha256(table).hexdigest(),
         "sha256_matched": (
-            hashlib.sha256(table).hexdigest()
-            == INDEXED_TABLE_SOURCE_SHA256
+            hashlib.sha256(table).hexdigest() == INDEXED_TABLE_SOURCE_SHA256
         ),
         "all_text_slots_null_terminated": slots_terminated,
         "record_06": {
@@ -345,9 +319,7 @@ def validate_runtime_regions(path: pathlib.Path) -> tuple[dict[str, Any], ...]:
                 {
                     "name": region.name,
                     "cpu_address": f"0x{region.cpu_address:04X}",
-                    "payload_offset": (
-                        f"0x{region.payload_offset:08X}"
-                    ),
+                    "payload_offset": (f"0x{region.payload_offset:08X}"),
                     "bytes": len(region.expected),
                     "sha256": hashlib.sha256(actual).hexdigest(),
                     "matched": matched,
@@ -407,14 +379,10 @@ def build_runtime_report(
     table = indexed_table_evidence(payload)
     report: dict[str, Any] = {
         "tier": "B2-static",
-        "scope": (
-            "Mission 0 dialogue interpreter and indexed-table loader proof"
-        ),
+        "scope": ("Mission 0 dialogue interpreter and indexed-table loader proof"),
         "payload_sha256": payload_digest,
         "payload_authenticated": payload_digest == TRACK2_PAYLOAD_SHA256,
-        "all_source_guards_match": all(
-            item["matched"] for item in regions
-        ),
+        "all_source_guards_match": all(item["matched"] for item in regions),
         "regions": regions,
         "indexed_table_loader": table,
         "three_d_static_semantics": {
@@ -432,9 +400,7 @@ def build_runtime_report(
             "glyph_renderer_cpu": f"0x{GLYPH_CELL_RENDERER_CPU:04X}",
         },
         "ownership": {
-            "historical_zero_region_cpu": (
-                f"0x{HISTORICAL_ZERO_REGION_CPU:04X}"
-            ),
+            "historical_zero_region_cpu": (f"0x{HISTORICAL_ZERO_REGION_CPU:04X}"),
             "zero_filled": next(
                 item["matched"]
                 for item in regions

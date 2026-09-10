@@ -10,9 +10,11 @@ from cyber_oedo.disc.game_layout import SECTOR_SIZE
 from .model import CandidateResourceRegion, ResourceHeader
 
 RESOURCE_NAME = re.compile(r"^[A-Z][A-Z0-9_]{1,15}$")
-_RESOURCE_NAME_BYTES = frozenset(
-    range(ord("A"), ord("Z") + 1)
-) | frozenset(range(ord("0"), ord("9") + 1)) | frozenset({ord("_")})
+_RESOURCE_NAME_BYTES = (
+    frozenset(range(ord("A"), ord("Z") + 1))
+    | frozenset(range(ord("0"), ord("9") + 1))
+    | frozenset({ord("_")})
+)
 
 
 def looks_like_resource_name(text: str) -> bool:
@@ -46,8 +48,7 @@ def read_sector_header_name(
     end = start
     maximum_end = min(start + 16, size)
     while (
-        end < maximum_end
-        and data[end] in _RESOURCE_NAME_BYTES  # type: ignore[index]
+        end < maximum_end and data[end] in _RESOURCE_NAME_BYTES  # type: ignore[index]
     ):
         end += 1
     if end == maximum_end and end < size:

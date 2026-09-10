@@ -30,9 +30,7 @@ def build_human_test_disc(
 
     output_directory = output_directory.resolve()
     if output_directory.exists():
-        raise ValueError(
-            f"output directory already exists: {output_directory}"
-        )
+        raise ValueError(f"output directory already exists: {output_directory}")
 
     output_directory.parent.mkdir(parents=True, exist_ok=True)
     temporary = pathlib.Path(
@@ -53,12 +51,9 @@ def build_human_test_disc(
             title_screen_mode,
         )
         text_patches = tuple(
-            patch.to_payload_patch()
-            for patch in profile.HUMAN_TEST_PATCHES
+            patch.to_payload_patch() for patch in profile.HUMAN_TEST_PATCHES
         )
-        binary_patches = (
-            profile.HUMAN_TEST_BINARY_PATCHES + title_patches
-        )
+        binary_patches = profile.HUMAN_TEST_BINARY_PATCHES + title_patches
         payload_patches = text_patches + binary_patches
 
         sector_reports = apply_payload_patches(
@@ -82,10 +77,7 @@ def build_human_test_disc(
             for report in sector_reports
             if report.before_sha256 != report.after_sha256
         )
-        expected_lbas = tuple(
-            report.absolute_lba
-            for report in changed_reports
-        )
+        expected_lbas = tuple(report.absolute_lba for report in changed_reports)
         if comparison.changed_lbas != expected_lbas:
             raise ValueError(
                 "unexpected changed sectors: expected "
@@ -104,9 +96,7 @@ def build_human_test_disc(
         manifest = {
             "build_profile": profile.BUILD_PROFILE,
             "title_screen_mode": title_screen_mode,
-            "created_utc": datetime.datetime.now(
-                datetime.timezone.utc
-            ).isoformat(),
+            "created_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "scope": (
                 "Same-size stock-renderer English vertical slice with "
                 "guarded text, layout, profile, Media Mix, and optional "
@@ -117,16 +107,13 @@ def build_human_test_disc(
             "image_bytes": output_paths[".img"].stat().st_size,
             "changed_absolute_lbas": list(comparison.changed_lbas),
             "changed_relative_sectors": [
-                report.relative_sector
-                for report in changed_reports
+                report.relative_sector for report in changed_reports
             ],
             "guarded_relative_sectors": [
-                report.relative_sector
-                for report in sector_reports
+                report.relative_sector for report in sector_reports
             ],
             "modified_sectors": [
-                dataclasses.asdict(report)
-                for report in changed_reports
+                dataclasses.asdict(report) for report in changed_reports
             ],
             "text_patches": text_patch_rows(
                 profile.HUMAN_TEST_PATCHES,

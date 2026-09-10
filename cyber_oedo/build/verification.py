@@ -34,6 +34,4 @@ def verify_plan_footprint(plan: PatchPlan) -> None:
             try:
                 int(digest, 16)
             except ValueError as error:
-                raise ValueError(
-                    "patch plan contains a malformed SHA-256"
-                ) from error
+                raise ValueError("patch plan contains a malformed SHA-256") from error

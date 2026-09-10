@@ -53,9 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     """
 
     return argparse.ArgumentParser(
-        description=(
-            "Combine alphabetically sorted PNGs into a labeled contact sheet."
-        )
+        description=("Combine alphabetically sorted PNGs into a labeled contact sheet.")
     )
 
 

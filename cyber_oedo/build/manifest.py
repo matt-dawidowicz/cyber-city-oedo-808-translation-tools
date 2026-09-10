@@ -64,12 +64,8 @@ def binary_patch_rows(
             "payload_offset": f"0x{patch.offset:08X}",
             "relative_sector": relative_sector,
             "absolute_lba": track_start_lba + relative_sector,
-            "expected_sha256": hashlib.sha256(
-                patch.expected
-            ).hexdigest(),
-            "replacement_sha256": hashlib.sha256(
-                patch.replacement
-            ).hexdigest(),
+            "expected_sha256": hashlib.sha256(patch.expected).hexdigest(),
+            "replacement_sha256": hashlib.sha256(patch.replacement).hexdigest(),
             "bytes": len(patch.expected),
         }
         if len(patch.expected) <= inline_limit:

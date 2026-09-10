@@ -65,9 +65,7 @@ class ContractDescriptor:
 
         missing = [field for field in self.fields if field not in actual]
         if missing:
-            raise ValueError(
-                "missing required fields: " + ", ".join(missing)
-            )
+            raise ValueError("missing required fields: " + ", ".join(missing))
 
 
 DIALOGUE_V1 = ContractDescriptor(

@@ -49,20 +49,11 @@ def _plausible(text: str, shape: ScriptMetrics) -> bool:
     if shape.ascii_printable > 2 and shape.fullwidth < 4:
         return False
     kana = shape.hiragana + shape.katakana
-    natural_sentence = (
-        len(text) >= 8
-        and kana >= 3
-        and kana / len(text) >= 0.20
-    )
+    natural_sentence = len(text) >= 8 and kana >= 3 and kana / len(text) >= 0.20
     japanese_label = (
-        len(text) >= 5
-        and kana >= 2
-        and (kana + shape.kanji) / len(text) >= 0.60
+        len(text) >= 5 and kana >= 2 and (kana + shape.kanji) / len(text) >= 0.60
     )
-    fullwidth_label = (
-        shape.fullwidth >= 5
-        and shape.ascii_printable == 0
-    )
+    fullwidth_label = shape.fullwidth >= 5 and shape.ascii_printable == 0
     return natural_sentence or japanese_label or fullwidth_label
 
 
@@ -113,11 +104,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     count = 0
-    with mapped_file(args.input) as data, args.output.open(
-        "w",
-        encoding="utf-8-sig",
-        newline="",
-    ) as output:
+    with (
+        mapped_file(args.input) as data,
+        args.output.open(
+            "w",
+            encoding="utf-8-sig",
+            newline="",
+        ) as output,
+    ):
         writer = csv.DictWriter(
             output,
             fieldnames=(
@@ -146,7 +140,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             strict=True,
         ):
             offset = int(start)
-            raw = data[offset:int(end)]  # type: ignore[index]
+            raw = data[offset : int(end)]  # type: ignore[index]
             try:
                 text = raw.decode("shift_jis")
             except UnicodeDecodeError as error:
@@ -157,9 +151,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 {
                     "offset": f"0x{offset:08X}",
                     "sector": offset // SECTOR_SIZE,
-                    "within_sector": (
-                        f"0x{offset % SECTOR_SIZE:03X}"
-                    ),
+                    "within_sector": (f"0x{offset % SECTOR_SIZE:03X}"),
                     "bytes": len(raw),
                     "characters": int(shape[0]),
                     "hiragana": int(shape[1]),

@@ -66,14 +66,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     if not any(selected):
         parser.error(
-            "at least one of --resource-map, --dialogue, or --inventory "
-            "is required"
+            "at least one of --resource-map, --dialogue, or --inventory is required"
         )
     if args.output.exists():
         if not args.overwrite:
-            parser.error(
-                "output already exists; pass --overwrite to replace it"
-            )
+            parser.error("output already exists; pass --overwrite to replace it")
         args.output.unlink()
     args.output.parent.mkdir(parents=True, exist_ok=True)
 

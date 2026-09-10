@@ -52,9 +52,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(str(error))
 
     manifest = json.loads(
-        (output_ccd.parent / "build_manifest.json").read_text(
-            encoding="utf-8"
-        )
+        (output_ccd.parent / "build_manifest.json").read_text(encoding="utf-8")
     )
     changed = manifest["changed_relative_sectors"]
     guarded = manifest["guarded_relative_sectors"]

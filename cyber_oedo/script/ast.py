@@ -29,13 +29,9 @@ class TextRun:
         try:
             encoded = self.text.encode("shift_jis")
         except UnicodeEncodeError as error:
-            raise ValueError(
-                "text run is not Shift-JIS encodable"
-            ) from error
+            raise ValueError("text run is not Shift-JIS encodable") from error
         if encoded != self.raw:
-            raise ValueError(
-                "text run bytes do not match its decoded text"
-            )
+            raise ValueError("text run bytes do not match its decoded text")
 
     @property
     def end_offset(self) -> int:
@@ -59,13 +55,9 @@ class ControlCommand:
         if self.offset < 0:
             raise ValueError("control offset must be non-negative")
         if not 0 < self.opcode < 0x80:
-            raise ValueError(
-                "control opcode must be in the range 01-7F"
-            )
+            raise ValueError("control opcode must be in the range 01-7F")
         if self.name is not None and not self.name:
-            raise ValueError(
-                "control name must be non-empty when supplied"
-            )
+            raise ValueError("control name must be non-empty when supplied")
 
     @property
     def raw(self) -> bytes:
@@ -90,9 +82,7 @@ class ControlCommand:
 
         if not self.operands:
             return f"<${self.opcode:02X}>"
-        operand_text = " ".join(
-            f"{value:02X}" for value in self.operands
-        )
+        operand_text = " ".join(f"{value:02X}" for value in self.operands)
         return f"<${self.opcode:02X}:{operand_text}>"
 
     def legacy_tags(self) -> tuple[str, ...]:
@@ -122,14 +112,10 @@ class DialogueBody:
         expected = self.start_offset
         for node in self.nodes:
             if node.offset != expected:
-                raise ValueError(
-                    "dialogue nodes must cover source bytes contiguously"
-                )
+                raise ValueError("dialogue nodes must cover source bytes contiguously")
             expected = node.end_offset
         if expected != self.terminator_offset:
-            raise ValueError(
-                "dialogue nodes must end immediately before terminator"
-            )
+            raise ValueError("dialogue nodes must end immediately before terminator")
 
     @property
     def end_offset(self) -> int:
@@ -141,31 +127,21 @@ class DialogueBody:
     def visible_text(self) -> str:
         """Return concatenated visible text with bytecode commands omitted."""
 
-        return "".join(
-            node.text
-            for node in self.nodes
-            if isinstance(node, TextRun)
-        )
+        return "".join(node.text for node in self.nodes if isinstance(node, TextRun))
 
     @property
     def sjis_characters(self) -> int:
         """Return the number of decoded Shift-JIS glyphs."""
 
         return sum(
-            node.character_count
-            for node in self.nodes
-            if isinstance(node, TextRun)
+            node.character_count for node in self.nodes if isinstance(node, TextRun)
         )
 
     @property
     def commands(self) -> tuple[ControlCommand, ...]:
         """Return control nodes in encounter order."""
 
-        return tuple(
-            node
-            for node in self.nodes
-            if isinstance(node, ControlCommand)
-        )
+        return tuple(node for node in self.nodes if isinstance(node, ControlCommand))
 
     @property
     def control_opcodes(self) -> tuple[int, ...]:
@@ -177,20 +153,14 @@ class DialogueBody:
     def legacy_control_bytes(self) -> tuple[int, ...]:
         """Flatten command bytes for compatibility with the v1 TSV schema."""
 
-        return tuple(
-            value
-            for command in self.commands
-            for value in command.raw
-        )
+        return tuple(value for command in self.commands for value in command.raw)
 
     @property
     def tagged_text(self) -> str:
         """Render visible text with operand-aware command tags."""
 
         return "".join(
-            node.text
-            if isinstance(node, TextRun)
-            else node.semantic_tag()
+            node.text if isinstance(node, TextRun) else node.semantic_tag()
             for node in self.nodes
         )
 
@@ -220,9 +190,7 @@ class DialogueRecord:
         if self.marker_offset < 0:
             raise ValueError("marker offset must be non-negative")
         if self.body.start_offset != self.marker_offset + 2:
-            raise ValueError(
-                "body must begin immediately after the two-byte marker"
-            )
+            raise ValueError("body must begin immediately after the two-byte marker")
 
     @property
     def end_offset(self) -> int:

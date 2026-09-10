@@ -155,9 +155,7 @@ def _require_fields(
     actual = set(fieldnames or ())
     missing = [field for field in required if field not in actual]
     if missing:
-        raise ValueError(
-            "missing required fields: " + ", ".join(missing)
-        )
+        raise ValueError("missing required fields: " + ", ".join(missing))
 
 
 def ingest_resource_map(
@@ -251,9 +249,7 @@ def ingest_translation_inventory(
 
     reader, source = _reader(path)
     try:
-        TRANSLATION_INVENTORY_V1.require_compatible_header(
-            reader.fieldnames or ()
-        )
+        TRANSLATION_INVENTORY_V1.require_compatible_header(reader.fieldnames or ())
         rows = [
             (
                 row["entry_id"],
@@ -299,11 +295,7 @@ def table_counts(connection: sqlite3.Connection) -> Mapping[str, int]:
         "translation_occurrences",
     )
     return {
-        table: int(
-            connection.execute(
-                f"SELECT COUNT(*) FROM {table}"
-            ).fetchone()[0]
-        )
+        table: int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
         for table in tables
     }
 

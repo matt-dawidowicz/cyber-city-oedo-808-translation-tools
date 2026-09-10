@@ -20,9 +20,7 @@ class PackagingMetadataTests(unittest.TestCase):
         """Require recursive discovery for package namespaces."""
 
         metadata = tomllib.loads(
-            (REPOSITORY_ROOT / "pyproject.toml").read_text(
-                encoding="utf-8"
-            )
+            (REPOSITORY_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         )
         setuptools = metadata["tool"]["setuptools"]
         patterns = setuptools["packages"]["find"]["include"]
@@ -82,16 +80,10 @@ class UnifiedCommandTests(unittest.TestCase):
             "import_module",
             return_value=target,
         ) as importer:
-            status = cli.main(
-                ["extract-dialogue", "input.bin", "dialogue.tsv"]
-            )
+            status = cli.main(["extract-dialogue", "input.bin", "dialogue.tsv"])
         self.assertEqual(status, 0)
-        importer.assert_called_once_with(
-            "cyber_oedo.text.extract_dialogue"
-        )
-        target.main.assert_called_once_with(
-            ["input.bin", "dialogue.tsv"]
-        )
+        importer.assert_called_once_with("cyber_oedo.text.extract_dialogue")
+        target.main.assert_called_once_with(["input.bin", "dialogue.tsv"])
 
 
 if __name__ == "__main__":

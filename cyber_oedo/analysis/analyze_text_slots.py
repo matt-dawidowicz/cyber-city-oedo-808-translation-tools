@@ -143,9 +143,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     headers = read_resource_headers(args.ascii_scan)
     if not headers:
-        parser.error(
-            "no candidate sector-aligned resource headers were found"
-        )
+        parser.error("no candidate sector-aligned resource headers were found")
     header_sectors = [header.sector for header in headers]
 
     grouped: dict[
@@ -159,17 +157,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         newline="",
     ) as source:
         for row in csv.DictReader(source, delimiter="\t"):
-            if (
-                not args.include_review
-                and row["quality"] != "likely_text"
-            ):
+            if not args.include_review and row["quality"] != "likely_text":
                 continue
             record_offset = parse_hex(row["offset"])
             record_sector = record_offset // SECTOR_SIZE
-            header_index = bisect.bisect_right(
-                header_sectors,
-                record_sector,
-            ) - 1
+            header_index = (
+                bisect.bisect_right(
+                    header_sectors,
+                    record_sector,
+                )
+                - 1
+            )
             if header_index < 0:
                 unassigned_records += 1
                 continue
@@ -188,11 +186,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     padded_count = 0
     tail_sizes: list[int] = []
 
-    with mapped_file(args.track) as data, args.output.open(
-        "w",
-        encoding="utf-8-sig",
-        newline="",
-    ) as output:
+    with (
+        mapped_file(args.track) as data,
+        args.output.open(
+            "w",
+            encoding="utf-8-sig",
+            newline="",
+        ) as output,
+    ):
         sector_count, remainder = divmod(len(data), SECTOR_SIZE)
         if remainder:
             parser.error(
@@ -221,13 +222,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 len(data),
             )
             record_ends = [
-                offset + byte_count
-                for _, offset, byte_count in region_records
+                offset + byte_count for _, offset, byte_count in region_records
             ]
-            crossing = sum(
-                record_end > region_end
-                for record_end in record_ends
-            )
+            crossing = sum(record_end > region_end for record_end in record_ends)
             last_record_end = max(record_ends)
             tail_start = min(
                 max(last_record_end, region_start),
@@ -251,14 +248,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             region_sectors = next_sector - header.sector
             bounded = region_sectors <= args.max_region_sectors
             boundary_quality = (
-                "adjacent_named_headers"
-                if bounded
-                else "wide_header_gap"
+                "adjacent_named_headers" if bounded else "wide_header_gap"
             )
             likely_padding = (
-                bounded
-                and fill_byte in LIKELY_PADDING_BYTES
-                and fill_ratio >= 0.80
+                bounded and fill_byte in LIKELY_PADDING_BYTES and fill_ratio >= 0.80
             )
             writer.writerow(
                 {
@@ -270,15 +263,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "boundary_quality": boundary_quality,
                     "records": len(region_records),
                     "records_crossing_region": crossing,
-                    "last_record_end_in_region": (
-                        last_record_end - region_start
-                    ),
+                    "last_record_end_in_region": (last_record_end - region_start),
                     "tail_bytes": tail_bytes,
                     "tail_dominant_byte": f"{fill_byte:02X}",
                     "tail_dominant_ratio": f"{fill_ratio:.5f}",
-                    "tail_is_likely_padding": (
-                        "yes" if likely_padding else "no"
-                    ),
+                    "tail_is_likely_padding": ("yes" if likely_padding else "no"),
                 }
             )
             text_regions += 1
@@ -298,10 +287,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"records_crossing_regions={crossing_total}")
     print(f"likely_padded_tails={padded_count}")
     if tail_sizes:
-        print(
-            "median_tail_bytes="
-            f"{tail_sizes[len(tail_sizes) // 2]}"
-        )
+        print(f"median_tail_bytes={tail_sizes[len(tail_sizes) // 2]}")
         print(f"max_tail_bytes={tail_sizes[-1]}")
     return 0
 

@@ -75,9 +75,7 @@ class HumanTestProfileTests(unittest.TestCase):
                 if line.screen == screen and line.english
             ]
             self.assertEqual(len(rows), len(set(rows)))
-            self.assertTrue(
-                all(b - a >= 2 for a, b in zip(rows, rows[1:]))
-            )
+            self.assertTrue(all(b - a >= 2 for a, b in zip(rows, rows[1:])))
 
     def test_profile_sector_footprints_remain_stable(self) -> None:
         """Keep original/clean title variants on reviewed sectors."""
@@ -120,8 +118,7 @@ class TitleScreenTests(unittest.TestCase):
         self.assertEqual(len(asset), engine.TITLE_ASSET_BYTES)
         self.assertEqual(
             hashlib.sha256(asset).hexdigest(),
-            "f8e91ad827040796ea63a80541e06f71"
-            "159ca18121b10ab5128347ad6206e8f1",
+            "f8e91ad827040796ea63a80541e06f71159ca18121b10ab5128347ad6206e8f1",
         )
         self.assertEqual(TITLE_SUBTITLE, "ATTRIBUTE OF THE BEAST")
         self.assertEqual(
@@ -138,13 +135,13 @@ class TitleScreenTests(unittest.TestCase):
         self.assertEqual(len(palette), TITLE_PALETTE_BYTES)
         frame_bytes = TITLE_PALETTE_COLORS * 2
         frames = [
-            palette[offset:offset + frame_bytes]
+            palette[offset : offset + frame_bytes]
             for offset in range(0, len(palette), frame_bytes)
         ]
         self.assertEqual(len(frames), TITLE_PALETTE_FRAMES)
         self.assertTrue(all(frame == frames[0] for frame in frames))
         words = [
-            int.from_bytes(frames[0][offset:offset + 2], "little")
+            int.from_bytes(frames[0][offset : offset + 2], "little")
             for offset in range(0, frame_bytes, 2)
         ]
         self.assertEqual(words, [level * 0x49 for level in TITLE_PALETTE_LEVELS])

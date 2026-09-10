@@ -24,8 +24,7 @@ def _entropy_from_counts(
     if length <= 0:
         return 0.0
     return -sum(
-        (count / length) * math.log2(count / length)
-        for count in counts.values()
+        (count / length) * math.log2(count / length) for count in counts.values()
     )
 
 
@@ -86,7 +85,7 @@ def scan_shift_jis(
         strict=True,
     ):
         offset = int(start)
-        raw = data[offset:int(end)]  # type: ignore[index]
+        raw = data[offset : int(end)]  # type: ignore[index]
         try:
             decoded = raw.decode("shift_jis")
         except UnicodeDecodeError:
@@ -94,9 +93,7 @@ def scan_shift_jis(
         yield (
             offset,
             int(japanese),
-            decoded.replace("\r", "\\r")
-            .replace("\n", "\\n")
-            .replace("\t", "\\t"),
+            decoded.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t"),
         )
 
 
@@ -154,8 +151,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if remainder:
             raise SystemExit(
-                "Track length is not sector-aligned: "
-                f"remainder {remainder}"
+                f"Track length is not sector-aligned: remainder {remainder}"
             )
 
         nonzero, unique, entropy_values, zero_flags_array = sector_metrics(
@@ -169,13 +165,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             encoding="utf-8",
             newline="",
         ) as output:
-            output.write(
-                "sector\toffset\tnonzero\tunique\tentropy\t"
-                "prefix_hex\n"
-            )
+            output.write("sector\toffset\tnonzero\tunique\tentropy\tprefix_hex\n")
             for sector_number in range(sector_count):
                 start = sector_number * SECTOR_SIZE
-                prefix = data[start:start + 16]  # type: ignore[index]
+                prefix = data[start : start + 16]  # type: ignore[index]
                 output.write(
                     f"{sector_number}\t0x{start:08X}\t"
                     f"{int(nonzero[sector_number])}\t"
@@ -191,9 +184,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             encoding="utf-8",
             newline="",
         ) as output:
-            output.write(
-                "offset\tsector\twithin_sector\ttext\n"
-            )
+            output.write("offset\tsector\twithin_sector\ttext\n")
             for offset, text in scan_ascii(
                 data,
                 args.minimum_ascii,
@@ -217,10 +208,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             encoding="utf-8",
             newline="",
         ) as output:
-            output.write(
-                "offset\tsector\twithin_sector\t"
-                "japanese_chars\ttext\n"
-            )
+            output.write("offset\tsector\twithin_sector\tjapanese_chars\ttext\n")
             for offset, japanese, text in scan_shift_jis(
                 data,
                 args.minimum_japanese,
@@ -252,15 +240,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"ascii_runs={ascii_count}",
         f"shift_jis_runs={sjis_count}",
         "",
-        (
-            "long_zero_sector_runs "
-            "(start inclusive, end exclusive, count):"
-        ),
+        ("long_zero_sector_runs (start inclusive, end exclusive, count):"),
     ]
     summary.extend(
-        f"{start}\t{end}\t{end - start}"
-        for start, end in runs
-        if end - start >= 2
+        f"{start}\t{end}\t{end - start}" for start, end in runs if end - start >= 2
     )
     (output_dir / "summary.txt").write_text(
         "\n".join(summary) + "\n",

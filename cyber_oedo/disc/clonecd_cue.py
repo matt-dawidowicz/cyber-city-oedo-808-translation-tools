@@ -80,9 +80,7 @@ def cue_time(lba: int) -> str:
     return f"{minutes:02d}:{seconds:02d}:{frames:02d}"
 
 
-def render_cue(
-    *, image_name: str, tracks: list[Track], catalog: str | None
-) -> str:
+def render_cue(*, image_name: str, tracks: list[Track], catalog: str | None) -> str:
     """Render a CUE descriptor that references the original monolithic IMG."""
 
     lines: list[str] = []
@@ -106,9 +104,7 @@ def build_cue(ccd_path: Path, output_path: Path) -> None:
         if not companion.is_file():
             raise FileNotFoundError(f"missing CloneCD companion: {companion}")
     if image_path.stat().st_size % RAW_SECTOR_SIZE:
-        raise ValueError(
-            "raw CloneCD IMG is not a whole number of 2352-byte sectors"
-        )
+        raise ValueError("raw CloneCD IMG is not a whole number of 2352-byte sectors")
 
     parser = configparser.ConfigParser(interpolation=None)
     parser.optionxform = str
@@ -133,17 +129,13 @@ def main() -> int:
     """Generate a CUE descriptor alongside a supplied CloneCD descriptor."""
 
     argument_parser = argparse.ArgumentParser(description=__doc__)
-    argument_parser.add_argument(
-        "ccd", type=Path, help="source CloneCD .ccd file"
-    )
+    argument_parser.add_argument("ccd", type=Path, help="source CloneCD .ccd file")
     argument_parser.add_argument(
         "output", type=Path, help="new .cue file; must not exist"
     )
     args = argument_parser.parse_args()
     if args.output.exists():
-        argument_parser.error(
-            f"refusing to overwrite existing output: {args.output}"
-        )
+        argument_parser.error(f"refusing to overwrite existing output: {args.output}")
     build_cue(args.ccd, args.output)
     return 0
 

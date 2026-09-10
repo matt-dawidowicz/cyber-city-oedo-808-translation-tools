@@ -59,9 +59,7 @@ class PatchPlan:
             "build_profile": self.build_profile,
             "title_screen_mode": self.title_screen_mode,
             "entries": [asdict(entry) for entry in self.entries],
-            "guarded_relative_sectors": list(
-                self.guarded_relative_sectors
-            ),
+            "guarded_relative_sectors": list(self.guarded_relative_sectors),
         }
 
     def canonical_json(self) -> str:
@@ -77,9 +75,7 @@ class PatchPlan:
     def sha256(self) -> str:
         """Return the SHA-256 identity of the canonical plan JSON."""
 
-        return hashlib.sha256(
-            self.canonical_json().encode("utf-8")
-        ).hexdigest()
+        return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
 
 
 def _entry_from_payload_patch(
@@ -153,13 +149,9 @@ def build_profile_plan(title_screen_mode: str) -> PatchPlan:
     """
 
     expected_sectors = profile.profile_relative_sectors(title_screen_mode)
-    text_patches = tuple(
-        item.to_payload_patch()
-        for item in profile.HUMAN_TEST_PATCHES
-    )
+    text_patches = tuple(item.to_payload_patch() for item in profile.HUMAN_TEST_PATCHES)
     entries = tuple(
-        _entry_from_payload_patch("text", patch)
-        for patch in text_patches
+        _entry_from_payload_patch("text", patch) for patch in text_patches
     ) + tuple(
         _entry_from_payload_patch("layout", patch)
         for patch in profile.HUMAN_TEST_BINARY_PATCHES
@@ -168,9 +160,7 @@ def build_profile_plan(title_screen_mode: str) -> PatchPlan:
         entries += _title_entries()
     sectors = _sectors_for_entries(entries)
     if sectors != expected_sectors:
-        raise ValueError(
-            "derived patch plan disagrees with profile sector footprint"
-        )
+        raise ValueError("derived patch plan disagrees with profile sector footprint")
     return PatchPlan(
         build_profile=profile.BUILD_PROFILE,
         title_screen_mode=title_screen_mode,

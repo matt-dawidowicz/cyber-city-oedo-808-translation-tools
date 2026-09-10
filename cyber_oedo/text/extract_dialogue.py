@@ -87,8 +87,7 @@ def japanese_character_count(text: str) -> int:
     """Count broad Japanese-script characters in visible text."""
 
     return sum(
-        0x3000 <= ord(character) <= 0x30FF
-        or 0x3400 <= ord(character) <= 0x9FFF
+        0x3000 <= ord(character) <= 0x30FF or 0x3400 <= ord(character) <= 0x9FFF
         for character in text
     )
 
@@ -100,10 +99,7 @@ def classify_record(
     """Classify structured records as likely text or manual review."""
 
     japanese_count = japanese_character_count(text)
-    has_halfwidth = any(
-        0xFF61 <= ord(character) <= 0xFF9F
-        for character in text
-    )
+    has_halfwidth = any(0xFF61 <= ord(character) <= 0xFF9F for character in text)
     unexpected = set(controls) - COMMON_DIALOGUE_CONTROLS
     if japanese_count >= 3 and not has_halfwidth and not unexpected:
         return "likely_text"
@@ -144,11 +140,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     record_count = 0
     total_characters = 0
 
-    with mapped_file(args.input) as data, args.output.open(
-        "w",
-        encoding="utf-8-sig",
-        newline="",
-    ) as output:
+    with (
+        mapped_file(args.input) as data,
+        args.output.open(
+            "w",
+            encoding="utf-8-sig",
+            newline="",
+        ) as output,
+    ):
         writer = csv.DictWriter(
             output,
             fieldnames=OUTPUT_FIELDS,
@@ -182,26 +181,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             bank = bank_for_offset(marker_offset)
             tagged = "".join(parsed.tokens)
-            raw_hex = data[
-                marker_offset:parsed.end_offset + 1
-            ].hex(" ")
+            raw_hex = data[marker_offset : parsed.end_offset + 1].hex(" ")
             writer.writerow(
                 {
                     "bank": bank,
                     "quality": quality,
                     "offset": f"0x{marker_offset:08X}",
                     "sector": marker_offset // SECTOR_SIZE,
-                    "within_sector": (
-                        f"0x{marker_offset % SECTOR_SIZE:03X}"
-                    ),
-                    "record_bytes": (
-                        parsed.end_offset - marker_offset + 1
-                    ),
+                    "within_sector": (f"0x{marker_offset % SECTOR_SIZE:03X}"),
+                    "record_bytes": (parsed.end_offset - marker_offset + 1),
                     "sjis_characters": parsed.sjis_characters,
-                    "controls": " ".join(
-                        f"{value:02X}"
-                        for value in parsed.controls
-                    ),
+                    "controls": " ".join(f"{value:02X}" for value in parsed.controls),
                     "tagged_text": tagged,
                     "text": text,
                     "raw_hex": raw_hex,

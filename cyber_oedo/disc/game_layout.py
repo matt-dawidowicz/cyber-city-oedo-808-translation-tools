@@ -169,10 +169,7 @@ def payload_offset(sector: int, within_sector: int = 0) -> int:
     if sector < 0:
         raise ValueError("sector must be non-negative")
     if not 0 <= within_sector < SECTOR_SIZE:
-        raise ValueError(
-            "within_sector must be in the range "
-            f"0..{SECTOR_SIZE - 1}"
-        )
+        raise ValueError(f"within_sector must be in the range 0..{SECTOR_SIZE - 1}")
     return sector * SECTOR_SIZE + within_sector
 
 

@@ -46,13 +46,16 @@ def extract_mode1_payload(
     bytes_written = 0
     temporary_name: str | None = None
     try:
-        with image_path.open("rb") as source, tempfile.NamedTemporaryFile(
-            "wb",
-            dir=output_path.parent,
-            prefix=f".{output_path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as destination:
+        with (
+            image_path.open("rb") as source,
+            tempfile.NamedTemporaryFile(
+                "wb",
+                dir=output_path.parent,
+                prefix=f".{output_path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as destination,
+        ):
             temporary_name = destination.name
             source.seek(start_lba * RAW_SECTOR_SIZE)
             for relative_sector in range(sector_count):
@@ -74,8 +77,7 @@ def extract_mode1_payload(
                         f"{relative_sector}, found mode {raw[15]:02X}"
                     )
                 payload = raw[
-                    MODE1_USER_DATA_OFFSET:
-                    MODE1_USER_DATA_OFFSET + SECTOR_SIZE
+                    MODE1_USER_DATA_OFFSET : MODE1_USER_DATA_OFFSET + SECTOR_SIZE
                 ]
                 destination.write(payload)
                 digest.update(payload)
@@ -99,8 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
             "game's raw CloneCD Track 2 sectors."
         ),
         epilog=(
-            "Example: python extract_track2_mode1.py game.img "
-            "track02_mode1_2048.bin"
+            "Example: python extract_track2_mode1.py game.img track02_mode1_2048.bin"
         ),
     )
 
@@ -123,19 +124,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--start-lba",
         type=lambda value: int(value, 0),
         default=TRACK2_START_LBA,
-        help=(
-            "first raw IMG sector to extract "
-            f"(default: {TRACK2_START_LBA})"
-        ),
+        help=(f"first raw IMG sector to extract (default: {TRACK2_START_LBA})"),
     )
     parser.add_argument(
         "--sector-count",
         type=lambda value: int(value, 0),
         default=TRACK2_SECTOR_COUNT,
-        help=(
-            "number of Mode 1 sectors "
-            f"(default: {TRACK2_SECTOR_COUNT})"
-        ),
+        help=(f"number of Mode 1 sectors (default: {TRACK2_SECTOR_COUNT})"),
     )
     args = parser.parse_args(argv)
 

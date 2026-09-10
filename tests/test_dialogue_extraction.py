@@ -18,11 +18,7 @@ class DialogueExtractionTests(unittest.TestCase):
     ) -> None:
         """Drop unknown bytecode while retaining text after ``3D 00 06``."""
 
-        valid = (
-            b"\x27\x28\x3D\x00\x06"
-            + "猫犬猫".encode("shift_jis")
-            + b"\x00"
-        )
+        valid = b"\x27\x28\x3d\x00\x06" + "猫犬猫".encode("shift_jis") + b"\x00"
         unknown = (
             b"\x27\x28"
             + "犬猫犬".encode("shift_jis")
@@ -30,7 +26,7 @@ class DialogueExtractionTests(unittest.TestCase):
             + "猫犬猫".encode("shift_jis")
             + b"\x00"
         )
-        payload = valid + b"\xAA" * 8 + unknown
+        payload = valid + b"\xaa" * 8 + unknown
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -56,12 +52,7 @@ class DialogueExtractionTests(unittest.TestCase):
     ) -> None:
         """Keep forensic callers able to inspect an unknown control byte."""
 
-        body = (
-            "猫犬".encode("shift_jis")
-            + b"\x33"
-            + "猫".encode("shift_jis")
-            + b"\x00"
-        )
+        body = "猫犬".encode("shift_jis") + b"\x33" + "猫".encode("shift_jis") + b"\x00"
         parsed = parse_record(body, 0)
         self.assertIsNotNone(parsed)
         assert parsed is not None

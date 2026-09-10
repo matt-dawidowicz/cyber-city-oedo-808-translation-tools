@@ -42,9 +42,7 @@ class ContractTests(unittest.TestCase):
 
         row = {
             field: f"value-{index}"
-            for index, field in enumerate(
-                TRANSLATION_INVENTORY_V1.fields
-            )
+            for index, field in enumerate(TRANSLATION_INVENTORY_V1.fields)
         }
         record = TranslationInventoryRecord.from_mapping(row)
         self.assertEqual(record.to_mapping(), row)

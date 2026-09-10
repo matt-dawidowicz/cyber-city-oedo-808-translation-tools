@@ -55,9 +55,7 @@ class PackageArchitectureTests(unittest.TestCase):
         """Keep source-tree compatibility shims out of the repository."""
 
         remaining = sorted(
-            name
-            for name in RETIRED_ROOT_MODULES
-            if (ROOT / f"{name}.py").exists()
+            name for name in RETIRED_ROOT_MODULES if (ROOT / f"{name}.py").exists()
         )
         self.assertEqual([], remaining)
 
