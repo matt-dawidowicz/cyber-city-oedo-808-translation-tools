@@ -31,7 +31,7 @@ def synthetic_payload(
             raise ValueError("header sector lies outside synthetic payload")
         encoded = name.encode("ascii")
         start = sector * SECTOR_SIZE
-        payload[start:start + len(encoded)] = encoded
+        payload[start : start + len(encoded)] = encoded
     return bytes(payload)
 
 
@@ -52,11 +52,7 @@ class ResourceHeaderTests(unittest.TestCase):
             },
         )
         headers = discover_resource_headers(payload)
-        selected = tuple(
-            header
-            for header in headers
-            if 747 <= header.sector <= 755
-        )
+        selected = tuple(header for header in headers if 747 <= header.sector <= 755)
         self.assertEqual(
             selected,
             (
@@ -154,9 +150,7 @@ class ResourceMapCommandTests(unittest.TestCase):
         self.assertEqual(rows[0]["sector_count"], "2")
         self.assertEqual(rows[1]["sector_count"], "3")
         self.assertEqual(rows[2]["sector_count"], "2")
-        self.assertTrue(
-            all(row["ownership_status"] == "unproven" for row in rows)
-        )
+        self.assertTrue(all(row["ownership_status"] == "unproven" for row in rows))
 
 
 if __name__ == "__main__":

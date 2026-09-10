@@ -1,6 +1,0 @@
-# Core native accelerators for large binary reconnaissance scans.
-numpy>=2.0
-numba>=0.65
-
-# Graphics commands.
-Pillow>=10

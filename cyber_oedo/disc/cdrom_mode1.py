@@ -21,14 +21,14 @@ import pathlib
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from game_layout import (
+from cyber_oedo.disc.game_layout import (
     MODE1_USER_DATA_OFFSET,
     RAW_SECTOR_SIZE,
     SECTOR_SIZE,
 )
 
 
-MODE1_SYNC = b"\x00" + (b"\xFF" * 10) + b"\x00"
+MODE1_SYNC = b"\x00" + (b"\xff" * 10) + b"\x00"
 MODE1_EDC_OFFSET = 2064
 MODE1_RESERVED_OFFSET = 2068
 MODE1_ECC_P_OFFSET = 2076
@@ -68,9 +68,7 @@ class PayloadPatch:
         if not self.expected:
             raise ValueError("patch data must not be empty")
         if len(self.expected) != len(self.replacement):
-            raise ValueError(
-                "expected and replacement byte lengths must match"
-            )
+            raise ValueError("expected and replacement byte lengths must match")
         if not self.label.strip():
             raise ValueError("patch label must not be blank")
 
@@ -213,9 +211,7 @@ def _compute_ecc(
         raise ValueError("ECC parameters must be positive")
     size = major_count * minor_count
     if len(source) != size:
-        raise ValueError(
-            f"ECC source must contain {size} bytes, found {len(source)}"
-        )
+        raise ValueError(f"ECC source must contain {size} bytes, found {len(source)}")
 
     destination = bytearray(major_count * 2)
     for major in range(major_count):
@@ -249,15 +245,12 @@ def validate_mode1_structure(raw_sector: bytes | bytearray) -> None:
 
     if len(raw_sector) != RAW_SECTOR_SIZE:
         raise ValueError(
-            f"raw sector must contain {RAW_SECTOR_SIZE} bytes, "
-            f"found {len(raw_sector)}"
+            f"raw sector must contain {RAW_SECTOR_SIZE} bytes, found {len(raw_sector)}"
         )
     if raw_sector[: len(MODE1_SYNC)] != MODE1_SYNC:
         raise ValueError("raw sector has an invalid synchronization pattern")
     if raw_sector[15] != 1:
-        raise ValueError(
-            f"raw sector is mode {raw_sector[15]:02X}, not Mode 1"
-        )
+        raise ValueError(f"raw sector is mode {raw_sector[15]:02X}, not Mode 1")
 
 
 def rebuild_mode1_sector(raw_sector: bytes | bytearray) -> bytes:
@@ -282,9 +275,7 @@ def rebuild_mode1_sector(raw_sector: bytes | bytearray) -> bytes:
     validate_mode1_structure(raw_sector)
     rebuilt = bytearray(raw_sector)
     edc = compute_edc(rebuilt[:MODE1_EDC_OFFSET])
-    rebuilt[
-        MODE1_EDC_OFFSET:MODE1_RESERVED_OFFSET
-    ] = edc.to_bytes(4, "little")
+    rebuilt[MODE1_EDC_OFFSET:MODE1_RESERVED_OFFSET] = edc.to_bytes(4, "little")
     rebuilt[MODE1_RESERVED_OFFSET:MODE1_ECC_P_OFFSET] = bytes(8)
     rebuilt[MODE1_ECC_P_OFFSET:MODE1_ECC_Q_OFFSET] = _compute_ecc(
         rebuilt[12:MODE1_ECC_P_OFFSET],
@@ -383,14 +374,11 @@ def read_payload_range(
             image.seek(absolute_lba * RAW_SECTOR_SIZE)
             raw = image.read(RAW_SECTOR_SIZE)
             if len(raw) != RAW_SECTOR_SIZE:
-                raise ValueError(
-                    f"short read at absolute LBA {absolute_lba}"
-                )
+                raise ValueError(f"short read at absolute LBA {absolute_lba}")
             validate_mode1_structure(raw)
             if not mode1_integrity_matches(raw):
                 raise ValueError(
-                    f"original EDC/ECC mismatch at absolute LBA "
-                    f"{absolute_lba}"
+                    f"original EDC/ECC mismatch at absolute LBA {absolute_lba}"
                 )
 
             sector_payload_start = relative_sector * SECTOR_SIZE
@@ -399,16 +387,8 @@ def read_payload_range(
                 offset + size,
                 sector_payload_start + SECTOR_SIZE,
             )
-            raw_start = (
-                MODE1_USER_DATA_OFFSET
-                + overlap_start
-                - sector_payload_start
-            )
-            raw_end = (
-                MODE1_USER_DATA_OFFSET
-                + overlap_end
-                - sector_payload_start
-            )
+            raw_start = MODE1_USER_DATA_OFFSET + overlap_start - sector_payload_start
+            raw_end = MODE1_USER_DATA_OFFSET + overlap_end - sector_payload_start
             result.extend(raw[raw_start:raw_end])
 
     if len(result) != size:
@@ -445,13 +425,9 @@ def _validate_patch_set(
     previous_end = 0
     for index, patch in enumerate(ordered):
         if patch.end_offset > payload_size:
-            raise ValueError(
-                f"{patch.label}: patch ends beyond the payload"
-            )
+            raise ValueError(f"{patch.label}: patch ends beyond the payload")
         if index and patch.offset < previous_end:
-            raise ValueError(
-                f"{patch.label}: patch overlaps the previous replacement"
-            )
+            raise ValueError(f"{patch.label}: patch overlaps the previous replacement")
         previous_end = patch.end_offset
     return ordered
 
@@ -495,12 +471,9 @@ def _patch_sector_data(
         actual = bytes(sector_data[raw_start:raw_end])
         if actual != expected:
             raise ValueError(
-                f"{patch.label}: source bytes differ at payload "
-                f"0x{overlap_start:08X}"
+                f"{patch.label}: source bytes differ at payload 0x{overlap_start:08X}"
             )
-        sector_data[raw_start:raw_end] = patch.replacement[
-            patch_start:patch_end
-        ]
+        sector_data[raw_start:raw_end] = patch.replacement[patch_start:patch_end]
         edited_bytes += overlap_end - overlap_start
     return edited_bytes
 
@@ -565,14 +538,11 @@ def apply_payload_patches(
             image.seek(absolute_lba * RAW_SECTOR_SIZE)
             raw = image.read(RAW_SECTOR_SIZE)
             if len(raw) != RAW_SECTOR_SIZE:
-                raise ValueError(
-                    f"short read at absolute LBA {absolute_lba}"
-                )
+                raise ValueError(f"short read at absolute LBA {absolute_lba}")
             validate_mode1_structure(raw)
             if not mode1_integrity_matches(raw):
                 raise ValueError(
-                    f"original EDC/ECC mismatch at absolute LBA "
-                    f"{absolute_lba}"
+                    f"original EDC/ECC mismatch at absolute LBA {absolute_lba}"
                 )
 
             edited = bytearray(raw)

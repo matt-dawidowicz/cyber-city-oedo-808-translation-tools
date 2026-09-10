@@ -20,14 +20,11 @@ def resolve_source_paths(
     if source_ccd.suffix.lower() != ".ccd":
         raise ValueError("source path must name a .ccd file")
     paths = {
-        extension: source_ccd.with_suffix(extension)
-        for extension in source_hashes
+        extension: source_ccd.with_suffix(extension) for extension in source_hashes
     }
     for extension, path in paths.items():
         if not path.is_file():
-            raise ValueError(
-                f"missing CloneCD companion {extension}: {path}"
-            )
+            raise ValueError(f"missing CloneCD companion {extension}: {path}")
     return paths
 
 
@@ -43,8 +40,7 @@ def resolve_source_set(
         expected = source_hashes[extension]
         if actual != expected:
             raise ValueError(
-                f"{path.name}: SHA-256 mismatch; expected {expected}, "
-                f"found {actual}"
+                f"{path.name}: SHA-256 mismatch; expected {expected}, found {actual}"
             )
     return paths
 
@@ -91,16 +87,10 @@ def copy_authenticated_source_set(
         extension: destination_directory / f"{output_stem}{extension}"
         for extension in source_paths
     }
-    existing = [
-        path
-        for path in destinations.values()
-        if path.exists()
-    ]
+    existing = [path for path in destinations.values() if path.exists()]
     if existing:
         names = ", ".join(path.name for path in existing)
-        raise FileExistsError(
-            f"refusing to overwrite existing output file(s): {names}"
-        )
+        raise FileExistsError(f"refusing to overwrite existing output file(s): {names}")
     output_paths: dict[str, pathlib.Path] = {}
     created: list[pathlib.Path] = []
     try:

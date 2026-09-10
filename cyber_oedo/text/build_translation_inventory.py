@@ -60,10 +60,7 @@ def read_tsv(path: pathlib.Path) -> Iterator[dict[str, str]]:
 def auxiliary_quality(text: str) -> str:
     """Return the retained quality label for auxiliary text."""
 
-    has_halfwidth = any(
-        0xFF61 <= ord(character) <= 0xFF9F
-        for character in text
-    )
+    has_halfwidth = any(0xFF61 <= ord(character) <= 0xFF9F for character in text)
     suspicious_prefix = text.startswith(("`", "'"))
     if has_halfwidth or suspicious_prefix:
         return "review"
@@ -79,9 +76,7 @@ def _dialogue_occurrences(
     for row in read_tsv(path):
         offset = int(row["offset"], 16)
         if offset < previous:
-            raise ValueError(
-                f"{path}: rows are not sorted by offset"
-            )
+            raise ValueError(f"{path}: rows are not sorted by offset")
         previous = offset
         yield Occurrence(
             "dialogue",
@@ -105,9 +100,7 @@ def _auxiliary_occurrences(
     for row in read_tsv(path):
         offset = int(row["offset"], 16)
         if offset < previous:
-            raise ValueError(
-                f"{path}: rows are not sorted by offset"
-            )
+            raise ValueError(f"{path}: rows are not sorted by offset")
         previous = offset
         yield Occurrence(
             "auxiliary",
@@ -186,17 +179,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             source_text = occurrence.source_text
             canonical_id = canonical_ids.get(source_text)
             if canonical_id is None:
-                canonical_id = (
-                    f"T{len(canonical_ids) + 1:05d}"
-                )
+                canonical_id = f"T{len(canonical_ids) + 1:05d}"
                 canonical_ids[source_text] = canonical_id
             writer.writerow(
                 {
                     "entry_id": f"E{index:05d}",
                     "canonical_id": canonical_id,
-                    "occurrence_count": (
-                        occurrence_counts[source_text]
-                    ),
+                    "occurrence_count": (occurrence_counts[source_text]),
                     **occurrence.export_base(),
                     "english_translation": "",
                     "translator_notes": "",

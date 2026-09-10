@@ -48,9 +48,7 @@ def compare_and_hash_raw_images(
     source_size = source_image.stat().st_size
     output_size = output_image.stat().st_size
     if source_size != output_size:
-        raise ValueError(
-            f"IMG size changed: {source_size:,} != {output_size:,}"
-        )
+        raise ValueError(f"IMG size changed: {source_size:,} != {output_size:,}")
     if source_size % RAW_SECTOR_SIZE:
         raise ValueError("IMG size is not divisible by 2352")
 
@@ -98,15 +96,10 @@ def _replacement_slices(
                 len(patch.replacement) - checked,
                 SECTOR_SIZE - within_sector,
             )
-            replacement = patch.replacement[checked:checked + size]
-            indexed[relative_sector].append(
-                (within_sector, replacement, patch.label)
-            )
+            replacement = patch.replacement[checked : checked + size]
+            indexed[relative_sector].append((within_sector, replacement, patch.label))
             checked += size
-    return {
-        sector: tuple(items)
-        for sector, items in indexed.items()
-    }
+    return {sector: tuple(items) for sector, items in indexed.items()}
 
 
 def verify_output_patches(
@@ -124,19 +117,14 @@ def verify_output_patches(
             image.seek(absolute_lba * RAW_SECTOR_SIZE)
             raw = image.read(RAW_SECTOR_SIZE)
             if len(raw) != RAW_SECTOR_SIZE:
-                raise ValueError(
-                    f"short read at absolute LBA {absolute_lba}"
-                )
+                raise ValueError(f"short read at absolute LBA {absolute_lba}")
             validate_mode1_structure(raw)
             if not mode1_integrity_matches(raw):
                 raise ValueError(
-                    "rebuilt EDC/ECC mismatch at absolute LBA "
-                    f"{absolute_lba}"
+                    f"rebuilt EDC/ECC mismatch at absolute LBA {absolute_lba}"
                 )
             for within_sector, replacement, label in indexed[relative_sector]:
                 start = MODE1_USER_DATA_OFFSET + within_sector
                 end = start + len(replacement)
                 if raw[start:end] != replacement:
-                    raise ValueError(
-                        f"{label}: output verification failed"
-                    )
+                    raise ValueError(f"{label}: output verification failed")

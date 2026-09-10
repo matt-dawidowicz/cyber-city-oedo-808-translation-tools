@@ -23,7 +23,7 @@ import pathlib
 from PIL import Image
 
 
-from pce_graphics import decode_tile
+from cyber_oedo.graphics.pce_graphics import decode_tile
 
 
 def grayscale_palette() -> list[int]:

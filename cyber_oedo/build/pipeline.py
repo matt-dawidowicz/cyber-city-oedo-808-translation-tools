@@ -9,7 +9,7 @@ import pathlib
 import shutil
 import tempfile
 
-from cyber_oedo.build import engine
+from cyber_oedo.build.profiles import mission0_stock as profile
 from cyber_oedo.build.image_verify import (
     compare_and_hash_raw_images,
     verify_output_patches,
@@ -24,15 +24,13 @@ def build_human_test_disc(
     source_ccd: pathlib.Path,
     output_directory: pathlib.Path,
     *,
-    title_screen_mode: str = engine.DEFAULT_TITLE_SCREEN_MODE,
+    title_screen_mode: str = profile.DEFAULT_TITLE_SCREEN_MODE,
 ) -> pathlib.Path:
     """Build the guarded stock-renderer image with consolidated checks."""
 
     output_directory = output_directory.resolve()
     if output_directory.exists():
-        raise ValueError(
-            f"output directory already exists: {output_directory}"
-        )
+        raise ValueError(f"output directory already exists: {output_directory}")
 
     output_directory.parent.mkdir(parents=True, exist_ok=True)
     temporary = pathlib.Path(
@@ -45,32 +43,29 @@ def build_human_test_disc(
         source_paths, output_paths = copy_authenticated_source_set(
             source_ccd,
             temporary,
-            engine.OUTPUT_STEM,
-            engine.SOURCE_HASHES,
+            profile.OUTPUT_STEM,
+            profile.SOURCE_HASHES,
         )
-        title_patches = engine.optional_title_screen_patches(
+        title_patches = profile.optional_title_screen_patches(
             source_paths[".img"],
             title_screen_mode,
         )
         text_patches = tuple(
-            patch.to_payload_patch()
-            for patch in engine.HUMAN_TEST_PATCHES
+            patch.to_payload_patch() for patch in profile.HUMAN_TEST_PATCHES
         )
-        binary_patches = (
-            engine.HUMAN_TEST_BINARY_PATCHES + title_patches
-        )
+        binary_patches = profile.HUMAN_TEST_BINARY_PATCHES + title_patches
         payload_patches = text_patches + binary_patches
 
         sector_reports = apply_payload_patches(
             output_paths[".img"],
             payload_patches,
-            start_lba=engine.TRACK2_START_LBA,
-            sector_count=engine.TRACK2_SECTOR_COUNT,
+            start_lba=profile.TRACK2_START_LBA,
+            sector_count=profile.TRACK2_SECTOR_COUNT,
         )
         verify_output_patches(
             output_paths[".img"],
             payload_patches,
-            start_lba=engine.TRACK2_START_LBA,
+            start_lba=profile.TRACK2_START_LBA,
         )
 
         comparison = compare_and_hash_raw_images(
@@ -82,10 +77,7 @@ def build_human_test_disc(
             for report in sector_reports
             if report.before_sha256 != report.after_sha256
         )
-        expected_lbas = tuple(
-            report.absolute_lba
-            for report in changed_reports
-        )
+        expected_lbas = tuple(report.absolute_lba for report in changed_reports)
         if comparison.changed_lbas != expected_lbas:
             raise ValueError(
                 "unexpected changed sectors: expected "
@@ -98,45 +90,40 @@ def build_human_test_disc(
             ".sub": sha256_file(output_paths[".sub"]),
         }
         for extension in (".ccd", ".sub"):
-            if output_hashes[extension] != engine.SOURCE_HASHES[extension]:
+            if output_hashes[extension] != profile.SOURCE_HASHES[extension]:
                 raise ValueError(f"{extension} changed during build")
 
         manifest = {
-            "build_profile": engine.BUILD_PROFILE,
+            "build_profile": profile.BUILD_PROFILE,
             "title_screen_mode": title_screen_mode,
-            "created_utc": datetime.datetime.now(
-                datetime.timezone.utc
-            ).isoformat(),
+            "created_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "scope": (
                 "Same-size stock-renderer English vertical slice with "
                 "guarded text, layout, profile, Media Mix, and optional "
                 "title-screen patches; not a complete translation."
             ),
-            "source_hashes": engine.SOURCE_HASHES,
+            "source_hashes": profile.SOURCE_HASHES,
             "output_hashes": output_hashes,
             "image_bytes": output_paths[".img"].stat().st_size,
             "changed_absolute_lbas": list(comparison.changed_lbas),
             "changed_relative_sectors": [
-                report.relative_sector
-                for report in changed_reports
+                report.relative_sector for report in changed_reports
             ],
             "guarded_relative_sectors": [
-                report.relative_sector
-                for report in sector_reports
+                report.relative_sector for report in sector_reports
             ],
             "modified_sectors": [
-                dataclasses.asdict(report)
-                for report in changed_reports
+                dataclasses.asdict(report) for report in changed_reports
             ],
             "text_patches": text_patch_rows(
-                engine.HUMAN_TEST_PATCHES,
-                sector_size=engine.SECTOR_SIZE,
-                track_start_lba=engine.TRACK2_START_LBA,
+                profile.HUMAN_TEST_PATCHES,
+                sector_size=profile.SECTOR_SIZE,
+                track_start_lba=profile.TRACK2_START_LBA,
             ),
             "binary_patches": binary_patch_rows(
                 binary_patches,
-                sector_size=engine.SECTOR_SIZE,
-                track_start_lba=engine.TRACK2_START_LBA,
+                sector_size=profile.SECTOR_SIZE,
+                track_start_lba=profile.TRACK2_START_LBA,
             ),
             "verification": {
                 "source_hashes_match": True,
@@ -155,7 +142,7 @@ def build_human_test_disc(
         )
         ccd_name = output_paths[".ccd"].name
         (temporary / "HUMAN_TEST_README.txt").write_text(
-            engine.build_tester_readme(ccd_name, title_screen_mode),
+            profile.build_tester_readme(ccd_name, title_screen_mode),
             encoding="utf-8",
         )
         temporary.replace(output_directory)
@@ -163,4 +150,4 @@ def build_human_test_disc(
         shutil.rmtree(temporary, ignore_errors=True)
         raise
 
-    return output_directory / f"{engine.OUTPUT_STEM}.ccd"
+    return output_directory / f"{profile.OUTPUT_STEM}.ccd"

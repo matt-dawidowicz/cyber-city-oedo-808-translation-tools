@@ -85,9 +85,7 @@ class LiveSnapshot:
         if not isinstance(self.memory, bytes):
             raise TypeError("memory must be bytes")
         if len(self.memory) != CPU_ADDRESS_SPACE:
-            raise ValueError(
-                "logical CPU memory dump must be exactly 65536 bytes"
-            )
+            raise ValueError("logical CPU memory dump must be exactly 65536 bytes")
 
 
 def logical_to_physical(
@@ -123,14 +121,11 @@ def stream_pointer_from_memory(memory: bytes) -> int:
 def _decode_slot(memory: bytes, address: int) -> str:
     """Decode one null-terminated 13-byte Shift-JIS record slot."""
     data = bytes(
-        memory[(address + offset) & 0xFFFF]
-        for offset in range(INDEXED_TEXT_SLOT_BYTES)
+        memory[(address + offset) & 0xFFFF] for offset in range(INDEXED_TEXT_SLOT_BYTES)
     )
     terminator = data.find(b"\x00")
     if terminator < 0:
-        raise ValueError(
-            f"indexed text slot at ${address:04X} is not null-terminated"
-        )
+        raise ValueError(f"indexed text slot at ${address:04X} is not null-terminated")
     return data[:terminator].decode("shift_jis")
 
 
@@ -143,8 +138,7 @@ def prove_three_d_snapshot(snapshot: LiveSnapshot) -> dict[str, Any]:
         )
     if snapshot.a != THREE_D_OPCODE:
         raise ValueError(
-            f"expected A=${THREE_D_OPCODE:02X} after CMP #$3D; "
-            f"got ${snapshot.a:02X}"
+            f"expected A=${THREE_D_OPCODE:02X} after CMP #$3D; got ${snapshot.a:02X}"
         )
     active_page = snapshot.mprs[MISSION0_INTERPRETER_MPR_SLOT]
     if active_page != MISSION0_INTERPRETER_MPR:
@@ -164,9 +158,7 @@ def prove_three_d_snapshot(snapshot: LiveSnapshot) -> dict[str, Any]:
     selected_address = (record_address + selected_offset) & 0xFFFF
 
     primary_text = _decode_slot(snapshot.memory, record_address)
-    alternate_address = (
-        record_address + INDEXED_ALTERNATE_TEXT_OFFSET
-    ) & 0xFFFF
+    alternate_address = (record_address + INDEXED_ALTERNATE_TEXT_OFFSET) & 0xFFFF
     alternate_text = _decode_slot(snapshot.memory, alternate_address)
     selected_text = primary_text if selected_offset == 0 else alternate_text
 
@@ -188,9 +180,7 @@ def prove_three_d_snapshot(snapshot: LiveSnapshot) -> dict[str, Any]:
         "operands": {
             "arg0": f"0x{arg0:02X}",
             "arg1": f"0x{arg1:02X}",
-            "arg0_semantics": (
-                "read-and-discarded by the proven Mission 0 handler"
-            ),
+            "arg0_semantics": ("read-and-discarded by the proven Mission 0 handler"),
             "arg1_semantics": "one-based 32-byte indexed-record selector",
         },
         "record": {
@@ -218,8 +208,7 @@ def load_snapshot(
     if not isinstance(raw_mprs, list):
         raise ValueError("snapshot metadata must contain an mprs array")
     mprs = tuple(
-        _parse_number(value, f"mprs[{index}]")
-        for index, value in enumerate(raw_mprs)
+        _parse_number(value, f"mprs[{index}]") for index, value in enumerate(raw_mprs)
     )
     return LiveSnapshot(
         pc=_parse_number(metadata["pc"], "pc"),

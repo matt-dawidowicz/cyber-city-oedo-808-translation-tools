@@ -1,15 +1,13 @@
 """Native hot loops for large binary reconnaissance scans.
 
-The public scanners process an 84 MiB payload.  Per-byte Python loops dominate
-that workload, so the deterministic token state machines live in Numba-compiled
-functions while formatting and file I/O remain ordinary Python.  The routines
-below preserve the toolkit's conservative Shift-JIS byte model exactly.
+The public scanners process an 84 MiB payload. Per-byte Python loops dominate
+that workload, so deterministic token state machines live in Numba-compiled
+functions while formatting and file I/O remain ordinary Python.
 """
 
 from __future__ import annotations
 
 import math
-import unicodedata
 
 import numpy as np
 from numba import njit
@@ -71,12 +69,7 @@ def _count_broad_sjis_runs(data, minimum_japanese):
         japanese = 0
         while offset < size:
             first = data[offset]
-            if (
-                0x20 <= first <= 0x7E
-                or first == 0x09
-                or first == 0x0A
-                or first == 0x0D
-            ):
+            if 0x20 <= first <= 0x7E or first == 0x09 or first == 0x0A or first == 0x0D:
                 offset += 1
             elif 0xA1 <= first <= 0xDF:
                 japanese += 1
@@ -85,8 +78,7 @@ def _count_broad_sjis_runs(data, minimum_japanese):
                 (0x81 <= first <= 0x9F or 0xE0 <= first <= 0xEF)
                 and offset + 1 < size
                 and (
-                    0x40 <= data[offset + 1] <= 0x7E
-                    or 0x80 <= data[offset + 1] <= 0xFC
+                    0x40 <= data[offset + 1] <= 0x7E or 0x80 <= data[offset + 1] <= 0xFC
                 )
             ):
                 japanese += 1
@@ -117,12 +109,7 @@ def _fill_broad_sjis_runs(
         japanese = 0
         while offset < size:
             first = data[offset]
-            if (
-                0x20 <= first <= 0x7E
-                or first == 0x09
-                or first == 0x0A
-                or first == 0x0D
-            ):
+            if 0x20 <= first <= 0x7E or first == 0x09 or first == 0x0A or first == 0x0D:
                 offset += 1
             elif 0xA1 <= first <= 0xDF:
                 japanese += 1
@@ -131,8 +118,7 @@ def _fill_broad_sjis_runs(
                 (0x81 <= first <= 0x9F or 0xE0 <= first <= 0xEF)
                 and offset + 1 < size
                 and (
-                    0x40 <= data[offset + 1] <= 0x7E
-                    or 0x80 <= data[offset + 1] <= 0xFC
+                    0x40 <= data[offset + 1] <= 0x7E or 0x80 <= data[offset + 1] <= 0xFC
                 )
             ):
                 japanese += 1
@@ -241,8 +227,7 @@ def _scan_likely_sjis_native(
                 (0x81 <= first <= 0x9F or 0xE0 <= first <= 0xEF)
                 and offset + 1 < size
                 and (
-                    0x40 <= data[offset + 1] <= 0x7E
-                    or 0x80 <= data[offset + 1] <= 0xFC
+                    0x40 <= data[offset + 1] <= 0x7E or 0x80 <= data[offset + 1] <= 0xFC
                 )
             ):
                 key = data[offset + 1] | (first << 8)
@@ -284,23 +269,13 @@ def _scan_likely_sjis_native(
             if not (ascii_printable > 2 and fullwidth < 4):
                 kana = hiragana + katakana
                 natural_sentence = (
-                    tokens >= 8
-                    and kana >= 3
-                    and 100 * kana >= 20 * tokens
+                    tokens >= 8 and kana >= 3 and 100 * kana >= 20 * tokens
                 )
                 japanese_label = (
-                    tokens >= 5
-                    and kana >= 2
-                    and 100 * (kana + kanji) >= 60 * tokens
+                    tokens >= 5 and kana >= 2 and 100 * (kana + kanji) >= 60 * tokens
                 )
-                fullwidth_label = (
-                    fullwidth >= 5 and ascii_printable == 0
-                )
-                plausible = (
-                    natural_sentence
-                    or japanese_label
-                    or fullwidth_label
-                )
+                fullwidth_label = fullwidth >= 5 and ascii_printable == 0
+                plausible = natural_sentence or japanese_label or fullwidth_label
         if plausible:
             if write_output:
                 starts[output_index] = start
@@ -350,93 +325,5 @@ def likely_sjis_runs(data: object, minimum_tokens: int):
         if filled != count:
             raise AssertionError("likely Shift-JIS run count changed")
         return starts, ends, metrics
-    finally:
-        del view
-
-
-def _build_reversed_codepoints():
-    """Keep only reversed pairs that decode to plausible Japanese symbols."""
-
-    result = np.full(65536, -1, dtype=np.int32)
-    valid_keys = np.flatnonzero(_PAIR_CODEPOINT >= 0)
-    for key in valid_keys:
-        codepoint = int(_PAIR_CODEPOINT[key])
-        character = chr(codepoint)
-        if (
-            0x3000 <= codepoint <= 0x30FF
-            or 0x3400 <= codepoint <= 0x4DBF
-            or 0x4E00 <= codepoint <= 0x9FFF
-            or 0xFF01 <= codepoint <= 0xFF60
-            or unicodedata.category(character).startswith("P")
-        ):
-            result[key] = codepoint
-    return result
-
-
-_REVERSED_CODEPOINT = _build_reversed_codepoints()
-
-
-@njit(cache=True)
-def _scan_reversed_native(
-    data,
-    minimum,
-    lookup,
-    starts,
-    ends,
-    write_output,
-):
-    """Find aligned plausible reversed-pair runs in compiled code."""
-
-    size = data.size
-    output_index = 0
-    for alignment in range(2):
-        offset = alignment
-        while offset + 1 < size:
-            start = offset
-            characters = 0
-            while offset + 1 < size:
-                key = data[offset] | (data[offset + 1] << 8)
-                if lookup[key] < 0:
-                    break
-                characters += 1
-                offset += 2
-            if characters >= minimum:
-                if write_output:
-                    starts[output_index] = start
-                    ends[output_index] = offset
-                output_index += 1
-            offset = max(offset + 2, start + 2)
-    return output_index
-
-
-def reversed_sjis_runs(data: object, minimum: int):
-    """Return reversed-pair run coordinates without Python per-pair loops."""
-
-    if minimum <= 0:
-        raise ValueError("minimum must be positive")
-    view = np.frombuffer(data, dtype=np.uint8)  # type: ignore[arg-type]
-    dummy = np.empty(1, dtype=np.int64)
-    try:
-        count = _scan_reversed_native(
-            view,
-            minimum,
-            _REVERSED_CODEPOINT,
-            dummy,
-            dummy,
-            False,
-        )
-        starts = np.empty(count, dtype=np.int64)
-        ends = np.empty(count, dtype=np.int64)
-        filled = _scan_reversed_native(
-            view,
-            minimum,
-            _REVERSED_CODEPOINT,
-            starts,
-            ends,
-            True,
-        )
-        if filled != count:
-            raise AssertionError("reversed Shift-JIS run count changed")
-        return starts, ends
     finally:
         del view

@@ -31,11 +31,8 @@ def encode_tile(pixels: Sequence[int]) -> bytes:
     """
 
     if len(pixels) != 64:
-        raise ValueError(
-            "A PC Engine 4bpp tile must contain exactly 64 pixels"
-        )
-    if any(not isinstance(pixel, int) or not 0 <= pixel <= 15
-           for pixel in pixels):
+        raise ValueError("A PC Engine 4bpp tile must contain exactly 64 pixels")
+    if any(not isinstance(pixel, int) or not 0 <= pixel <= 15 for pixel in pixels):
         raise ValueError("Tile pixels must be integer palette indexes 0-15")
 
     encoded = bytearray(32)
@@ -84,8 +81,7 @@ def decode_tile(tile: bytes) -> list[int]:
         for x in range(8):
             mask = 0x80 >> x
             value = sum(
-                ((plane & mask) != 0) << bit
-                for bit, plane in enumerate(planes)
+                ((plane & mask) != 0) << bit for bit, plane in enumerate(planes)
             )
             pixels.append(value)
     return pixels

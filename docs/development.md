@@ -1,90 +1,163 @@
 # Development and maintenance guide
 
-## Purpose
+## Supported architecture
 
-The repository now has two compatible operator surfaces:
+The repository has one maintained Python implementation surface: the
+`cyber_oedo` package.
 
-1. the historical root scripts, such as `python extract_dialogue.py ...`; and
-2. the installable `cyber-oedo` command, such as
-   `cyber-oedo extract-dialogue ...`.
+Operators should use either:
 
-The unified command forwards arguments to the existing scripts rather than
-rewriting their command-line parsers. This keeps the modernization low risk and
-provides a stable entry point for future internal package moves.
+```bash
+cyber-oedo <command> ...
+```
 
-## Editable installation
+or:
 
-From the repository root:
+```bash
+python -m cyber_oedo <command> ...
+```
 
-```powershell
+Historical root-level script wrappers were transitional migration scaffolding
+and are no longer part of the supported architecture. Package code must not
+import them or recreate equivalent duplicate modules.
+
+## Environment
+
+Create an editable development environment with:
+
+```bash
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-The base project has no mandatory third-party runtime dependency. Pillow remains
-optional for graphics work and is provided by the `graphics` and `dev` extras.
+The core package requires NumPy and Numba because the reconnaissance scanners
+process the complete 84 MiB Track 2 payload in compiled/vectorized hot loops.
+Pillow is optional for graphics commands and is provided by the `graphics` and
+`dev` extras.
+
+`pyproject.toml` is the authoritative dependency declaration. Do not add a
+second `requirements.txt` dependency surface.
 
 ## Daily quality gate
 
-Run these checks before committing:
+Run:
 
-```powershell
-python -m unittest discover -s .\tests -v
-python -m compileall -q .
+```bash
+python -m ruff check cyber_oedo tests
+python -m unittest discover -s tests -v
+python -m compileall -q cyber_oedo tests
 python -m cyber_oedo doctor
 ```
 
-Before changing packaging or the public command surface, build both supported
-distribution formats:
+Before packaging or command-surface changes, also run:
 
-```powershell
-python -m build --outdir .\dist
+```bash
+python -m build --outdir dist
 ```
 
-CI repeats these checks on Windows and Linux for the oldest supported Python
-minor version and a current Python minor version. It then force-installs the
-built wheel and runs `python -m cyber_oedo --help` plus `doctor` from outside
-the checkout. That last step is important: an editable source tree can hide
-missing package files that a real wheel install would expose.
+Ruff handles generic Python correctness/style checks. Unit tests should encode
+project behavior and architecture, not reimplement a general-purpose linter.
 
-CI runs once for each pull-request commit and for pushes to `main`. Superseded
-runs on the same ref are cancelled so rapid maintenance commits do not waste
-runner capacity.
+## CI
+
+Pull requests run the maintained checks on Ubuntu with both Python 3.11 and
+3.13. CI also builds source and wheel distributions and force-installs the wheel
+outside the checkout before running `python -m cyber_oedo --help` and `doctor`.
+This prevents an editable checkout from hiding missing package files.
+
+A Windows/Linux compatibility matrix remains available for manual/release
+validation.
+
+## Package ownership
+
+Use package imports that reflect the actual responsibility:
+
+- `cyber_oedo.disc` for CloneCD geometry, Mode 1 integrity, extraction, and raw
+  patch primitives;
+- `cyber_oedo.script` for typed dialogue bytecode;
+- `cyber_oedo.text` for text extraction, layout, inventory, and relocation;
+- `cyber_oedo.resources` for resource evidence;
+- `cyber_oedo.runtime` for Tier-B static/live runtime proof;
+- `cyber_oedo.graphics` for PCE tile/title tooling;
+- `cyber_oedo.build` for patch planning, authenticated builds, manifests, and
+  verification;
+- `cyber_oedo.build.profiles` for immutable game/profile-specific patch data.
+
+Avoid catch-all modules. If a file combines large translation datasets with
+I/O, binary mutation, presentation, and CLI behavior, split those concerns
+before adding more functionality.
+
+## Build-profile changes
+
+The stock build is deliberately decomposed:
+
+- `build/profiles/models.py` owns typed patch/data models;
+- `build/profiles/startup.py` owns startup, mission-title, and Mission 0 text;
+- `build/profiles/dossiers.py` owns opening dossier content/layout;
+- `build/profiles/media_mix.py` owns Media Mix content/layout;
+- `build/profiles/mission0_stock.py` assembles the maintained vertical-slice
+  profile;
+- `build/plan.py` produces source-independent patch plans;
+- `build/pipeline.py` performs authenticated copy/patch/verification work.
+
+A profile-data edit should not require touching raw-sector machinery. A
+raw-sector implementation change should not require editing translation data.
 
 ## Real-disc validation gate
 
-Synthetic tests are necessary but cannot prove title-specific image behavior.
-Run the local authenticated workflow when a change touches any of the following:
+Synthetic tests cannot prove title-specific disc behavior. Run authenticated
+local validation when a change touches:
 
 - source hashes or CloneCD path handling;
-- payload or raw-sector coordinate conversion;
-- patch coordinates, expected bytes, or replacement bytes;
+- raw/payload coordinate conversion;
+- expected or replacement bytes;
 - EDC/ECC regeneration;
-- dialogue record extraction semantics;
-- resource boundary or relocation logic; or
-- title-screen or palette insertion.
+- dialogue record semantics;
+- resource boundaries or relocation logic;
+- title/palette insertion; or
+- runtime-engine mutation.
 
-For changes that can alter generated analysis data, compare the old and new
-artifacts rather than checking only whether generation succeeds. At minimum,
-compare record counts, offset sets, schema headers, and stable hashes where they
-are already documented.
+For analysis changes, compare old/new generated artifacts: record counts, offset
+sets, schemas, and stable hashes where available.
 
-## Compatibility policy
+For build changes, compare the deterministic patch plan before producing a disc
+and then compare the final raw-sector footprint. A cleanup/refactor must not
+silently broaden the changed sector set.
 
-Root scripts are compatibility entry points. They should continue working while
-implementation code moves under `cyber_oedo/` in later refactors. A future
-removal requires a documented deprecation period and a migration note.
+## Reverse-engineering discipline
 
-The unified command is the preferred automation surface because its command
-names can remain stable even if Python module paths change internally.
+Do not convert observations into stronger claims than the evidence supports.
+In particular:
 
-## Packaging boundary
+- string occurrence does not prove runtime reachability;
+- padding does not prove writable ownership;
+- zero-filled code/data space is not automatically a code cave;
+- a logical HuC6280 address is ambiguous without its MPR mapping;
+- emulator bootability does not replace exact source guards or structural
+  verification.
 
-The first package release intentionally installs existing root modules as
-`py-modules`. That is transitional architecture, not the desired final layout.
-It gives downstream users an installable environment without duplicating or
-moving verified binary logic in the same change.
+Tier A owns structural facts. Tier B owns runtime semantics and ownership/lifetime
+proof. Tier C may activate translation mutations only after the relevant Tier-B
+gates are satisfied.
 
-See `docs/modernization_roadmap.md` for the planned internal migration.
+See `game_architecture_and_translation_strategy.md` for the rationale.
+
+## Translation changes
+
+Translation wording and reverse-engineering mechanics should remain separable.
+Translator-facing text belongs in the inventory/profile data with notes and
+context; engine code should not contain ad hoc prose substitutions.
+
+Use the OVA for established continuity, terminology, and characterization where
+appropriate, but translate the Japanese game source. Do not import dub-only
+rewrites simply to make the game resemble the English dub.
+
+## Removing code
+
+Prefer deletion over permanent compatibility scaffolding when an experiment is
+finished or disproven. Git history is the archive.
+
+Historical failure documentation can remain when it prevents repetition of a
+bad design; executable implementations of abandoned designs should not remain
+registered as supported commands.

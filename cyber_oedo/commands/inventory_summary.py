@@ -71,12 +71,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = build_parser().parse_args(argv)
     indent = None if args.compact else 2
-    text = json.dumps(
-        summarize(args.inventory),
-        ensure_ascii=False,
-        sort_keys=True,
-        indent=indent,
-    ) + "\n"
+    text = (
+        json.dumps(
+            summarize(args.inventory),
+            ensure_ascii=False,
+            sort_keys=True,
+            indent=indent,
+        )
+        + "\n"
+    )
     if args.output is None:
         print(text, end="")
         return 0

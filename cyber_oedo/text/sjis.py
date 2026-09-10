@@ -99,9 +99,7 @@ def ascii_to_fullwidth(text: str) -> str:
         elif 0x21 <= codepoint <= 0x7E:
             converted.append(chr(codepoint + 0xFEE0))
         else:
-            raise ValueError(
-                f"unsupported non-printable ASCII character {character!r}"
-            )
+            raise ValueError(f"unsupported non-printable ASCII character {character!r}")
     return "".join(converted)
 
 

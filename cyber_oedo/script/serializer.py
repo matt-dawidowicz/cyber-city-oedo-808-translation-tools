@@ -16,9 +16,7 @@ def serialize_dialogue_body(body: DialogueBody) -> bytes:
         elif isinstance(node, ControlCommand):
             output.extend(node.raw)
         else:  # pragma: no cover - defensive against invalid runtime unions.
-            raise TypeError(
-                f"unsupported dialogue node {type(node)!r}"
-            )
+            raise TypeError(f"unsupported dialogue node {type(node)!r}")
     output.append(DIALOGUE_TERMINATOR)
     return bytes(output)
 

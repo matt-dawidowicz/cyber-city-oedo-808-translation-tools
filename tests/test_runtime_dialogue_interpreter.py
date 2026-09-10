@@ -88,9 +88,9 @@ class RuntimeDialogueInterpreterTests(unittest.TestCase):
             record = bytearray(INDEXED_RECORD_STRIDE)
             primary = f"P{index + 1:02d}".encode("shift_jis")
             alternate = f"A{index + 1:02d}".encode("shift_jis")
-            record[:len(primary)] = primary
+            record[: len(primary)] = primary
             start = INDEXED_ALTERNATE_TEXT_OFFSET
-            record[start:start + len(alternate)] = alternate
+            record[start : start + len(alternate)] = alternate
             records.append(record)
         records[5][INDEXED_STATE_OFFSET] = 0x7F
         table = b"".join(records) + b"\x00"
@@ -100,7 +100,7 @@ class RuntimeDialogueInterpreterTests(unittest.TestCase):
             path = pathlib.Path(directory) / "payload.bin"
             source_offset = indexed_table_source_offset()
             payload = bytearray(source_offset + len(table))
-            payload[source_offset:source_offset + len(table)] = table
+            payload[source_offset : source_offset + len(table)] = table
             path.write_bytes(payload)
             evidence = indexed_table_evidence(path)
 
@@ -118,15 +118,14 @@ class RuntimeDialogueInterpreterTests(unittest.TestCase):
         payload = bytearray(size)
         for region in RUNTIME_REGIONS:
             offset = region.payload_offset
-            payload[offset:offset + len(region.expected)] = region.expected
+            payload[offset : offset + len(region.expected)] = region.expected
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "payload.bin"
             path.write_bytes(payload)
             results = validate_runtime_regions(path)
         self.assertTrue(all(item["matched"] for item in results))
         zero_region = next(
-            item for item in results
-            if item["name"] == "historical_zero_region"
+            item for item in results if item["name"] == "historical_zero_region"
         )
         self.assertFalse(zero_region["ownership_proven"])
 
@@ -137,7 +136,7 @@ class RuntimeDialogueInterpreterTests(unittest.TestCase):
         payload = bytearray(size)
         for region in RUNTIME_REGIONS:
             offset = region.payload_offset
-            payload[offset:offset + len(region.expected)] = region.expected
+            payload[offset : offset + len(region.expected)] = region.expected
         first = RUNTIME_REGIONS[0]
         payload[first.payload_offset] ^= 0xFF
         with tempfile.TemporaryDirectory() as directory:

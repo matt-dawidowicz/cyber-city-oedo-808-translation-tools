@@ -1,0 +1,329 @@
+"""Startup, mission-title, and Mission 0 stock-renderer text data."""
+
+from __future__ import annotations
+
+from cyber_oedo.build.profiles.models import InPlaceTextPatch
+
+
+PROLOGUE_WRAP_WIDTH = 11
+
+
+BOOT_MENU_PATCHES: tuple[InPlaceTextPatch, ...] = (
+    InPlaceTextPatch(6955, "ＮＯＴＩＣＥ：注意", "TEST DISC", "startup notice heading"),
+    InPlaceTextPatch(
+        6977,
+        "このゲームはＭＩＳＳＩＯＮ０からＭＩＳＳＯＮ８までの",
+        "THIS GAME HAS 9 MISSIONS",
+        "startup notice line 1",
+    ),
+    InPlaceTextPatch(
+        7033,
+        "全９パートから構成されています。",
+        "HUMAN TEST BUILD",
+        "startup notice line 2",
+    ),
+    InPlaceTextPatch(
+        7069,
+        "ひとつのＭＩＳＳＯＮが終了するまで途中セーブは出来ません。",
+        "SAVE ONLY AFTER EACH MISSION",
+        "startup notice save rule",
+    ),
+    InPlaceTextPatch(
+        7131,
+        "バックアップメモリは充分に余っていますか？",
+        "BACKUP MEMORY READY?",
+        "startup notice memory prompt",
+    ),
+    InPlaceTextPatch(
+        7177,
+        "メモリが足りないとセーブできません！",
+        "NO SPACE TO SAVE!",
+        "startup notice memory warning",
+    ),
+    InPlaceTextPatch(7235, "（最初から）", "(NEW)", "new game menu explanation"),
+    InPlaceTextPatch(
+        7271, "（セーブしたところから）", "(FROM SAVE)", "data load menu explanation"
+    ),
+    InPlaceTextPatch(
+        7325, "（空きメモリーの確認）", "FREE SPACE", "memory check menu explanation"
+    ),
+    InPlaceTextPatch(
+        7351,
+        "項目を選んでＩボタンを押して下さい。",
+        "CHOOSE AND PRESS I",
+        "main menu instruction",
+    ),
+    InPlaceTextPatch(
+        7562, "データをロードします。", "LOADING...", "load screen action"
+    ),
+    InPlaceTextPatch(
+        7588, "ファイル名を選んで下さい。", "CHOOSE FILE", "load screen file prompt"
+    ),
+    InPlaceTextPatch(7698, "ＯＫならば", "IF OK", "load confirmation condition"),
+    InPlaceTextPatch(
+        7712, "Ｉボタンを押して下さい。", "PRESS I NOW", "load confirmation instruction"
+    ),
+    InPlaceTextPatch(7903, "この状態では", "CANNOT", "new game save warning line 1"),
+    InPlaceTextPatch(
+        7919, "セーブができません。", "NO SAVING", "new game save warning line 2"
+    ),
+    InPlaceTextPatch(
+        7943, "このままスタートしますか？", "START NOW?", "new game confirmation"
+    ),
+    InPlaceTextPatch(
+        7973, "スタートするときは", "TO START", "new game instruction line 1"
+    ),
+    InPlaceTextPatch(
+        7995, "Ｉボタンを押して下さい。", "PRESS I NOW", "new game instruction line 2"
+    ),
+    InPlaceTextPatch(
+        8188, "ファイルが有りません。", "NO FILE", "missing save file error"
+    ),
+    InPlaceTextPatch(
+        8379, "メモリーが壊れています。", "MEMORY ERROR", "damaged memory error"
+    ),
+    InPlaceTextPatch(
+        8578, "ＯＥＤＯ８０８ファイルは", "OEDO808 FILE", "memory file check line 1"
+    ),
+    InPlaceTextPatch(
+        8606, "正しく存在しています。", "FILE OK", "memory file check line 2"
+    ),
+)
+
+
+STARTUP_V2_EXTRA_PATCHES: tuple[InPlaceTextPatch, ...] = (
+    InPlaceTextPatch(
+        8803, "ＯＥＤＯ８０８ファイルは", "OEDO808 FILE", "memory creation line 1"
+    ),
+    InPlaceTextPatch(8831, "作成可能です。", "CAN USE", "memory creation line 2"),
+    InPlaceTextPatch(
+        9020,
+        "空きメモリーが足りません。",
+        "NO FREE SPACE",
+        "insufficient memory line 1",
+    ),
+    InPlaceTextPatch(
+        9050,
+        "何かファイルを消して下さい。",
+        "DELETE A FILE",
+        "insufficient memory line 2",
+    ),
+    InPlaceTextPatch(
+        9253, "ＯＥＤＯ８０８ファイルが", "OEDO808 FILE", "damaged game file line 1"
+    ),
+    InPlaceTextPatch(9281, "壊れています。", "IS BAD", "damaged game file line 2"),
+    InPlaceTextPatch(
+        9299, "いったん削除してから", "DELETE IT", "damaged game file recovery line 1"
+    ),
+    InPlaceTextPatch(
+        9323, "スタートして下さい。", "THEN START", "damaged game file recovery line 2"
+    ),
+    InPlaceTextPatch(
+        9518,
+        "フォーマットされていません。",
+        "NOT FORMATTED",
+        "unformatted memory line 1",
+    ),
+    InPlaceTextPatch(
+        9550, "フォーマットしてから", "FORMAT IT", "unformatted memory recovery line 1"
+    ),
+    InPlaceTextPatch(
+        9574, "スタートして下さい。", "THEN START", "unformatted memory recovery line 2"
+    ),
+)
+
+
+MISSION_TITLE_PATCHES: tuple[InPlaceTextPatch, ...] = (
+    InPlaceTextPatch(
+        13705275, "\u3000\u3000【大使護衛】", " [GUARD]", "Mission 1 title subtitle"
+    ),
+    InPlaceTextPatch(
+        24910805, "\u3000【機密ファイル】", " [SECRET]", "Mission 2 title subtitle"
+    ),
+    InPlaceTextPatch(
+        36094011, "\u3000\u3000\u3000【容疑者】", " [SUSP.]", "Mission 3 title subtitle"
+    ),
+    InPlaceTextPatch(
+        45261637, "\u3000\u3000【連続殺人】", " [KILLS]", "Mission 4 title subtitle"
+    ),
+    InPlaceTextPatch(
+        53889857, "\u3000【不破博士失跡】", " [FUWA?]", "Mission 5 title subtitle"
+    ),
+    InPlaceTextPatch(
+        62137162, "\u3000\u3000【赤毛と青目】", " [R+B]", "Mission 6 title subtitle"
+    ),
+    InPlaceTextPatch(
+        69794673, "\u3000\u3000\u3000【誘拐】", " [KID]", "Mission 7 title subtitle"
+    ),
+    InPlaceTextPatch(
+        75338561,
+        "\u3000【不破博士失跡】",
+        " [FUWA?]",
+        "Mission 5 duplicate title subtitle",
+    ),
+    InPlaceTextPatch(
+        75838282,
+        "\u3000\u3000【赤毛と青目】",
+        " [R+B]",
+        "Mission 6 duplicate title subtitle",
+    ),
+    InPlaceTextPatch(
+        75850545, "\u3000\u3000\u3000【アジト】", " [LAIR]", "Mission 8 title subtitle"
+    ),
+)
+
+
+MISSION0_DIALOGUE_PATCHES: tuple[InPlaceTextPatch, ...] = (
+    InPlaceTextPatch(
+        1333394,
+        "バーテン「いらっしゃいませ」",
+        "Bart: Welcome.",
+        "Mission 0 bartender greeting",
+    ),
+    InPlaceTextPatch(
+        1333432,
+        "バーテン「お客さん、この辺は初めてでしょう。",
+        "Bart: First time?",
+        "Mission 0 bartender newcomer question",
+    ),
+    InPlaceTextPatch(
+        1333477,
+        "いや、なに、顔を見りゃそれぐらいわかりますよ」",
+        "Your face gave it away.",
+        "Mission 0 bartender newcomer answer",
+    ),
+    InPlaceTextPatch(
+        1333531,
+        "バーテン「いったいどの辺から来なさったんです？\u3000おっと、つまらないこと聞いちまいましたね」",
+        "Bart: Where from? Never mind. Bad question.",
+        "Mission 0 bartender origin question",
+    ),
+    InPlaceTextPatch(
+        1333637,
+        "バーテン「ところで、あちらのお嬢さん、気を付けた方がいいですよ。どうも賞金稼ぎらしいですからね。ま、これは忠告ってやつです」",
+        "Bart: Watch that girl. Bounty hunter. Friendly warning.",
+        "Mission 0 bartender bounty hunter warning",
+    ),
+    InPlaceTextPatch(
+        1333767,
+        "バーテン「いやなに、わたしは最初からあんたも賞金稼ぎなんじゃないかと思ってたんですよ」",
+        "Bart: I knew you were a bounty hunter too.",
+        "Mission 0 bartender recognizes player",
+    ),
+    InPlaceTextPatch(
+        1333861,
+        "バーテン「ご注文は？」",
+        "Your order?",
+        "Mission 0 bartender order prompt",
+    ),
+    InPlaceTextPatch(
+        1333892,
+        "バーテン「無法地帯？\u3000とんでもない。ここにはここの法があるんですよ」",
+        "Lawless? No. We have our own law.",
+        "Mission 0 bartender law response",
+    ),
+    InPlaceTextPatch(
+        1333964,
+        "バーテン「この上の新市街にある茶色のビルがその本部でさあ」",
+        "HQ is in the brown building.",
+        "Mission 0 bartender headquarters response",
+    ),
+    InPlaceTextPatch(
+        1334026,
+        "バーテン「保安隊？\u3000命が惜しかったら、そんなことはかぎ回らないに限ると思いますがね」",
+        "Security? If you value life, do not ask.",
+        "Mission 0 bartender security response",
+    ),
+    InPlaceTextPatch(
+        1334114,
+        "バーテン「さあ、ちょっと知りませんね」",
+        "Bart: No idea.",
+        "Mission 0 bartender unknown response",
+    ),
+    InPlaceTextPatch(
+        1334156,
+        "俺は少し待ってみることにした。",
+        "I waited a bit.",
+        "Mission 0 wait narration",
+    ),
+    InPlaceTextPatch(
+        1334187, "……だが何も起こらなかった。", "Nothing.", "Mission 0 wait result"
+    ),
+    InPlaceTextPatch(
+        1334230, "バーテン「またどうぞ」", "Come again.", "Mission 0 bartender farewell"
+    ),
+)
+
+
+MISSION0_PROLOGUE_PATCHES: tuple[InPlaceTextPatch, ...] = (
+    InPlaceTextPatch(
+        1529898,
+        "「俺の名はセンゴク、一匹狼の賞金稼ぎ。",
+        "Sengoku. Loner.",
+        "Mission 0 prologue introduction",
+        wrap_width=PROLOGUE_WRAP_WIDTH,
+    ),
+    InPlaceTextPatch(
+        1529937,
+        "ならず者の電脳犯罪者どもを片っ端から捕まえて警察に引き渡すのが俺の仕事だ。",
+        "I hunt crooks and turn them in.",
+        "Mission 0 opening narration job description",
+        wrap_width=PROLOGUE_WRAP_WIDTH,
+    ),
+    InPlaceTextPatch(
+        1530012,
+        "クリス・ダンフォード、コードネーム『バラ発疹』、",
+        "Danford aka Rose Rash,",
+        "Mission 0 prologue target name",
+        wrap_width=PROLOGUE_WRAP_WIDTH,
+    ),
+    InPlaceTextPatch(
+        1530061,
+        "こいつを追いかけて上海からＯＥＤＯに７年ぶりに舞い戻ってきた。",
+        "His trail led me back to Oedo.",
+        "Mission 0 prologue return to Oedo",
+        wrap_width=PROLOGUE_WRAP_WIDTH,
+    ),
+    InPlaceTextPatch(
+        1530124,
+        "だが、この７年の間に俺の知っていたＯＥＤＯ、特に犯罪者たちのたむろする旧市街はすっかり様子が変わってしまっていた。",
+        "Seven years changed Oedo. Old City most of all.",
+        "Mission 0 prologue changed city",
+        wrap_width=PROLOGUE_WRAP_WIDTH,
+    ),
+    InPlaceTextPatch(
+        1530239,
+        "電警−電脳警察−の下部組織だった保安隊が勢力を増し、旧市街全体を飲み込もうとしている。",
+        "Security Force takes Old City.",
+        "Mission 0 prologue Security Force expansion",
+        wrap_width=PROLOGUE_WRAP_WIDTH,
+    ),
+    InPlaceTextPatch(
+        1530326,
+        "街には武器が溢れ、以前よりずっと物騒な気配が漂っている。",
+        "More guns. It's worse.",
+        "Mission 0 prologue dangerous streets",
+        wrap_width=PROLOGUE_WRAP_WIDTH,
+    ),
+    InPlaceTextPatch(
+        1530383,
+        "この世界最大の都市で何かが始まろうとしている。",
+        "It begins.",
+        "Mission 0 prologue impending event",
+        wrap_width=PROLOGUE_WRAP_WIDTH,
+    ),
+    InPlaceTextPatch(
+        1530430,
+        "俺が仕掛けたワナをいつもすりぬけるＡ級の電脳犯罪者、",
+        "Top crooks evade me,",
+        "Mission 0 prologue rival criminals",
+        wrap_width=PROLOGUE_WRAP_WIDTH,
+    ),
+    InPlaceTextPatch(
+        1530483,
+        "『ベンテン』と『ゴーグル』も、この街にやって来ているらしい。奴らの狙いは……？\u3000なにはともあれ調べてみるか」",
+        "Benten. Goggles. Here. Why? I'll look.",
+        "Mission 0 prologue Benten and Goggles",
+        wrap_width=PROLOGUE_WRAP_WIDTH,
+    ),
+)

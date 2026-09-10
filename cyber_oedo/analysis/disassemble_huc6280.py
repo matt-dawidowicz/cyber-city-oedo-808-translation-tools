@@ -116,9 +116,7 @@ def _build_opcode_table() -> tuple[tuple[str, str], ...]:
     for row_number, row in enumerate(_OPCODE_ROWS):
         entries = row.split()
         if len(entries) != 16:
-            raise RuntimeError(
-                f"opcode row {row_number:X} has {len(entries)} entries"
-            )
+            raise RuntimeError(f"opcode row {row_number:X} has {len(entries)} entries")
         for entry in entries:
             mnemonic, mode = entry.split(":", maxsplit=1)
             if mode not in _MODE_LENGTHS:
@@ -285,11 +283,10 @@ def decode_instruction(
     opcode = data[index]
     mnemonic, mode = OPCODES[opcode]
     length = _MODE_LENGTHS[mode]
-    raw = data[index:index + length]
+    raw = data[index : index + length]
     if len(raw) != length:
         raise ValueError(
-            f"truncated instruction at payload offset "
-            f"0x{payload_offset:08X}"
+            f"truncated instruction at payload offset 0x{payload_offset:08X}"
         )
     return Instruction(
         payload_offset=payload_offset,
@@ -336,7 +333,6 @@ def linear_disassemble(
         index += len(instruction.raw)
 
 
-
 def read_binary_region(
     path: pathlib.Path,
     offset: int,
@@ -367,17 +363,14 @@ def read_binary_region(
         end = offset + length
         if end > file_size:
             raise ValueError(
-                f"requested region ends at 0x{end:X}; "
-                f"file size is 0x{file_size:X}"
+                f"requested region ends at 0x{end:X}; file size is 0x{file_size:X}"
             )
         source.seek(offset)
         region = source.read(length)
     if len(region) != length:
-        raise ValueError(
-            f"short read: expected {length} bytes, "
-            f"found {len(region)}"
-        )
+        raise ValueError(f"short read: expected {length} bytes, found {len(region)}")
     return region
+
 
 def parse_int(value: str) -> int:
     """Parse a decimal integer or a hexadecimal value prefixed by `0x`.
@@ -395,9 +388,7 @@ def parse_int(value: str) -> int:
     try:
         parsed = int(value, 0)
     except ValueError as exc:
-        raise argparse.ArgumentTypeError(
-            f"invalid integer: {value}"
-        ) from exc
+        raise argparse.ArgumentTypeError(f"invalid integer: {value}") from exc
     if parsed < 0:
         raise argparse.ArgumentTypeError("value must not be negative")
     return parsed

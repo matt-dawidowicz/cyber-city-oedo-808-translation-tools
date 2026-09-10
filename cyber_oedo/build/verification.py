@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cyber_oedo.build import engine
+from cyber_oedo.build.profiles import mission0_stock as profile
 from cyber_oedo.build.plan import PatchPlan
 
 
@@ -17,9 +17,9 @@ def verify_plan_footprint(plan: PatchPlan) -> None:
             footprint differs from the authenticated build engine contract.
     """
 
-    if plan.build_profile != engine.BUILD_PROFILE:
+    if plan.build_profile != profile.BUILD_PROFILE:
         raise ValueError("patch plan uses an unexpected build profile")
-    expected = engine.profile_relative_sectors(plan.title_screen_mode)
+    expected = profile.profile_relative_sectors(plan.title_screen_mode)
     if plan.guarded_relative_sectors != expected:
         raise ValueError("patch plan has an unexpected guarded footprint")
     for entry in plan.entries:
@@ -34,6 +34,4 @@ def verify_plan_footprint(plan: PatchPlan) -> None:
             try:
                 int(digest, 16)
             except ValueError as error:
-                raise ValueError(
-                    "patch plan contains a malformed SHA-256"
-                ) from error
+                raise ValueError("patch plan contains a malformed SHA-256") from error

@@ -65,9 +65,7 @@ def _read_rows(path: pathlib.Path) -> list[dict[str, str]]:
         newline="",
     ) as source:
         reader = csv.DictReader(source, delimiter="\t")
-        TRANSLATION_INVENTORY_V1.require_compatible_header(
-            reader.fieldnames or ()
-        )
+        TRANSLATION_INVENTORY_V1.require_compatible_header(reader.fieldnames or ())
         return list(reader)
 
 
@@ -115,9 +113,7 @@ def _build_matcher(
     for row in old_rows:
         key = (row.kind, row.offset, row.source_text)
         if key in exact:
-            raise ValueError(
-                "old inventory contains duplicate physical occurrence key"
-            )
+            raise ValueError("old inventory contains duplicate physical occurrence key")
         exact[key] = row
     return exact, _source_consensus(old_rows)
 
@@ -201,17 +197,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             migrated = dict(row)
             old_entry_id = ""
             if match.source is not None:
-                migrated["english_translation"] = (
-                    match.source.english_translation
-                )
-                migrated["translator_notes"] = (
-                    match.source.translator_notes
-                )
+                migrated["english_translation"] = match.source.english_translation
+                migrated["translator_notes"] = match.source.translator_notes
                 old_entry_id = match.source.entry_id
                 used_old_entries.add(match.source.entry_id)
-            writer.writerow(
-                {field: migrated[field] for field in OUTPUT_FIELDS}
-            )
+            writer.writerow({field: migrated[field] for field in OUTPUT_FIELDS})
             report_rows.append(
                 {
                     "entry_id": row["entry_id"],
@@ -237,11 +227,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             writer.writeheader()
             writer.writerows(report_rows)
 
-    translated_old = {
-        row.entry_id
-        for row in old_rows
-        if row.english_translation
-    }
+    translated_old = {row.entry_id for row in old_rows if row.english_translation}
     orphaned = translated_old - used_old_entries
     for status in (
         "exact_occurrence",

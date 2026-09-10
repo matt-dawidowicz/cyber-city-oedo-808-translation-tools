@@ -31,10 +31,9 @@ def synthetic_sector(fill: int) -> bytes:
     raw = bytearray(RAW_SECTOR_SIZE)
     raw[: len(MODE1_SYNC)] = MODE1_SYNC
     raw[15] = 1
-    raw[
-        MODE1_USER_DATA_OFFSET:
-        MODE1_USER_DATA_OFFSET + SECTOR_SIZE
-    ] = bytes((fill,)) * SECTOR_SIZE
+    raw[MODE1_USER_DATA_OFFSET : MODE1_USER_DATA_OFFSET + SECTOR_SIZE] = (
+        bytes((fill,)) * SECTOR_SIZE
+    )
     return rebuild_mode1_sector(raw)
 
 
@@ -70,16 +69,13 @@ class OptimizedPatchingTests(unittest.TestCase):
             self.assertTrue(mode1_integrity_matches(second))
             self.assertEqual(
                 first[
-                    MODE1_USER_DATA_OFFSET + SECTOR_SIZE - 2:
-                    MODE1_USER_DATA_OFFSET + SECTOR_SIZE
+                    MODE1_USER_DATA_OFFSET + SECTOR_SIZE - 2 : MODE1_USER_DATA_OFFSET
+                    + SECTOR_SIZE
                 ],
                 b"AB",
             )
             self.assertEqual(
-                second[
-                    MODE1_USER_DATA_OFFSET:
-                    MODE1_USER_DATA_OFFSET + 2
-                ],
+                second[MODE1_USER_DATA_OFFSET : MODE1_USER_DATA_OFFSET + 2],
                 b"CD",
             )
 
@@ -113,9 +109,7 @@ class ChunkedImageComparisonTests(unittest.TestCase):
             source = root / "source.img"
             output = root / "output.img"
             source_data = (
-                synthetic_sector(0x10)
-                + synthetic_sector(0x20)
-                + synthetic_sector(0x30)
+                synthetic_sector(0x10) + synthetic_sector(0x20) + synthetic_sector(0x30)
             )
             changed = bytearray(source_data)
             changed[RAW_SECTOR_SIZE + 100] ^= 0x01

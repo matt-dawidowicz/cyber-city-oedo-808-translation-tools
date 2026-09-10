@@ -17,9 +17,7 @@ def build_payload(title_screen_mode: str) -> dict[str, object]:
     plan = planned_profile(title_screen_mode)
     category_counts: dict[str, int] = {}
     for entry in plan.entries:
-        category_counts[entry.category] = (
-            category_counts.get(entry.category, 0) + 1
-        )
+        category_counts[entry.category] = category_counts.get(entry.category, 0) + 1
     return {
         "contract": BUILD_PLAN_V1.identifier,
         "schema_version": BUILD_PLAN_V1.version,
@@ -68,12 +66,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = build_parser().parse_args(argv)
     indent = None if args.compact else 2
-    text = json.dumps(
-        build_payload(args.title_screen),
-        ensure_ascii=False,
-        sort_keys=True,
-        indent=indent,
-    ) + "\n"
+    text = (
+        json.dumps(
+            build_payload(args.title_screen),
+            ensure_ascii=False,
+            sort_keys=True,
+            indent=indent,
+        )
+        + "\n"
+    )
     if args.output is None:
         print(text, end="")
         return 0

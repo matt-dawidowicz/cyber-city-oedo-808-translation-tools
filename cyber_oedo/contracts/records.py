@@ -35,10 +35,7 @@ class TranslationInventoryRecord:
         """Build a typed row after requiring the version-1 schema fields."""
 
         TRANSLATION_INVENTORY_V1.require_compatible_header(tuple(row))
-        values = {
-            field: str(row[field])
-            for field in TRANSLATION_INVENTORY_V1.fields
-        }
+        values = {field: str(row[field]) for field in TRANSLATION_INVENTORY_V1.fields}
         return cls(**values)
 
     def to_mapping(self) -> dict[str, str]:

@@ -35,9 +35,9 @@ def build_payload() -> bytes:
     """Return a four-sector payload with two candidate resource headers."""
 
     payload = bytearray(4 * SECTOR_SIZE)
-    payload[SECTOR_SIZE:SECTOR_SIZE + 7] = b"KURUZER"
+    payload[SECTOR_SIZE : SECTOR_SIZE + 7] = b"KURUZER"
     start = 3 * SECTOR_SIZE
-    payload[start:start + 6] = b"MAYA01"
+    payload[start : start + 6] = b"MAYA01"
     return bytes(payload)
 
 
@@ -137,11 +137,7 @@ class AnalysisDatabaseTests(unittest.TestCase):
                     """,
                     ("E00001",),
                 ).fetchone()
-                metadata = dict(
-                    connection.execute(
-                        "SELECT key, value FROM metadata"
-                    )
-                )
+                metadata = dict(connection.execute("SELECT key, value FROM metadata"))
             finally:
                 connection.close()
 

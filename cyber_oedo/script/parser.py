@@ -39,7 +39,7 @@ def _decode_one_glyph(
         )
     ):
         raw = bytes(
-            data[position:position + 2]  # type: ignore[index]
+            data[position : position + 2]  # type: ignore[index]
         )
     elif is_halfwidth_katakana_byte(value):
         raw = bytes((value,))
@@ -129,7 +129,7 @@ def parse_dialogue_body(
             if command_end > size or command_end - start > limit:
                 return None
             operands = bytes(
-                data[position + 1:command_end]  # type: ignore[index]
+                data[position + 1 : command_end]  # type: ignore[index]
             )
             nodes.append(
                 ControlCommand(
