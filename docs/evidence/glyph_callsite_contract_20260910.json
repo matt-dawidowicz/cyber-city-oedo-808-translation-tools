@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "status_date": "2026-09-10",
+  "scope": "B3 stock glyph-call interface recovery; evidence only, no runtime mutation",
+  "mission0_module_payload_base": "0x00131800",
+  "callsite": {
+    "cpu": "0x56C0",
+    "payload_offset": "0x00136EC0",
+    "source_guard_hex": "20 60 E0",
+    "decoded": "JSR $E060",
+    "stock_target": "System Card EX_GETFNT",
+    "stock_return_cpu": "0x56C3"
+  },
+  "glyph_buffer": {
+    "cpu_start": "0x4C6C",
+    "cpu_end_inclusive": "0x4C8B",
+    "bytes": 32,
+    "shape": "16 rows x 2 bytes per row",
+    "live_evidence": "Observed empty before EX_GETFNT and populated with the generated 16x16 glyph after return during the 2026-09-10 H_BARTEN trace."
+  },
+  "historical_custom_hook_pattern": {
+    "status": "interface pattern retained; old allocation and parser scheme rejected",
+    "behavior": [
+      "Replace the three-byte JSR $E060 callsite with JSR to a game-side glyph provider.",
+      "For a custom English cell, write exactly two bytes for each of 16 rows into $4C6C-$4C8B.",
+      "RTS from the custom provider so execution resumes at stock game code $56C3.",
+      "For a stock Japanese cell, delegate to $E060 and preserve the stock path."
+    ],
+    "important_consequence": "A custom embedded font does not need to replace the downstream game renderer if it can reproduce the 32-byte glyph-buffer contract.",
+    "explicitly_rejected": [
+      "historical runtime placement at $A300",
+      "historical font placement at $A800",
+      "global tagged FF 01 57 44 ... FE text format",
+      "any allocation based only on homogeneous padding or zero fill"
+    ]
+  },
+  "remaining_proof": [
+    "Prove an owned executable/data destination and lifetime for the custom provider/font.",
+    "Prove a deliberate loader/residency path.",
+    "Prove a record-, handler-, or resource-local one-byte English selector that is collision-free and redraw-safe.",
+    "Trace $4C6C-$4CAB and the continuation after $56C3 far enough to verify no hidden buffer-side assumptions are violated."
+  ]
+}
