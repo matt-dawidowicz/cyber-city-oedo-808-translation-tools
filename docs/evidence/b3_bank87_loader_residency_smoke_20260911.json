@@ -1,0 +1,91 @@
+{
+  "status_date": "2026-09-11",
+  "branch": "b3/self-contained-renderer-space-proof-20260910",
+  "purpose": "Record the first controlled runtime load into physical CD-RAM bank $87 using the game's real byte loader and stock Japanese System Card 3.0.",
+  "status": "headless_smoke_pass_full_manual_lifecycle_pending",
+  "source": {
+    "track2_payload_sha256": "0817cfa03fedc7b33c52f9bd9423b41480fa385cff3693262732b8768e7ca223",
+    "img_sha256": "815a8dda33ba2bb046fcbde773ad3a80fc6f89a96ef07e9c06bcc1c2e5fddece",
+    "system_card": "stock Japanese System Card 3.0",
+    "mesen": "2.2.1"
+  },
+  "test_payload": {
+    "description": "One existing authenticated Track-2 data sector beginning with H_BARTEN, reused as an unmistakable residency pattern. The disc was not modified.",
+    "absolute_disc_lba": "0x0010DD",
+    "track2_start_absolute_lba": 3590,
+    "track2_relative_sector": "0x02D7",
+    "track2_payload_offset": "0x0016B800",
+    "length_bytes": 2048,
+    "sha256": "054603d9b31b5d1c4bff6cec3d683c151bf88295f2b312684ebfde0bac3f114a",
+    "first_bytes_hex": "48 5F 42 41 52 54 45 4E"
+  },
+  "method": {
+    "disc_modified": false,
+    "system_card_modified": false,
+    "release_patch": false,
+    "debugger_controlled_runtime_trampoline": true,
+    "natural_load_preserved": true,
+    "details": [
+      "Allow the natural H_BARTEN request to enter the game's generic byte loader at 0x6EA0 with destination 0xC660, absolute LBA 0x0010DD, length 0x0080 and return 0x6D7F.",
+      "At the loader's final RTS, after the natural load and remainder copy are complete, temporarily replace the next 0x6D7F instruction with JSR 0x29D0.",
+      "Use the loader's now-idle 0x29D0 scratch buffer for a 155-byte transient trampoline.",
+      "The trampoline saves flags/registers/direct-page and BIOS argument registers, saves MPR5, maps MPR5 to physical bank 0x87, calls 0x6EA0 for absolute LBA 0x0010DD -> 0xA000 length 0x0800, restores state/MPR5, executes the displaced stock LDA 0x6CC7, and rejoins at 0x6D82.",
+      "Lua restores the original 0x6D7F bytes and the exact post-natural-load 0x29D0 scratch contents before normal execution continues."
+    ]
+  },
+  "observations": {
+    "natural_h_barten_loader": {
+      "frame": 185,
+      "destination": "0xC660",
+      "absolute_disc_lba": "0x0010DD",
+      "byte_length": "0x0080",
+      "return_target": "0x6D7F",
+      "mpr5": "0x83"
+    },
+    "trampoline_install": {
+      "frame": 212,
+      "guarded_stock_bytes_at_0x6D7F": "AD C7 6C",
+      "scratch_address": "0x29D0",
+      "stub_length_bytes": 155
+    },
+    "controlled_test_loader": {
+      "frame": 212,
+      "destination": "0xA000",
+      "absolute_disc_lba": "0x0010DD",
+      "byte_length": "0x0800",
+      "return_target": "0x2A2C",
+      "mpr5": "0x87"
+    },
+    "bios_cd_read": {
+      "entry": "0xE009",
+      "frame": 212,
+      "absolute_disc_lba": "0x0010DD",
+      "destination": "0xA000",
+      "length_sectors": 1,
+      "address_type": "0x01",
+      "mpr5": "0x87"
+    },
+    "completion": {
+      "frame": 223,
+      "mpr5_restored": "0x83",
+      "physical_bank_87_expected_writes": 2048,
+      "payload_mismatches": 0
+    },
+    "retention_to_frame_1200": {
+      "payload_mismatches": 0,
+      "post_injection_bank_87_writes": 0,
+      "bartender_stream_reads": 142,
+      "game_continued": true
+    }
+  },
+  "decision": {
+    "loader_residency_mechanism": "proven_in_headless_smoke",
+    "bank_87": "passes initial controlled load and short-retention gate; full bartender + menu/choice + exit/re-entry manual lifecycle still required before owned_for_english_runtime",
+    "media_allocation": "not yet solved by this test; the test reuses an existing read-only source sector and does not establish a production English asset location on disc",
+    "forbidden_ranges_unchanged": [
+      "0x9F1B-0x9FFF",
+      "historical 0xA300/0xA800 padding",
+      "H_BARTEN extension beyond declared 0x0080"
+    ]
+  }
+}
