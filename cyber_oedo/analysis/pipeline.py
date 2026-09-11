@@ -7,8 +7,8 @@ import contextlib
 import io
 import pathlib
 import sqlite3
-from dataclasses import dataclass
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from cyber_oedo.analysis.build_resource_map import write_resource_map
 from cyber_oedo.analysis.database import (
@@ -31,6 +31,7 @@ ARTIFACT_NAMES = (
     "likely_sjis.tsv",
     "dialogue.tsv",
     "auxiliary.tsv",
+    "auxiliary_rejected.tsv",
     "translation_inventory.tsv",
 )
 DATABASE_NAME = "analysis.sqlite3"
@@ -57,7 +58,10 @@ def _data_rows(path: pathlib.Path) -> int:
 def _quiet_main(function: object, argv: list[str]) -> int:
     """Run a retained forensic CLI entry point without duplicating its logic."""
 
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+    with (
+        contextlib.redirect_stdout(io.StringIO()),
+        contextlib.redirect_stderr(io.StringIO()),
+    ):
         return int(function(argv))  # type: ignore[operator]
 
 
@@ -115,21 +119,25 @@ def run_analysis(
     likely = output_directory / "likely_sjis.tsv"
     dialogue = output_directory / "dialogue.tsv"
     auxiliary = output_directory / "auxiliary.tsv"
+    auxiliary_rejected = output_directory / "auxiliary_rejected.tsv"
     inventory = output_directory / "translation_inventory.tsv"
 
-    # The three payload-dependent stages share one read-only map.  Downstream
-    # stages consume their stable TSV contracts and therefore do not remap the
-    # 84 MiB payload.
+    # Every payload-dependent stage shares one read-only map. Auxiliary
+    # extraction source-guards its TSV inputs against this same payload and
+    # uses the resource map to reject conservative dialogue-shadow fragments.
     with mapped_file(track) as data:
         write_resource_map(data, resource_map)
         write_likely_sjis(data, likely, minimum_tokens)
         write_dialogue(data, dialogue)
+        extract_auxiliary_text.write_auxiliary_text(
+            likely,
+            dialogue,
+            auxiliary,
+            resource_map=resource_map,
+            data=data,
+            rejected_output=auxiliary_rejected,
+        )
 
-    if _quiet_main(
-        extract_auxiliary_text.main,
-        [str(likely), str(dialogue), str(auxiliary)],
-    ):
-        raise ValueError("auxiliary text extraction failed")
     if _quiet_main(
         build_translation_inventory.main,
         [str(dialogue), str(auxiliary), str(inventory)],
@@ -147,8 +155,16 @@ def run_analysis(
         database_path = output_directory / DATABASE_NAME
         _build_database(database_path, resource_map, dialogue, inventory)
 
-    artifact_hashes = tuple((path.name, sha256_file(path)) for path in targets if path.suffix == ".tsv")
-    row_counts = tuple((path.name, _data_rows(path)) for path in targets if path.suffix == ".tsv")
+    artifact_hashes = tuple(
+        (path.name, sha256_file(path))
+        for path in targets
+        if path.suffix == ".tsv"
+    )
+    row_counts = tuple(
+        (path.name, _data_rows(path))
+        for path in targets
+        if path.suffix == ".tsv"
+    )
     return AnalysisResult(
         output_directory=output_directory,
         artifact_hashes=artifact_hashes,
@@ -201,7 +217,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["AnalysisResult", "ARTIFACT_NAMES", "DATABASE_NAME", "build_parser", "main", "run_analysis"]
+__all__ = [
+    "AnalysisResult",
+    "ARTIFACT_NAMES",
+    "DATABASE_NAME",
+    "build_parser",
+    "main",
+    "run_analysis",
+]
 
 
 if __name__ == "__main__":
