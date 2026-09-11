@@ -1,0 +1,99 @@
+{
+  "status_date": "2026-09-11",
+  "branch": "b3/self-contained-renderer-space-proof-20260910",
+  "purpose": "Record the extended live lifecycle proof for candidate physical CD-RAM bank $87 before any English-runtime mutation.",
+  "source_capture": {
+    "filename": "cyber_oedo_translation_capture_v5(1).log",
+    "sha256": "6b548bb224db072d4be291a7cc0f7410a1d331676225dab9bba6d273bacdfab0",
+    "mesen": "2.2.1",
+    "system_card": "stock Japanese System Card 3.0",
+    "instrumentation": "read-only Lua callbacks",
+    "frames": 12510
+  },
+  "coverage": {
+    "operator_sequence": [
+      "opening bartender greeting",
+      "one or more NPC dialogue paths including menu/option handling",
+      "leave the bar and allow subsequent room/resource loads to complete",
+      "re-enter the bar and allow interior resources to reload",
+      "interact again after re-entry"
+    ],
+    "authenticated_bartender": {
+      "first_dialogue_group": 1,
+      "first_frame": 590,
+      "first_stream_address": "0xC692",
+      "repeat_dialogue_group": 5,
+      "repeat_frame": 8912,
+      "repeat_stream_address": "0xC692",
+      "note": "The same H_BARTEN stream was observed before and after intervening load/transition activity."
+    },
+    "dialogue_groups": 6,
+    "parser_hits": 302,
+    "renderer_hits": 287,
+    "nonspace_glyph_captures": 20,
+    "menu_control_evidence": {
+      "observed_parser_control_bytes": ["0x40", "0x2F"],
+      "note": "Exact opcode names remain to be established; these accesses show that the run exercised parser control flow beyond straight two-byte Shift-JIS text."
+    },
+    "cd_read_calls": 36,
+    "byte_loader_entries": 7,
+    "cd_load_bursts": 17
+  },
+  "physical_cd_ram": {
+    "bank_85": {
+      "range": "0xA000-0xBFFF in Mesen pceCdromRam",
+      "reads": 212682,
+      "writes": 80257,
+      "executes": 231065,
+      "status": "positive_control_used"
+    },
+    "bank_87": {
+      "range": "0xE000-0xFFFF in Mesen pceCdromRam",
+      "reads": 0,
+      "writes": 0,
+      "executes": 0,
+      "mpr_mapping_observed": false,
+      "status": "unused_across_tested_bar_menu_exit_reentry_lifecycle",
+      "promotion": "eligible_for_controlled_english_runtime_load_experiment",
+      "scope_limit": "This does not assert that bank $87 is globally free across every mission, scene, System Card service, or game mode."
+    }
+  },
+  "loader_evidence": {
+    "generic_byte_loader_entry": "0x6EA0",
+    "bios_cd_read_entry": "0xE009",
+    "representative_request": {
+      "destination": "0x8000",
+      "track2_relative_lba": "0x001425",
+      "byte_length": "0x0F51",
+      "full_sector_read": {
+        "lba": "0x001425",
+        "destination": "0x8000",
+        "sectors": 1,
+        "mapped_bank": "0x85"
+      },
+      "remainder_sector_read": {
+        "lba": "0x001426",
+        "destination": "0x29D0",
+        "sectors": 1,
+        "purpose": "scratch read before copying the trailing non-sector-aligned bytes"
+      }
+    },
+    "conclusion": "The existing game loader accepts byte-oriented resource lengths and performs full-sector reads plus a final scratch-sector copy for non-2048-byte-aligned tails. This is suitable for deliberately relocated English resources once their descriptors/sectors are patched."
+  },
+  "renderer_evidence": {
+    "parser": "0x9543",
+    "renderer": "0x5915",
+    "font_call": "0x56C0 -> JSR 0xE060",
+    "continuation": "0x56C3",
+    "glyph_buffer": "0x4C6C-0x4C8B",
+    "nonblank_buffer_proven": true,
+    "conclusion": "A custom English glyph provider can target the existing 32-byte 16x16 buffer contract and return to the stock post-font path at 0x56C3."
+  },
+  "decision": {
+    "bank_85": "disqualified",
+    "bank_86": "previously disqualified",
+    "bank_87": "promoted from unproven candidate to scoped controlled-experiment candidate for the first embedded-font loader/residency proof",
+    "forbidden_ranges_unchanged": ["0x9F1B-0x9FFF", "historical 0xA300/0xA800 padding"],
+    "next_gate": "Perform a controlled loader experiment that deliberately loads authenticated English/font test data into physical bank $87, restores MPR mappings, and reruns the same lifecycle before treating $87 as owned_for_english_runtime."
+  }
+}
