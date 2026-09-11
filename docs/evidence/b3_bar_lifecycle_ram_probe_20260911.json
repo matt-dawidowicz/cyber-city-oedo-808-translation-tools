@@ -8,7 +8,8 @@
     "mesen": "2.2.1",
     "system_card": "stock Japanese System Card 3.0",
     "instrumentation": "read-only Lua callbacks",
-    "frames": 12510
+    "frames": 12510,
+    "capture_address_note": "The V5 Lua logger labeled sector*2048 as track2_payload_off. That label is incorrect for this disc because CD_READ sector arguments are absolute disc LBAs. Correct Track-2 offsets subtract TRACK2_START_LBA=3590 before multiplying by 2048."
   },
   "coverage": {
     "operator_sequence": [
@@ -25,7 +26,10 @@
       "repeat_dialogue_group": 5,
       "repeat_frame": 8912,
       "repeat_stream_address": "0xC692",
-      "note": "The same H_BARTEN stream was observed before and after intervening load/transition activity."
+      "absolute_disc_lba": "0x0010DD",
+      "track2_relative_sector": "0x02D7",
+      "track2_payload_offset": "0x0016B800",
+      "note": "The same H_BARTEN stream was observed before and after intervening load/transition activity. The corrected payload offset matches the authenticated H_BARTEN header in the source Track-2 payload."
     },
     "dialogue_groups": 6,
     "parser_hits": 302,
@@ -61,24 +65,35 @@
   "loader_evidence": {
     "generic_byte_loader_entry": "0x6EA0",
     "bios_cd_read_entry": "0xE009",
+    "disc_coordinate_model": {
+      "track2_start_absolute_lba": 3590,
+      "formula": "track2_relative_sector = absolute_disc_lba - 3590; track2_payload_offset = track2_relative_sector * 2048",
+      "system_card_recbase_observed_in_bar_savestate": "0x000000"
+    },
     "representative_request": {
       "destination": "0x8000",
-      "track2_relative_lba": "0x001425",
+      "absolute_disc_lba": "0x001425",
+      "track2_relative_sector": "0x061F",
+      "track2_payload_offset": "0x0030F800",
       "byte_length": "0x0F51",
       "full_sector_read": {
-        "lba": "0x001425",
+        "absolute_disc_lba": "0x001425",
+        "track2_relative_sector": "0x061F",
+        "track2_payload_offset": "0x0030F800",
         "destination": "0x8000",
         "sectors": 1,
         "mapped_bank": "0x85"
       },
       "remainder_sector_read": {
-        "lba": "0x001426",
+        "absolute_disc_lba": "0x001426",
+        "track2_relative_sector": "0x0620",
+        "track2_payload_offset": "0x00310000",
         "destination": "0x29D0",
         "sectors": 1,
         "purpose": "scratch read before copying the trailing non-sector-aligned bytes"
       }
     },
-    "conclusion": "The existing game loader accepts byte-oriented resource lengths and performs full-sector reads plus a final scratch-sector copy for non-2048-byte-aligned tails. This is suitable for deliberately relocated English resources once their descriptors/sectors are patched."
+    "conclusion": "The existing game loader accepts byte-oriented resource lengths and performs full-sector reads plus a final scratch-sector copy for non-2048-byte-aligned tails. This is suitable for deliberately relocated English resources once their absolute disc LBAs/descriptors are patched."
   },
   "renderer_evidence": {
     "parser": "0x9543",
@@ -94,6 +109,6 @@
     "bank_86": "previously disqualified",
     "bank_87": "promoted from unproven candidate to scoped controlled-experiment candidate for the first embedded-font loader/residency proof",
     "forbidden_ranges_unchanged": ["0x9F1B-0x9FFF", "historical 0xA300/0xA800 padding"],
-    "next_gate": "Perform a controlled loader experiment that deliberately loads authenticated English/font test data into physical bank $87, restores MPR mappings, and reruns the same lifecycle before treating $87 as owned_for_english_runtime."
+    "next_gate": "Perform a controlled loader experiment that deliberately loads authenticated test data into physical bank $87, restores MPR mappings, and reruns the same lifecycle before treating $87 as owned_for_english_runtime."
   }
 }
