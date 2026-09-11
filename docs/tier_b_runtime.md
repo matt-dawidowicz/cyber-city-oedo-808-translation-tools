@@ -55,8 +55,8 @@ still require loader/runtime correlation before they receive game-facing names.
 
 ## B2 static loader and state proof
 
-The authenticated Mission 0 startup path now resolves the source and shape of
-the `$A400` table without relying on an emulator assumption.
+The authenticated Mission 0 startup path resolves the source and shape of the
+`$A400` table without relying on an emulator assumption.
 
 At `$64CB`, the game prepares a transfer whose destination is `$A400`, whose
 source is absolute disc LBA `$107D`, and whose byte count is `$0301`. The
@@ -90,9 +90,9 @@ and every later mission.
 
 ## B2.5 bank-aware live snapshot validation
 
-The static model is now sufficient to validate a frozen emulator stop without
-confusing a reused logical address with the Mission 0 interpreter. The live
-snapshot validator requires:
+The static model can validate a frozen emulator stop without confusing a reused
+logical address with the Mission 0 interpreter. The live snapshot validator
+requires:
 
 - a 64 KiB logical CPU-memory dump from the stopped emulator;
 - `PC`, accumulator `A`, and all eight HuC6280 MPR values;
@@ -163,21 +163,49 @@ $FF      = 00      ; 16x16 font mode
 ```
 
 The 32-byte range `$4C6C-$4C8B` was observed empty before `EX_GETFNT` and
-contained the generated glyph bitmap after return. Control then returns to game
-code at approximately `$56C3`, after which the game continues its own bitmap
-processing/rendering path.
+contained the generated glyph bitmap after return. Control returns to game code
+at `$56C3`, after which the game continues its own bitmap-processing/rendering
+path.
 
-These observations support a new preferred direction: retain the stock System
-Card and use `EX_GETFNT` only as a **source** for Latin bitmaps, then perform a
-small game-side crop/normalize/composite step before resuming the existing game
-pipeline. This can potentially eliminate the old 1,520-byte embedded font
-asset. It does not yet justify a patch: the adapter still needs proven-owned
-executable storage and a record-/handler-local one-byte selector.
+### Recovered `$56C0` glyph-provider contract
 
-The B3 evidence and allocation audit are documented in:
+Historical source-guarded B3 work records the exact three stock bytes at
+`$56C0-$56C2` as:
+
+```text
+20 60 E0    JSR $E060
+```
+
+That callsite is a much cleaner boundary than replacing the downstream renderer.
+The historical custom-font experiment replaced only this `JSR` with a `JSR` to
+a game-side glyph provider. Its custom path wrote 16 rows × 2 bytes directly to
+`$4C6C-$4C8B`, then executed `RTS`; the stock game consequently resumed at
+`$56C3` exactly as it does after `EX_GETFNT`. Japanese cells delegated back to
+`$E060`.
+
+The **interface pattern is retained**; the old implementation is not. Its
+`$A300` code placement, `$A800` font placement, and global tagged
+`FF 01 57 44 ... FE` stream scheme remain unproven or rejected and must not be
+revived.
+
+This changes the production renderer problem substantially. An embedded English
+font provider only has to reproduce the observed **32-byte glyph-buffer
+contract** and return to `$56C3`; it does not need to replace the stock
+post-font bitmap/VDC pipeline unless later evidence shows a reason to do so.
+
+The production typography design is documented in
+`docs/text_engine_v1_design_20260910.md`. The initial contract contains all 95
+printable ASCII characters plus eight corpus-required typographic symbols, or
+103 glyphs total. At 8x16 1-bpp this is 1,648 bytes per complete font and 4,944
+bytes for three complete font roles. Disc storage is therefore not a reason to
+sacrifice lowercase, punctuation, or font quality.
+
+Evidence files:
 
 - `docs/evidence/h_barten_live_runtime_20260910.json`
+- `docs/evidence/glyph_callsite_contract_20260910.json`
 - `docs/evidence/mission0_one_byte_capacity_20260910.json`
+- `docs/evidence/english_typography_repertoire_20260910.json`
 - `docs/b3_self_contained_renderer_investigation_20260910.md`
 
 ## Runtime proof command
@@ -191,28 +219,31 @@ cyber-oedo prove-dialogue-runtime track02_mode1_2048.bin \
 
 The command checks the authenticated Track 2 SHA-256, validates every B1/B2
 static code window byte-for-byte, authenticates the Mission 0 indexed-table
-source, reports the historical zero region without promoting its ownership, and
-correlates `3D` operand pairs from a Tier-A dialogue TSV. Its historical static
-label for `$9F1B-$9FFF` must not be interpreted as an allocation candidate; the
-2026-09-10 live evidence supersedes that status and marks the range forbidden.
+source, and correlates `3D` operand pairs from a Tier-A dialogue TSV. Its
+historical static label for `$9F1B-$9FFF` must not be interpreted as an
+allocation candidate; the 2026-09-10 live evidence supersedes that status and
+marks the range forbidden.
 
 ## Gates before Tier-B mutation
 
-The 2026-09-10 trace closes the representative Mission 0 MPR/stream-pointer gate
-and establishes the stock `$5915 -> $E060 -> $4C6C -> ~$56C3` glyph path. The
-remaining gates before a one-byte English mutation are now narrower:
+The representative Mission 0 MPR/stream-pointer gate and stock glyph-provider
+interface are now established. The remaining gates before a one-byte embedded
+English mutation are:
 
-- prove an executable/storage range owned for the full lifetime of the adapter;
-- bound the exact game routine around the `$56C0` font call and its post-call
-  `$56xx/$4Exx` bitmap-processing path;
-- capture several known Latin glyph bitmaps before and after that processing to
-  derive a stable 16x16-to-8x16 transform;
-- trace any adjacent `$4C8C-$4CAB` scratch/derived buffer before treating it as
-  writable state;
-- prove a record-/handler-local one-byte selector whose lifetime survives the
-  stock full-window redraw behavior; and
+- prove an executable/data range owned for the full active lifetime of the
+  English provider and whichever font is resident;
+- prove a deliberate loader path, or an equivalent already-owned residency
+  mechanism, for that code/data;
+- trace `$4C6C-$4CAB` and enough of the continuation after `$56C3` to verify the
+  custom provider may write the 32-byte cell buffer without hidden side-state;
+- prove a record-/handler-/resource-local one-byte selector whose lifetime is
+  collision-free and survives the stock full-window redraw behavior; and
 - retain the existing `$A400` state/table proof for dynamic indexed fields as
   Mission 0 translation expands beyond the bartender vertical slice.
+
+Capturing several stock Latin glyphs through `EX_GETFNT` is still useful as a
+visual/buffer reference, but a 16x16-to-8x16 crop transform is **not a mandatory
+production gate** now that the preferred path is an embedded custom font.
 
 No global escape marker is permitted. No modified BIOS/System Card is permitted
 as a release requirement. No code or RAM region becomes allocatable from
