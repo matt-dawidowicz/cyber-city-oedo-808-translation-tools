@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "evidence_id": "mission0-h_barten-live-runtime-20260910",
+  "status": "live_emulator_observation",
+  "captured_local_date": "2026-09-10",
+  "emulator": "Mesen",
+  "source_baseline": {
+    "repository_commit": "0fb5dd8bcc3be5a48eae11254cd891782d3b2055",
+    "track2_payload_sha256": "0817cfa03fedc7b33c52f9bd9423b41480fa385cff3693262732b8768e7ca223",
+    "track2_payload_size": 84375552
+  },
+  "runtime_requirement": {
+    "system_card": "stock Japanese System Card 3.0",
+    "modified_bios_permitted": false,
+    "modified_system_card_permitted": false
+  },
+  "resource": {
+    "name": "H_BARTEN",
+    "directory_source_sector": "0x0110DD",
+    "directory_size": "0x0080",
+    "payload_base": "0x0016B800",
+    "cpu_base_observed": "0xC650",
+    "dialogue_marker": {
+      "cpu_address": "0xC690",
+      "payload_offset": "0x0016B840",
+      "bytes_hex": "27 28"
+    },
+    "text_start": {
+      "cpu_address": "0xC692",
+      "payload_offset": "0x0016B842"
+    },
+    "same_size_probe": {
+      "source_text": "バーテン「いらっしゃいませ」",
+      "replacement_text": "ＢＡＲＴＥＮＤＥＲ「ＯＫ！」",
+      "result": "visible_success",
+      "conclusion": "H_BARTEN is the live opening bartender resource."
+    }
+  },
+  "parser_stop": {
+    "pc": "0x9543",
+    "mprs": {
+      "MPR0": "0xFF",
+      "MPR1": "0xF8",
+      "MPR2": "0x80",
+      "MPR3": "0x81",
+      "MPR4": "0x82",
+      "MPR5": "0x83",
+      "MPR6": "0x84",
+      "MPR7": "0x00"
+    },
+    "stream_pointer_storage": {
+      "low_address": "0x207F",
+      "low_value": "0x92",
+      "high_address": "0x2080",
+      "high_value": "0xC6"
+    },
+    "stream_pointer": "0xC692",
+    "stream_window_mpr": "MPR6",
+    "stream_physical_bank": "0x84"
+  },
+  "glyph_path": {
+    "stock_cell_renderer": "0x5915",
+    "observed_glyph_pair": {
+      "low_address": "0x2002",
+      "low_value": "0x60",
+      "high_address": "0x2003",
+      "high_value": "0x82",
+      "sjis": "0x8260",
+      "character": "Ａ"
+    },
+    "bios_ex_getfnt": "0xE060",
+    "ex_getfnt_arguments": {
+      "F8": "0x61",
+      "F9": "0x82",
+      "sjis": "0x8261",
+      "character": "Ｂ",
+      "FA": "0x6C",
+      "FB": "0x4C",
+      "bitmap_destination": "0x4C6C",
+      "FF": "0x00",
+      "font_mode": "16x16"
+    },
+    "bitmap_destination_range": "0x4C6C-0x4C8B",
+    "before_ex_getfnt": "observed empty",
+    "after_ex_getfnt": "observed generated glyph bitmap",
+    "return_to_game_approx": "0x56C3",
+    "post_return_behavior": "game-owned bitmap processing/rendering continues"
+  },
+  "forbidden_injection_spaces": [
+    {
+      "cpu_range": "0x9F1B-0x9FFF",
+      "status": "runtime_used_forbidden",
+      "live_proof": {
+        "breakpoint": "read/write/execute",
+        "event": "read",
+        "pc_approx": "0xF4FC",
+        "instruction": "LDA ($FA) [$9F1B] = $00",
+        "call_stack_context": "System Card code",
+        "suspected_subsystem": "ADPCM transfer path"
+      },
+      "conclusion": "Never use this range for game-side injection."
+    }
+  ],
+  "failed_experiments": [
+    {
+      "name": "H_BARTEN load extension",
+      "original_directory_size": "0x0080",
+      "attempted_load_size": "0x0800",
+      "result": "runtime glitch/corruption",
+      "conclusion": "Do not extend a resource load beyond its declared extent without static and live ownership/lifetime proof."
+    }
+  ],
+  "architecture_constraints": [
+    "The final renderer must be self-contained in the patched game and use a stock Japanese System Card 3.0.",
+    "Global FF, FF00, or replacement escape-marker architectures are permanently rejected.",
+    "Zero-filled memory is not ownership proof.",
+    "No new renderer runtime image may be produced until code and storage ownership are justified by static plus live evidence."
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "evidence_id": "mission0-one-byte-capacity-20260910",
+  "status": "storage_only_recalculation",
+  "repository_baseline": "0fb5dd8bcc3be5a48eae11254cd891782d3b2055",
+  "method": {
+    "question": "Would approved/current Mission 0 English fit local source byte budgets if each English character occupied one byte instead of two-byte fullwidth Shift-JIS?",
+    "slot_budget": "source_bytes from the translation workbooks",
+    "english_projection": "ASCII-compatible one-byte length after normalizing common typographic punctuation to ASCII equivalents",
+    "individual_fit_rule": "projected English bytes <= source_bytes",
+    "limitations": [
+      "This is a storage-capacity calculation only; it does not prove parser safety, control-byte safety, pointer safety, or renderer support.",
+      "Aggregate surplus in one resource class cannot be pooled with deficit in another unless relocation ownership and pointers are independently proven.",
+      "The previously reported 497/502 fullwidth cohort could not be reconstructed exactly from current main or the recovered project artifacts, so no result below is presented as the same 502-record cohort."
+    ]
+  },
+  "historical_reference": {
+    "reported_prior_result": "497/502 do not fit under two-byte fullwidth encoding",
+    "exact_cohort_reproducible": false,
+    "comparison_status": "directionally superseded but not numerically apples-to-apples"
+  },
+  "review_workbook": {
+    "filename": "cyber-city-oedo-808-translation-review-workbook.xlsx",
+    "sha256": "52e8b681b232bc2fb9eef9a671d01ab3e7d2aaaf7da201e29cfb119f0921e3d7",
+    "mission0_valid_translated_records": 821,
+    "all_records": {
+      "one_byte_fit": 454,
+      "one_byte_nonfit": 367,
+      "source_capacity_bytes": 44490,
+      "projected_english_bytes": 44732,
+      "aggregate_balance_bytes": -242
+    },
+    "dialogue": {
+      "records": 469,
+      "one_byte_fit": 175,
+      "one_byte_nonfit": 294,
+      "source_capacity_bytes": 28666,
+      "projected_english_bytes": 32207,
+      "aggregate_balance_bytes": -3541
+    },
+    "auxiliary": {
+      "records": 352,
+      "one_byte_fit": 279,
+      "one_byte_nonfit": 73,
+      "source_capacity_bytes": 15824,
+      "projected_english_bytes": 12525,
+      "aggregate_balance_bytes": 3299
+    },
+    "interpretation": "The old two-byte/fullwidth warning materially overstated the storage problem. A one-byte renderer converts hundreds of previously impossible local fits into viable same-size fits, although dialogue still has a real local-capacity deficit."
+  },
+  "current_master_script": {
+    "filename": "Cyber_City_Oedo_808_Master_Script.xlsx",
+    "sha256": "b654d7c3f9861dd1dda546f299d03133f305926b0a5592c3e5628fc06b296999",
+    "mission0_translated_records": 851,
+    "all_records": {
+      "one_byte_fit": 439,
+      "one_byte_nonfit": 412,
+      "source_capacity_bytes": 44954,
+      "projected_english_bytes": 46735,
+      "aggregate_balance_bytes": -1781
+    },
+    "dialogue": {
+      "records": 471,
+      "one_byte_fit": 161,
+      "one_byte_nonfit": 310,
+      "source_capacity_bytes": 28710,
+      "projected_english_bytes": 32708,
+      "aggregate_balance_bytes": -3998
+    },
+    "auxiliary": {
+      "records": 380,
+      "one_byte_fit": 278,
+      "one_byte_nonfit": 102,
+      "source_capacity_bytes": 16244,
+      "projected_english_bytes": 14027,
+      "aggregate_balance_bytes": 2217
+    },
+    "interpretation": "The current script is somewhat more verbose than the older review workbook, but the same conclusion holds: one-byte encoding reduces the problem substantially without eliminating per-record/per-resource relocation needs."
+  }
+}
