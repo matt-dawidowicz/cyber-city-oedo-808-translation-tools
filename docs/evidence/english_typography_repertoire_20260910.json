@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "status_date": "2026-09-10",
+  "source": {
+    "filename": "Cyber_City_Oedo_808_Master_Script.xlsx",
+    "sha256": "b654d7c3f9861dd1dda546f299d03133f305926b0a5592c3e5628fc06b296999",
+    "sheet": "Canonical Script",
+    "status_filter": "working_translation",
+    "translated_rows": 2914
+  },
+  "observed": {
+    "unique_characters": 91,
+    "all_observed_covered_by_production_repertoire": true
+  },
+  "production_font_contract": {
+    "printable_ascii_glyphs": 95,
+    "corpus_extensions": [
+      "¥",
+      "–",
+      "—",
+      "‘",
+      "’",
+      "“",
+      "”",
+      "■"
+    ],
+    "total_glyphs": 103,
+    "packed_8x16_1bpp_bytes_per_font": 1648,
+    "packed_8x16_1bpp_bytes_for_three_fonts": 4944,
+    "packed_8x16_2bpp_bytes_per_font": 3296,
+    "packed_8x16_2bpp_bytes_for_three_fonts": 9888
+  },
+  "scope_note": "Build-time repertoire evidence only; this does not prove an on-disc byte encoding, runtime selector, RAM owner, loader location, or executable injection range."
+}
