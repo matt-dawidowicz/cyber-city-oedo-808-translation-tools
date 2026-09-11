@@ -21,11 +21,16 @@ The source-guarded B1 model records the following code regions:
 | `$960F` | null-terminated indexed-field glyph loop |
 | `$5915` | stock dialogue glyph-cell renderer |
 | `$9F11/$9F14` | stream read/advance helpers |
-| `$9F1B-$9FFF` | historical zero-filled Stage 1 region |
+| `$9F1B-$9FFF` | **runtime-used System Card interaction range; forbidden injection space** |
 
-The last region remains **unowned**. Zero fill is evidence about bytes, not
-proof that the loader, another overlay, save state, or later runtime path never
-uses the region.
+`$9F1B-$9FFF` is no longer merely an unowned historical zero region. During a
+2026-09-10 Mesen session, a read/write/execute watch on this range fired on a
+live read from System Card code near `$F4FC`, with the observed instruction
+`LDA ($FA) [$9F1B] = $00`. The call stack passed through System Card code and
+the surrounding behavior appears ADPCM-transfer-related. Whatever the exact
+subsystem label, the allocation conclusion is definitive: **game-side injected
+code or data must never occupy `$9F1B-$9FFF`.** The dated observation is
+recorded in `docs/evidence/h_barten_live_runtime_20260910.json`.
 
 ## Opcode `3D`
 
@@ -125,6 +130,56 @@ a captured stop is either rejected for the wrong PC/opcode/bank or converted
 into deterministic evidence for the stream, indexed record, state byte, and
 selected field.
 
+## B3 H_BARTEN live renderer proof (2026-09-10)
+
+The opening bartender path now has a direct live observation from the ordinary,
+stock-renderer route. This is a stronger runtime anchor than the earlier static
+allocation assumptions.
+
+The visible same-size replacement identifies `H_BARTEN` as the live opening
+resource. Its directory entry declares source sector `0x0110DD` and size
+`0x0080`; the resource maps to payload `0x0016B800`, with the dialogue marker
+at CPU `$C690` / payload `0x0016B840` and the text body at CPU `$C692` / payload
+`0x0016B842`.
+
+At a live stop on `$9543`, Mesen reported:
+
+```text
+MPR0=$FF MPR1=$F8 MPR2=$80 MPR3=$81
+MPR4=$82 MPR5=$83 MPR6=$84 MPR7=$00
+```
+
+Direct-page bytes `$207F/$2080 = 92 C6` therefore resolve the active stream
+pointer to `$C692`; because that address lies in the MPR6 window, the stream is
+mapped through physical bank `$84`.
+
+The same ordinary path reaches `$5915`, then stock System Card `EX_GETFNT` at
+`$E060`. Captured arguments for fullwidth `Ｂ` were:
+
+```text
+$F8/$F9 = 61 82   ; Shift-JIS $8261
+$FA/$FB = 6C 4C   ; bitmap destination $4C6C
+$FF      = 00      ; 16x16 font mode
+```
+
+The 32-byte range `$4C6C-$4C8B` was observed empty before `EX_GETFNT` and
+contained the generated glyph bitmap after return. Control then returns to game
+code at approximately `$56C3`, after which the game continues its own bitmap
+processing/rendering path.
+
+These observations support a new preferred direction: retain the stock System
+Card and use `EX_GETFNT` only as a **source** for Latin bitmaps, then perform a
+small game-side crop/normalize/composite step before resuming the existing game
+pipeline. This can potentially eliminate the old 1,520-byte embedded font
+asset. It does not yet justify a patch: the adapter still needs proven-owned
+executable storage and a record-/handler-local one-byte selector.
+
+The B3 evidence and allocation audit are documented in:
+
+- `docs/evidence/h_barten_live_runtime_20260910.json`
+- `docs/evidence/mission0_one_byte_capacity_20260910.json`
+- `docs/b3_self_contained_renderer_investigation_20260910.md`
+
 ## Runtime proof command
 
 Run:
@@ -136,22 +191,29 @@ cyber-oedo prove-dialogue-runtime track02_mode1_2048.bin \
 
 The command checks the authenticated Track 2 SHA-256, validates every B1/B2
 static code window byte-for-byte, authenticates the Mission 0 indexed-table
-source, reports the historical zero region without promoting its ownership,
-and correlates `3D` operand pairs from a Tier-A dialogue TSV.
+source, reports the historical zero region without promoting its ownership, and
+correlates `3D` operand pairs from a Tier-A dialogue TSV. Its historical static
+label for `$9F1B-$9FFF` must not be interpreted as an allocation candidate; the
+2026-09-10 live evidence supersedes that status and marks the range forbidden.
 
 ## Gates before Tier-B mutation
 
-A record-local selector or another engine modification may be designed only
-after these remaining live facts are captured in an emulator trace:
+The 2026-09-10 trace closes the representative Mission 0 MPR/stream-pointer gate
+and establishes the stock `$5915 -> $E060 -> $4C6C -> ~$56C3` glyph path. The
+remaining gates before a one-byte English mutation are now narrower:
 
-- MPR/bank mapping at `$9543` and `$958F`;
-- the live `$7F/$80` stream pointer for representative dialogue;
-- confirmation that `$A400` remains owned for the relevant scene lifetime;
-- the selected record and state byte for at least two distinct `3D` operands;
-- glyph buffer/VDC destination through `$5915` and BIOS font service; and
-- evidence that any proposed injection storage is owned for the full lifetime
-  of the hook.
+- prove an executable/storage range owned for the full lifetime of the adapter;
+- bound the exact game routine around the `$56C0` font call and its post-call
+  `$56xx/$4Exx` bitmap-processing path;
+- capture several known Latin glyph bitmaps before and after that processing to
+  derive a stable 16x16-to-8x16 transform;
+- trace any adjacent `$4C8C-$4CAB` scratch/derived buffer before treating it as
+  writable state;
+- prove a record-/handler-local one-byte selector whose lifetime survives the
+  stock full-window redraw behavior; and
+- retain the existing `$A400` state/table proof for dynamic indexed fields as
+  Mission 0 translation expands beyond the bartender vertical slice.
 
-No global escape marker is permitted. The failed Stage 1 experiments already
-showed that apparent marker absence inside extracted dialogue does not imply
-runtime-global safety.
+No global escape marker is permitted. No modified BIOS/System Card is permitted
+as a release requirement. No code or RAM region becomes allocatable from
+zero-fill alone, and `$9F1B-$9FFF` is explicitly prohibited.
