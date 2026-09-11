@@ -35,12 +35,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test "$(git ls-remote https://github.com/nesdev-org/MesenCE.git refs/tags/2.2.1 | cut -f1)" = "20ba206cef5ba207c21203176d02cb9f43dda9fb"
           curl --fail --location --retry 3 \
             --output MesenCE-20ba206.tar.gz \
             https://github.com/nesdev-org/MesenCE/archive/20ba206cef5ba207c21203176d02cb9f43dda9fb.tar.gz
           mkdir source
           tar -xzf MesenCE-20ba206.tar.gz -C source --strip-components=1
-          test "$(git ls-remote https://github.com/nesdev-org/MesenCE.git refs/tags/2.2.1^{} | cut -f1)" = "20ba206cef5ba207c21203176d02cb9f43dda9fb"
 
       - name: Retain exact emulator and source
         uses: actions/upload-artifact@v4
