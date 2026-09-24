@@ -299,6 +299,12 @@ def _emit_runtime_code(
     assembler.emit(0x60)  # RTS
 
     assembler.label("custom_glyph")
+    # Preserve caller index registers. The stock BIOS call owns its own
+    # register contract; our custom path should not introduce additional
+    # X/Y clobbering beyond the replaced service.
+    assembler.emit(0xDA)  # PHX
+    assembler.emit(0x5A)  # PHY
+
     # X = private lead index, then multiply that index by 188 into $04/$05.
     assembler.zero_page(0xA5, GLYPH_LEAD_ZP)
     assembler.emit(0x38)  # SEC
@@ -392,6 +398,8 @@ def _emit_runtime_code(
         assembler.absolute(0x8D, destination)  # STA left staging byte
         assembler.absolute(0xB9, row_base)  # LDA row_base,Y
         assembler.absolute(0x8D, destination + 1)  # STA right staging byte
+    assembler.emit(0x7A)  # PLY
+    assembler.emit(0xFA)  # PLX
     assembler.emit(0x60)  # RTS
 
     return assembler.finish(), dict(assembler.labels)
