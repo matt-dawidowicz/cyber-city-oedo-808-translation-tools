@@ -4,19 +4,72 @@ Status: source-guarded implementation complete; emulator certification pending.
 
 ## Purpose
 
-This is the first runtime activation of the final English font architecture. It
-is deliberately narrower than the retired July wide-text experiment.
-
-The dialogue parser is untouched.
+This is the first runtime activation of the final English font architecture.
+The dialogue parser remains untouched.
 
 Private English text is encoded as ordinary two-byte glyphs using the reserved
 Shift-JIS lead range `F0-FC`. The stock parser therefore advances through
-English with its normal glyph path. Only the font service call at logical
-`$56C0` is intercepted.
+English with its normal glyph path. Only the stock System Card font call at
+logical `$56C0` is redirected.
 
-## Proven stock path
+## Corrected residency model
 
-Mission 0-B stock code around the hook is:
+The first draft of this proof incorrectly treated disc padding at
+`MISSION0_B_PAYLOAD_BASE + $A300` as though it were automatically mapped to
+CPU `$A300`. Review caught that error before merge.
+
+The corrected design uses the already-proven indexed-record loader at `$64CB`.
+
+Stock behavior:
+
+```text
+source absolute LBA $107D
+        ↓  $0301 bytes
+RAM $A400
+```
+
+The source contains 24 x 32-byte indexed records plus a one-byte trailer.
+The patch changes only the loader byte count:
+
+```text
+$0301 → $1C00
+```
+
+so the same read becomes:
+
+```text
+source absolute LBA $107D
+        ↓  $1C00 bytes
+RAM $A400-$BFFF
+```
+
+The original `$0301` bytes are preserved exactly. The existing source tail is:
+
+| Source-relative range | Original content | RAM destination |
+|---|---|---|
+| `$0000-$0300` | indexed table + trailer | `$A400-$A700` |
+| `$0301-$07FF` | exact `00` fill | `$A701-$ABFF` |
+| `$0800-$1BFF` | exact `E5` fill | `$AC00-$BFFF` |
+
+The complete original `$1C00` source interval has SHA-256:
+
+```text
+a2a62c29b20d87e7bcad28542d670a6446c62ab8d661c49a4d013317a985767f
+```
+
+The English runtime begins at RAM `$A800`, corresponding to source-relative
+offset `$0400`. It is therefore explicitly installed by the game's own CD
+loader rather than inferred from payload coordinates.
+
+Historical Mission 0 Mesen capture also shows MPR5 remaining `$83` throughout
+the covered dialogue/load lifecycle and none of the 36 recorded CD reads
+targeting `$A000-$BFFF` after initialization. That is useful lifecycle
+evidence, but the new proof capture must still watch the runtime range for
+unexpected writes before release certification.
+
+## Stock renderer path
+
+Around the hook the stock path is:
 
 ```text
 56AB  LDA $02
@@ -28,7 +81,9 @@ Mission 0-B stock code around the hook is:
 56C0  JSR $E060
 56C3  CLI
 56C4  LDA #$00
-...
+56C6  STA $4C6A
+56C9  LDA #$00
+56CB  STA $4C6B
 56CE  JSR $4E86
 ```
 
@@ -38,46 +93,12 @@ The redraw loop stores the first glyph byte in `$03` and the second in
 - `$F9` = Shift-JIS/private lead byte;
 - `$F8` = Shift-JIS/private trail byte.
 
-For non-private leads the new hook calls the exact original System Card
-`EX_GETFNT` service and returns.
+The three-byte `JSR $E060` becomes `JSR $A800`.
 
-For private leads it writes the 32-byte `$4C6C` staging cell itself and
-returns to `$56C3`. The existing `$4E86` transform, VDC upload, BAT write,
-text-grid redraw, cursor advance, scroll, timing, and page handling remain
-untouched.
-
-## Runtime storage
-
-The initial proof is intentionally limited to the Mission 0-B resident overlay.
-
-Authenticated payload base:
-
-```text
-0x00131800
-```
-
-Candidate logical region:
-
-```text
-$A300-$BFFF
-```
-
-Source contract:
-
-| Logical range | Original bytes |
-|---|---|
-| `$A300-$A7FF` | exactly `00` |
-| `$A800-$BFFF` | exactly `E5` |
-
-The complete 7,424-byte region has SHA-256:
-
-```text
-c4b3d9d150441e0fb914e0d8f8ffaf0e73c6b7e7037759fff4eb8a7c762fe18b
-```
-
-This is stronger than merely finding a low-entropy run, but it is still scoped
-as a Mission 0 runtime proof. Later overlays do not inherit this ownership
-claim.
+For a normal Japanese glyph, the new routine calls the original `$E060` BIOS
+service and returns. For a private English token it fills the 32-byte
+`$4C6C` staging cell directly and returns. Everything from `$56C3` onward
+is stock.
 
 ## Final-master sizing
 
@@ -88,16 +109,15 @@ The 2026-09-24 final localization master produces:
 - 3,044 bytes of pair-table data;
 - 1,456 bytes of 8x16 one-bit atlas data.
 
-With the current runtime:
+Current resident layout:
 
-| Component | Logical range |
+| Component | RAM range |
 |---|---|
-| decoder/compositor | `$A300-$A449` |
-| pair table | `$A500-$B0E3` |
-| glyph atlas | `$B100-$B6AF` |
+| decoder/compositor | `$A800-$A949` |
+| pair table | `$AA00-$B5E3` |
+| glyph atlas | `$B600-$BBAF` |
 
-The used resident range therefore ends at `$B6B0`, leaving `$950` bytes
-before `$C000`.
+The runtime ends at `$BBB0`, leaving `$450` bytes before `$C000`.
 
 ## Runtime algorithm
 
@@ -110,15 +130,15 @@ For lead `F0-FC`:
 5. reject indexes beyond the active pair dictionary;
 6. multiply the pair index by two;
 7. load left/right one-byte glyph IDs from the pair table;
-8. use those IDs as X/Y indexes into each of the sixteen row-major atlas rows;
-9. write left/right bytes to `$4C6C-$4C8B`;
+8. use those IDs as X/Y indexes into each of sixteen row-major atlas rows;
+9. write left/right row bytes to `$4C6C-$4C8B`;
 10. restore X/Y and return.
 
 Malformed/out-of-range private indexes render `??`.
 
 ## First visual proof
 
-The first proof modifies one exact same-size field:
+The proof modifies one fixed-size field:
 
 - payload offset: `0x00145892`
 - Japanese: `バーテン「いらっしゃいませ」`
@@ -127,30 +147,18 @@ The first proof modifies one exact same-size field:
 - packed English: 22 bytes
 - remaining six bytes: stock-ignored `80`
 
-The existing following null terminator and surrounding command stream are not
-moved.
+The following null terminator and surrounding command stream do not move.
 
-## Authenticated payload test
+## Authentication gates
 
-The implementation was validated against the supplied Track 2 payload:
+Validation requires both:
 
-- size: 84,375,552 bytes
-- SHA-256:
-  `0817cfa03fedc7b33c52f9bd9423b41480fa385cff3693262732b8768e7ca223`
+1. every individual patch source to match; and
+2. the complete unmodified `$1C00` indexed-table-plus-padding interval to
+   match its authenticated SHA-256.
 
-All five proof patch sources matched:
-
-1. font-fetch hook;
-2. runtime code storage;
-3. pair-table storage;
-4. atlas storage;
-5. bartender source field.
-
-The resulting proof touches relative Track 2 sectors:
-
-```text
-621, 631, 632, 633, 651
-```
+Matching only the individual code/data destinations is deliberately
+insufficient.
 
 ## Live certification
 
@@ -159,18 +167,19 @@ Use `tools/mesen_packed_english_capture.lua`.
 A successful packed-glyph event must show:
 
 ```text
-$56C0 -> $A300 -> $56C3
+$56C0 -> $A800 -> $56C3
 ```
 
 with:
 
-- MPRs stable across the call;
+- MPR5 = `$83` at the font hook;
 - `$F9` in `F0-FC`;
 - a valid private trail in `$F8`;
 - a populated 32-byte `$4C6C` staging cell after return;
+- the runtime bytes at `$A800-$BBAF` surviving the covered scene lifecycle;
 - normal continuation through the stock renderer;
-- readable bartender English;
-- Japanese fallback still working for non-private glyphs.
+- readable bartender English; and
+- stock Japanese fallback still functioning for non-private glyphs.
 
-The Mesen check is the remaining gate before this Mission 0 renderer proof is
-called runtime-certified.
+The Mesen check remains the final gate before this Mission 0 proof is called
+runtime-certified.
