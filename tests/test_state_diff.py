@@ -37,6 +37,27 @@ class StateDiffTests(unittest.TestCase):
         self.assertEqual(physical_address(0x4001, mprs), "*12:0001")
         self.assertEqual(physical_address(0xBFFF, mprs), "*15:1FFF")
 
+
+    def test_changed_run_splits_at_mpr_window_boundary(self) -> None:
+        before_memory = bytes(0x10000)
+        after_memory = bytearray(before_memory)
+        after_memory[0x3FFF] = 0x11
+        after_memory[0x4000] = 0x22
+        mprs = (0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17)
+
+        report = compare_states(
+            SnapshotState("before", mprs, before_memory),
+            SnapshotState("after", mprs, bytes(after_memory)),
+        )
+
+        self.assertEqual(report["changed_bytes"], 2)
+        self.assertEqual(report["changed_runs"], 2)
+        self.assertEqual(report["runs"][0]["start"], "0x3FFF")
+        self.assertEqual(report["runs"][0]["end_exclusive"], "0x4000")
+        self.assertEqual(report["runs"][0]["before_physical"], "*11:1FFF")
+        self.assertEqual(report["runs"][1]["start"], "0x4000")
+        self.assertEqual(report["runs"][1]["before_physical"], "*12:0000")
+
     def test_truncation_is_explicit(self) -> None:
         before_memory = bytes(0x10000)
         after_memory = bytearray(before_memory)
