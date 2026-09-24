@@ -18,7 +18,7 @@ local hitCounts = {}
 
 local targets = {
   -- Common dialogue parser entries: M0-A, M0-B, M1 ... M8.
-  {name="dialogue_parser_M0_A", address=0x94A7, pointer=0x007F},
+  {name="dialogue_parser_M0_A_or_M8", address=0x94A7, pointer=0x007F},
   {name="dialogue_parser_M0_B", address=0x9543, pointer=0x007F},
   {name="dialogue_parser_M1",   address=0x95AA, pointer=0x007F},
   {name="dialogue_parser_M2",   address=0x95AE, pointer=0x007F},
@@ -27,7 +27,7 @@ local targets = {
   {name="dialogue_parser_M5",   address=0x9581, pointer=0x007F},
   {name="dialogue_parser_M6",   address=0x9526, pointer=0x007F},
   {name="dialogue_parser_M7",   address=0x94A8, pointer=0x007F},
-  -- M8 reuses $94A7; MPRs disambiguate it from M0-A.
+  -- M8 reuses $94A7; the shared callback name and MPRs disambiguate it.
 
   -- Shared stock dialogue renderer and font path.
   {name="dialogue_renderer", address=0x5915},
