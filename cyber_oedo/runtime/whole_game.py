@@ -37,6 +37,9 @@ BOOT_SAVE_READ_SHA256 = "e50a4c01da3dee19d11bdfbd6c05086e1391aac251749d282ad59a3
 BOOT_SLOT_CONSUMER_OFFSET = 0x000019F1
 BOOT_SLOT_CONSUMER_BYTES = 0x110
 BOOT_SLOT_CONSUMER_SHA256 = "2796c27ffdacb966af5065ae308ce4d8fb7b184d63484d27d0efe98a4784bf5c"
+BOOT_EVENT_LOADER_OFFSET = 0x00001AD3
+BOOT_EVENT_LOADER_BYTES = 0x41
+BOOT_EVENT_LOADER_SHA256 = "af9dcecd7d068422f2b33a40b9e4deac0a89b21e7e92267a437b56ad55810708"
 
 SAVE_FILE_DESCRIPTOR = bytes.fromhex("07 00") + b"OEDO808   "
 SAVE_SLOT_BYTES = 4
@@ -296,6 +299,32 @@ def build_whole_game_report(path: pathlib.Path) -> dict[str, Any]:
         "payload_sha256": digest,
         "payload_authenticated": digest == TRACK2_PAYLOAD_SHA256,
         "save": _save_report(payload),
+        "event_control_boundary": {
+            "boot_loader": _guard(
+                payload,
+                GuardedRegion(
+                    "boot_event_overlay_loader",
+                    BOOT_EVENT_LOADER_OFFSET,
+                    BOOT_EVENT_LOADER_BYTES,
+                    BOOT_EVENT_LOADER_SHA256,
+                    (
+                        "Load one CD block to logical $D800 through CD_READ and "
+                        "jump to $D800 with new-game/resume selectors."
+                    ),
+                ),
+            ),
+            "entry": "$D800",
+            "progress_input": "$371F",
+            "proof": (
+                "startup establishes a separate outer event/control overlay; "
+                "its opcode language is not conflated with dialogue bytecode"
+            ),
+            "static_limit": (
+                "the loader's CD block address does not map naively to "
+                "Track2-payload sector*2048, so mapped runtime bytes are required "
+                "before assigning event opcodes"
+            ),
+        },
         "adpcm": _adpcm_report(payload),
         "objects_and_interactions": _object_and_interaction_report(),
         "already_proven_adjacent_systems": {
@@ -350,7 +379,8 @@ def main(argv: list[str] | None = None) -> int:
         for row in report["save"]["common_copies"]
     ) and all(row["matched"] for row in report["save"]["boot_regions"])
     adpcm_ok = all(row["matched"] for row in report["adpcm"]["regions"])
-    return 0 if report["payload_authenticated"] and save_ok and adpcm_ok else 1
+    event_ok = report["event_control_boundary"]["boot_loader"]["matched"]
+    return 0 if report["payload_authenticated"] and save_ok and adpcm_ok and event_ok else 1
 
 
 if __name__ == "__main__":
