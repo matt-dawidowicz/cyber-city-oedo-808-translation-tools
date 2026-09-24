@@ -31,6 +31,13 @@ The existing `mission0-stock-renderer` build remains a guarded vertical slice,
 not a full translation. It uses the game's stock fullwidth Shift-JIS renderer
 and does not activate the failed Stage-1 wide-text experiment.
 
+A new **non-activated** English-font architecture is now under review. It keeps
+the parser's proven two-byte-glyph contract, reserves collision-free private
+Shift-JIS tokens, and composes two readable 8x16 English glyphs inside each
+existing 16x16 staging cell. It does not revive the unsafe global escape-marker
+scheme. See
+[`docs/english_font_architecture.md`](docs/english_font_architecture.md).
+
 ## What is confirmed
 
 - Track 2 contains 41,199 Mode 1 data sectors.
@@ -63,6 +70,13 @@ OVA, and the English OVA is the most familiar English-language reference for
 many players. The translation therefore uses established franchise names and
 terminology where they fit the game, while treating the Japanese game text as
 the primary source.
+
+The final contextual pass also treats Mission 0 as the cast's origin-story
+phase: Sengoku begins as an independent bounty hunter and Benten/Gogul are
+wanted rivals, so later coworker familiarity is not back-projected into the
+opening. See
+[`docs/localization_style_guide.md`](docs/localization_style_guide.md) for the
+full voice, continuity, UI, profanity, and terminology rules.
 
 In practice:
 
@@ -300,3 +314,5 @@ Further documentation:
 - [`docs/gamewide_runtime_architecture.md`](docs/gamewide_runtime_architecture.md)
 - [`docs/text_engine_coverage.md`](docs/text_engine_coverage.md)
 - [`docs/text_engine_completion.md`](docs/text_engine_completion.md)
+- [`docs/localization_style_guide.md`](docs/localization_style_guide.md)
+- [`docs/english_font_architecture.md`](docs/english_font_architecture.md)
