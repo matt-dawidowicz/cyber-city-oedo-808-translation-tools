@@ -61,7 +61,7 @@ Y=5 -> $DA4F
 Y=6 -> $D940
 ```
 
-The controller contains two arrays of fixed four-byte CD descriptors. Their
+The controller contains three arrays of fixed four-byte CD descriptors. Their
 format is:
 
 ```text
@@ -71,10 +71,13 @@ format is:
 +3 CD_READ block count
 ```
 
-The primary table at $D827 has nine records. $371F is multiplied by four to
-select one of them; the chosen module is loaded to logical $4000 and the
-exploration engine is entered. A secondary table at $D8CA is used by transition
-results to select alternate modules before returning to exploration.
+Table A at $D803 has nine records and is used by one alternate Y=1 dispatcher
+path when the saved X/Y call selectors differ. Table B at $D827 has nine
+records and is the normal progress-indexed mission-module path. Table C at
+$D8CA is used by interaction-driven progress transitions.
+
+$371F is multiplied by four to select the appropriate descriptor; the chosen
+module is loaded to logical $4000 and the exploration engine is entered.
 
 So persistent progress is directly tied to mission-module selection:
 
@@ -179,13 +182,22 @@ The exploration overlay consumes:
 - $3704-$3706 as scene selector, entry selector, and position mode for that
   transition form.
 
-The exploration overlay has no direct readers of $3707-$370B. Those final five
-bytes are therefore a **handoff tail** for subsequent scene/action code, not
-locally decoded movement fields.
+The exploration overlay itself has no direct readers of $3707-$370B, but the
+mission controller resolves one important handoff field:
+
+- payload +6 is $3709;
+- if $3709 is below $10, the Y=1 controller follows the ordinary return path;
+- if $3709 is $10 or greater, it subtracts $10, stores the result in $371F,
+  indexes module table C at $D8CA, loads that module to $4000, and returns to
+  exploration.
+
+Thus payload +6 is a **progress/module-transition selector**. Payload bytes
++4/+5 and +7/+8 remain unconsumed by both the exploration core and this startup
+mission controller and stay intentionally unnamed.
 
 The whole-game Mesen capture records all nine bytes at the interaction copy,
-transition promotion, and $D800 outer-event entry so later consumers can be
-identified without guessing.
+transition promotion, and $D800 controller entry so later mission-specific
+consumers can still be correlated without guessing.
 
 ## Scene loading
 
@@ -255,7 +267,8 @@ dispatcher code rather than an opcode language.
 
 Remaining work is narrower:
 
-1. identify consumers of the interaction handoff tail $3707-$370B;
+1. identify consumers of the still-opaque interaction bytes $3707/$3708 and
+   $370A/$370B;
 2. determine whether preserved object auxiliary fields are used by another
    overlay rather than the exploration core;
 3. live-certify representative Missions 1-8 and ENDING;
