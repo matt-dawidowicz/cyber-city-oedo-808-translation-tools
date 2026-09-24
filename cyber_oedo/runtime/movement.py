@@ -39,6 +39,15 @@ COLLISION_RECT_BASE = 0x265E
 INTERACTION_TABLE_POINTER = 0x2779
 INTERACTION_CLASS = 0x277B
 INTERACTION_RESULT = 0x3703
+SCENE_INDEX = 0x3700
+SCENE_ENTRY_INDEX = 0x3701
+SCENE_POSITION_MODE = 0x3702
+STATIC_OBJECT_SOURCE_POINTER = 0x277E
+STATIC_OBJECT_COUNT = 0x277D
+LIVE_OBJECT_BASE = 0x2783
+METASPRITE_TABLE_CPU = 0x5A37
+CAMERA_SCROLL_X = 0x220C
+CAMERA_SCROLL_Y = 0x2210
 
 INPUT_CODES = {
     1: "left",
@@ -79,6 +88,32 @@ INTERACTION_RECORD_BYTES = 18
 INTERACTION_BOUNDS_BYTES = 8
 INTERACTION_PAYLOAD_BYTES = 9
 COLLISION_RECT_BYTES = 8
+STATIC_OBJECT_SOURCE_BYTES = 8
+LIVE_OBJECT_BYTES = 16
+METASPRITE_COMPONENT_BYTES = 6
+
+PLAYER_FRAME_COMPONENTS = {
+    0x14: ((640, -16, -48, 4481), (648, -16, -16, 385)),
+    0x15: ((672, -16, -48, 4481), (680, -16, -16, 385)),
+    0x16: ((704, -16, -48, 4481), (712, -16, -16, 385)),
+    0x17: ((736, -16, -48, 4481), (744, -16, -16, 385)),
+    0x18: ((652, -16, -48, 385), (656, -16, -32, 4481)),
+    0x19: ((684, -16, -48, 385), (688, -16, -32, 4481)),
+    0x1A: ((716, -16, -48, 385), (720, -16, -32, 4481)),
+    0x1B: ((748, -16, -48, 385), (752, -16, -32, 4481)),
+    0x1C: ((664, -16, -48, 4481), (768, -16, -16, 385)),
+    0x1D: ((800, -16, -16, 385), (696, -16, -48, 4481)),
+    0x1E: ((728, -16, -48, 4481), (832, -16, -16, 385)),
+    0x1F: ((864, -16, -16, 385), (760, -16, -48, 4481)),
+    0x20: ((772, -16, -48, 385), (776, -16, -32, 4481)),
+    0x21: ((804, -16, -48, 385), (808, -16, -32, 4481)),
+    0x22: ((836, -16, -48, 385), (840, -16, -32, 4481)),
+    0x23: ((868, -16, -48, 385), (872, -16, -32, 4481)),
+    0x24: ((784, -16, -48, 4481), (792, -16, -16, 385)),
+    0x25: ((816, -16, -48, 4481), (824, -16, -16, 385)),
+    0x26: ((848, -16, -48, 4481), (856, -16, -16, 385)),
+    0x27: ((880, -16, -32, 4481), (888, -16, 0, 385)),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,6 +316,110 @@ MOVEMENT_REGIONS = (
             "from the selected interaction record; carry is the in-bounds result."
         ),
     ),
+    MovementRegion(
+        "scene_result_promotion",
+        0x402B,
+        bytes.fromhex(
+            "20 B1 40 A0 02 AD 03 37 C9 FF D0 03 20 3D 40 A2 01 60 "
+            "AD 04 37 8D 00 37 AD 05 37 8D 01 37 AD 06 37 8D 02 37 "
+            "A0 01 60"
+        ),
+        (
+            "When interaction result byte $3703 is FF, promote $3704-$3706 "
+            "into the active scene selector, entry selector, and position mode."
+        ),
+    ),
+    MovementRegion(
+        "scene_entry_selection",
+        0x419E,
+        bytes.fromhex(
+            "AD 01 37 0A A8 AD 0A 70 85 2A AD 0B 70 85 2B "
+            "B1 2A C8 85 28 B1 2A 85 29 AD 02 37 D0 18 C2 "
+            "B1 28 8D 60 27 C8 B1 28 8D 61 27 C8 B1 28 8D 62 27 "
+            "C8 B1 28 8D 63 27 A0 04 B1 28 8D 4C 26 C8 "
+            "B1 28 8D 7E 27 C8 B1 28 8D 7F 27 C8 B1 28 8D 79 27 "
+            "C8 B1 28 8D 7A 27 C8 B1 28 85 1E C8 B1 28 85 1F "
+            "C8 B1 28 8D 1E 42 C8 B1 28 8D 1F 42"
+        ),
+        (
+            "Use $3701 to select a scene-entry record. When $3702 is zero, "
+            "load player X/Y from that record; always load object and interaction "
+            "table pointers plus scene-local loader fields."
+        ),
+    ),
+    MovementRegion(
+        "camera_follow_bridge",
+        0x4ADB,
+        bytes.fromhex(
+            "A5 1C 48 A5 1D 48 A5 1E 48 A5 1F 48 "
+            "AD 60 27 85 1C AD 61 27 85 1D AD 62 27 85 1E "
+            "AD 63 27 85 1F 20 F6 43 "
+            "68 85 1F 68 85 1E 68 85 1D 68 85 1C 60"
+        ),
+        (
+            "Feed the newly committed player X/Y position into the camera "
+            "follow/clamp routine after every movement step."
+        ),
+    ),
+    MovementRegion(
+        "object_source_initialization",
+        0x5519,
+        bytes.fromhex(
+            "9C 80 27 20 3B 55 AD 30 28 C9 FF F0 0E 20 88 55 20 7D 56 "
+            "EE 80 27 20 40 56 80 E8 AD 80 27 8D 7D 27 60 "
+            "A5 2A 48 A5 2B 48 AD 80 27 0A 0A 0A A8 AD 7E 27 85 2A "
+            "AD 7F 27 85 2B B1 2A C8 8D 30 28 B1 2A C8 8D 31 28 "
+            "B1 2A C8 8D 23 28 B1 2A C8 8D 24 28 B1 2A C8 8D 25 28 "
+            "B1 2A C8 8D 26 28 B1 2A C8 8D 2E 28 B1 2A 8D 2F 28 "
+            "68 85 2B 68 85 2A 60"
+        ),
+        (
+            "Read 8-byte scene object source records from $277E/$277F until "
+            "type FF, initialize runtime fields, and persist each as a 16-byte "
+            "live object record."
+        ),
+    ),
+    MovementRegion(
+        "live_object_update",
+        0x55E9,
+        bytes.fromhex(
+            "AD 7D 27 8D 80 27 AD 80 27 F0 0E 20 03 56 20 BE 56 "
+            "20 40 56 CE 80 27 80 ED 60 "
+            "AD 80 27 8D 39 56 9C 3A 56 CE 39 56 "
+            "0E 39 56 2E 3A 56 0E 39 56 2E 3A 56 "
+            "0E 39 56 2E 3A 56 0E 39 56 2E 3A 56 "
+            "AD 39 56 18 69 83 8D 39 56 AD 3A 56 69 27 8D 3A 56 "
+            "73 00 00 23 28 10 00 60"
+        ),
+        (
+            "Iterate the $277D live-object count, address $2783 + index*16, "
+            "copy each object to the scratch record, run animation, and write "
+            "the updated 16-byte record back."
+        ),
+    ),
+    MovementRegion(
+        "metasprite_renderer",
+        0x5769,
+        bytes.fromhex(
+            "AD 76 28 0A 0A 18 6D 76 28 A8 "
+            "B9 35 28 8D 77 28 B9 36 28 8D 78 28 "
+            "B9 37 28 8D 79 28 B9 38 28 8D 7A 28 "
+            "B9 39 28 8D 7B 28 60 "
+            "A5 1C 48 A9 37 85 00 A9 5A 85 01 62 CD 77 28 F0 18 "
+            "48 B2 00 0A 85 1C 0A 18 65 1C 1A 18 65 00 85 00 "
+            "90 02 E6 01 68 1A 80 E3 68 85 1C 60 "
+            "B2 00 8D 82 28 A0 01 62 48 20 DB 57 5A 20 00 58 "
+            "EE 83 28 7A 68 1A CD 82 28 D0 ED 60 "
+            "B1 00 8D 80 28 C8 B1 00 8D 81 28 C8 "
+            "B1 00 8D 7E 28 C8 B1 00 8D 7F 28 C8 "
+            "B1 00 8D 7C 28 C8 B1 00 8D 7D 28 C8 60"
+        ),
+        (
+            "Resolve a frame ID through the meta-sprite table at $5A37. Each "
+            "frame starts with a component count; each six-byte component is "
+            "pattern word, signed X offset, signed Y offset, attribute word."
+        ),
+    ),
 )
 
 
@@ -332,6 +471,14 @@ def build_movement_report(payload: pathlib.Path) -> dict[str, Any]:
             "interaction_table_pointer": "$2779/$277A",
             "interaction_class": "$277B",
             "interaction_result_payload": "$3703-$370B",
+            "scene_index": "$3700",
+            "scene_entry_index": "$3701",
+            "scene_position_mode": "$3702",
+            "static_object_source_pointer": "$277E/$277F",
+            "static_object_count": "$277D",
+            "live_object_base": "$2783",
+            "camera_scroll_x": "$220C/$220D",
+            "camera_scroll_y": "$2210/$2211",
         },
         "animation": {
             "walk_scripts": {str(key): f"0x{value:04X}" for key, value in WALK_ANIMATION_SCRIPTS.items()},
@@ -353,6 +500,49 @@ def build_movement_report(payload: pathlib.Path) -> dict[str, Any]:
             "payload_bytes": INTERACTION_PAYLOAD_BYTES,
             "terminator": "0xFF in class byte",
             "payload_destination": "$3703-$370B",
+            "transition_header": (
+                "$3703 == FF promotes $3704-$3706 to $3700-$3702"
+            ),
+        },
+        "scene_transition": {
+            "scene_selector": "$3700 selects a 9-byte CD/resource descriptor",
+            "entry_selector": "$3701 selects a scene-entry pointer",
+            "position_mode": (
+                "$3702 == 0 reloads player X/Y from the entry record; nonzero "
+                "preserves the established position"
+            ),
+        },
+        "objects": {
+            "source_record_bytes": STATIC_OBJECT_SOURCE_BYTES,
+            "source_pointer": "$277E/$277F",
+            "source_terminator": "0xFF in source record byte 0",
+            "live_record_bytes": LIVE_OBJECT_BYTES,
+            "live_base": "$2783",
+            "live_count": "$277D",
+            "source_fields": {
+                "+0": "animation/type selector",
+                "+1": "auxiliary byte, semantic name not yet proven",
+                "+2/+3": "X position",
+                "+4/+5": "Y position",
+                "+6/+7": "auxiliary word, semantic name not yet proven",
+            },
+        },
+        "metasprites": {
+            "table_cpu": f"0x{METASPRITE_TABLE_CPU:04X}",
+            "component_bytes": METASPRITE_COMPONENT_BYTES,
+            "component_format": (
+                "pattern_word, signed_x_offset, signed_y_offset, attribute_word"
+            ),
+            "player_frames": {
+                f"0x{frame:02X}": components
+                for frame, components in PLAYER_FRAME_COMPONENTS.items()
+            },
+        },
+        "camera": {
+            "follow_bridge": "$4ADB -> $43F6 after every coordinate commit",
+            "scroll_x": "$220C/$220D",
+            "scroll_y": "$2210/$2211",
+            "tile_refill_boundary_pixels": 16,
         },
         "input_codes": INPUT_CODES,
         "unit_vectors": {str(key): value for key, value in UNIT_VECTORS.items()},
@@ -369,8 +559,12 @@ def build_movement_report(payload: pathlib.Path) -> dict[str, Any]:
                 "needed to assign game-facing meanings to individual bits/rectangles"
             ),
             "interaction_payload_semantics": (
-                "record geometry and payload copying are proven; the nine payload "
-                "bytes are preserved as opaque until their consumers are fully mapped"
+                "the transition form is proven for bytes 0..3 when byte 0 is FF; "
+                "other payload forms and bytes 4..8 remain opaque"
+            ),
+            "object_auxiliary_fields": (
+                "source object bytes +1 and +6/+7 are preserved but not assigned "
+                "game-facing names until their consumers are mapped"
             ),
         },
     }

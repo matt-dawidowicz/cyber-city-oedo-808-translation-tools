@@ -228,8 +228,27 @@ at $265E. These are fetched by the overlap path around $47D0. Separately,
 $2779/$277A points at 18-byte interaction records. Their static layout is one
 class byte, eight bound bytes, and nine payload bytes. $4B20 filters by $277B,
 uses $5186 for the player-in-bounds test, and copies a successful payload to
-$3703-$370B. The nine-byte payload remains intentionally opaque until all of
-its consumers are mapped.
+$3703-$370B.
+
+One payload form is now decoded: when $3703 is FF, $403D promotes $3704-$3706
+into $3700-$3702. $3700 selects a 9-byte scene/resource load descriptor, $3701
+selects a scene-entry record, and $3702 controls whether that entry reloads the
+player X/Y position. This is the static room/scene-transition path.
+
+**Camera follow.** Each committed player step calls $4ADB, which passes
+$2760-$2763 into $43F6. The latter applies camera clamping/dead-zone behavior
+and drives horizontal $220C/$220D and vertical $2210/$2211 scroll state.
+Scroll changes are pixel-granular; crossing a 16-pixel boundary triggers map
+row/column refill.
+
+**Live objects and meta-sprites.** $277E/$277F points at fixed 8-byte scene
+object definitions terminated by source byte FF. Initialization expands those
+records into 16-byte live objects at $2783, with the count at $277D. The live
+records preserve X/Y, animation state, and the derived collision-rectangle
+index. Frame IDs resolve through the table at $5A37; every meta-sprite record
+contains a component count followed by 6-byte components consisting of pattern
+word, signed X offset, signed Y offset, and attribute word. Player frames
+$14-$27 are now decoded to exact two-component meta-sprites.
 
 ## Gates before Tier-B mutation
 
