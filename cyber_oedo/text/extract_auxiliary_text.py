@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from cyber_oedo.disc.game_layout import SECTOR_SIZE, bank_for_offset
 from cyber_oedo.io import mapped_file
+from cyber_oedo.resources import build_candidate_regions, discover_resource_headers
 from cyber_oedo.tabular import tsv_dict_reader, tsv_dict_writer
 
 CONTROL_TAG = re.compile(r"<\$[0-9A-Fa-f]{2}>")
@@ -124,6 +125,19 @@ def _resource_regions(
     regions.sort()
     if any(left[1] > right[0] for left, right in zip(regions, regions[1:])):
         raise ValueError(f"{path}: overlapping resource intervals")
+    if data is not None:
+        sector_count, remainder = divmod(len(data), SECTOR_SIZE)  # type: ignore[arg-type]
+        if remainder:
+            raise ValueError(f"{path}: payload length is not sector-aligned")
+        expected = [
+            (region.start_offset, region.end_offset, region.header.name)
+            for region in build_candidate_regions(
+                discover_resource_headers(data),
+                sector_count,
+            )
+        ]
+        if regions != expected:
+            raise ValueError(f"{path}: resource boundary sequence mismatch")
     return tuple(regions)
 
 
@@ -236,7 +250,6 @@ def _shadow_match(
     start: int,
     end: int,
     text: str,
-    raw: bytes,
     regions: tuple[tuple[int, int, str], ...],
     region_starts: tuple[int, ...],
     dialogue_by_resource: dict[int, tuple[DialogueEvidence, ...]],
@@ -255,7 +268,7 @@ def _shadow_match(
         distance = _interval_distance(start, end, record.start, record.end)
         if distance > distance_limit:
             continue
-        if not any(raw in segment for segment in record.segments):
+        if not any(text in segment.decode("shift_jis") for segment in record.segments):
             continue
         match = ShadowMatch(region[2], record.start, distance, tail[0], tail[1])
         if best is None or match.distance_bytes < best.distance_bytes:
@@ -330,11 +343,6 @@ def write_auxiliary_text(
             previous_candidate = start
             length = int(row["bytes"])
             end = start + length
-            if covered(start, end):
-                overlap_count += 1
-                continue
-
-            shadow = None
             if data is not None:
                 try:
                     encoded = row["text"].encode("shift_jis")
@@ -347,6 +355,12 @@ def write_auxiliary_text(
                     raise ValueError(
                         f"{likely_scan}: candidate source mismatch at {row['offset']}"
                     )
+            if covered(start, end):
+                overlap_count += 1
+                continue
+
+            shadow = None
+            if data is not None:
                 candidate_region = _find_region(
                     regions,
                     region_starts,
@@ -368,7 +382,6 @@ def write_auxiliary_text(
                         start=start,
                         end=end,
                         text=row["text"],
-                        raw=raw,
                         regions=regions,
                         region_starts=region_starts,
                         dialogue_by_resource=dialogue_by_resource,
