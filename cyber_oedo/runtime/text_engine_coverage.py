@@ -116,6 +116,9 @@ RESOURCE_BINARY_UI_FAMILIES = frozenset(
     }
 )
 
+# Compatibility alias for the earlier broad classification name.
+RESOURCE_TEXT_FAMILIES = RESOURCE_BINARY_UI_FAMILIES
+
 
 def _digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
