@@ -83,6 +83,17 @@ OBJECT_SOURCE_BYTES = 8
 INTERACTION_RESULT_BASE = 0x3703
 INTERACTION_RESULT_BYTES = 9
 
+MISSION_SCRIPT_OPCODES = (
+    0x32, 0x30, 0x22, 0x23, 0x2E, 0x3B, 0x38, 0x3C, 0x2F,
+    0x2B, 0x06, 0x24, 0x2D, 0x27, 0x3A, 0x36, 0x33, 0x34,
+    0x35, 0x44, 0x46, 0x48, 0x4B, 0x49, 0x47, 0x4A, 0x4C,
+)
+M0_SCRIPT_RESULT_HANDLER_OFFSET = 0x0013A9B7
+M0_SCRIPT_RESULT_HANDLER_BYTES = 0x4B
+M0_SCRIPT_RESULT_HANDLER_SHA256 = (
+    "e7fea25bd752ff7fa376501f5295bd169c130837c94a4f879caff3f49363c76b"
+)
+
 
 @dataclass(frozen=True, slots=True)
 class GuardedRegion:
@@ -289,6 +300,81 @@ def _event_control_report(payload: bytes) -> dict[str, Any]:
     }
 
 
+
+def _find_mission_script_dispatch(module: bytes) -> int:
+    needed = len(MISSION_SCRIPT_OPCODES) * 3
+    for offset in range(0, len(module) - needed + 1):
+        if all(
+            module[offset + index * 3] == opcode
+            for index, opcode in enumerate(MISSION_SCRIPT_OPCODES)
+        ):
+            return offset
+    raise ValueError("mission script dispatch table not found")
+
+
+def _mission_script_report(payload: bytes, event_report: dict[str, Any]) -> dict[str, Any]:
+    rows = []
+    for descriptor in event_report["module_tables"]["B"]["records"]:
+        relative_sector = descriptor["track2_relative_sector"]
+        byte_count = descriptor["block_count"] * 2048
+        module_offset = relative_sector * 2048
+        module = payload[module_offset : module_offset + byte_count]
+        table_offset = _find_mission_script_dispatch(module)
+        handlers = []
+        for index, opcode in enumerate(MISSION_SCRIPT_OPCODES):
+            entry = module[table_offset + index * 3 : table_offset + (index + 1) * 3]
+            handlers.append(
+                {
+                    "opcode": "0x%02X" % opcode,
+                    "handler": "$%04X" % int.from_bytes(entry[1:3], "little"),
+                }
+            )
+        rows.append(
+            {
+                "progress_index": descriptor["index"],
+                "absolute_lba": descriptor["absolute_lba"],
+                "payload_offset": "0x%08X" % module_offset,
+                "module_bytes": byte_count,
+                "dispatch_relative_offset": "0x%04X" % table_offset,
+                "handlers": handlers,
+            }
+        )
+
+    result_handler = GuardedRegion(
+        "mission0_event_result_opcode_49",
+        M0_SCRIPT_RESULT_HANDLER_OFFSET,
+        M0_SCRIPT_RESULT_HANDLER_BYTES,
+        M0_SCRIPT_RESULT_HANDLER_SHA256,
+        (
+            "Parse the event-result tuple into $3709-$370E, set script-complete "
+            "$34A6 to FF, and stop active ADPCM."
+        ),
+    )
+    return {
+        "architecture": (
+            "27-entry mission script command language nested below the $D800 "
+            "mission controller and above dialogue bytecode"
+        ),
+        "opcode_order": ["0x%02X" % value for value in MISSION_SCRIPT_OPCODES],
+        "mission_modules": rows,
+        "all_nine_modules_have_common_opcode_set": len(rows) == 9,
+        "decoded_commands": {
+            "0x49": {
+                "handler_guard": _guard(payload, result_handler),
+                "behavior": (
+                    "parse one byte plus two 16-bit values plus a final byte into "
+                    "$3709-$370E; FF as the first parsed value selects a discard/"
+                    "completion form; both forms set $34A6=FF and stop ADPCM"
+                ),
+                "controller_link": (
+                    "$3709 is later consumed by the $D800 mission controller as "
+                    "a progress/module transition selector"
+                ),
+            }
+        },
+    }
+
+
 def _decode_adpcm_record(raw: bytes, sample_id: int) -> dict[str, Any]:
     if len(raw) != ADPCM_RECORD_BYTES:
         raise ValueError("ADPCM record must be six bytes")
@@ -448,6 +534,10 @@ def build_whole_game_report(path: pathlib.Path) -> dict[str, Any]:
             "controller": _event_control_report(payload),
         },
         "adpcm": _adpcm_report(payload),
+        "mission_script": _mission_script_report(
+            payload,
+            _event_control_report(payload),
+        ),
         "objects_and_interactions": _object_and_interaction_report(),
         "already_proven_adjacent_systems": {
             "scene_loading": (
@@ -506,7 +596,13 @@ def main(argv: list[str] | None = None) -> int:
         report["event_control_boundary"]["boot_loader"]["matched"]
         and report["event_control_boundary"]["controller"]["overlay"]["matched"]
     )
-    return 0 if report["payload_authenticated"] and save_ok and adpcm_ok and event_ok else 1
+    script_ok = (
+        report["mission_script"]["all_nine_modules_have_common_opcode_set"]
+        and report["mission_script"]["decoded_commands"]["0x49"]["handler_guard"]["matched"]
+    )
+    return 0 if (
+        report["payload_authenticated"] and save_ok and adpcm_ok and event_ok and script_ok
+    ) else 1
 
 
 if __name__ == "__main__":
