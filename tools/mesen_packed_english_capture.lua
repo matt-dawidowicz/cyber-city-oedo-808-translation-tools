@@ -6,8 +6,12 @@
 --
 -- Expected proof path for a packed English glyph:
 --   $56C0  stock font-fetch call site
---   $A300  packed-English hook
+--   $A800  explicitly loaded packed-English hook
 --   $56C3  return to untouched stock renderer
+--
+-- The runtime-write watch covers $A800-$BBAF. Initial loader writes are
+-- expected; writes after the extended $A400 loader completes are evidence of
+-- an ownership collision and must be investigated.
 --
 -- The script records $F9/$F8 (lead/trail), MPRs, cursor state, and the complete
 -- 32-byte $4C6C glyph staging cell after the hook returns.
@@ -17,7 +21,7 @@ local MEM = emu.memType.pceMemory
 
 local frame = 0
 local logFile = nil
-local hits = {pre=0, hook=0, post=0, private=0, stock=0}
+local hits = {pre=0, hook=0, post=0, private=0, stock=0, runtimeWrites=0}
 
 local function r8(address)
   return emu.read(address, MEM)
@@ -121,7 +125,7 @@ emu.addMemoryCallback(
     describe("packed_hook")
   end,
   emu.callbackType.exec,
-  0xA300, 0xA300, CPU, MEM
+  0xA800, 0xA800, CPU, MEM
 )
 
 emu.addMemoryCallback(
@@ -134,6 +138,21 @@ emu.addMemoryCallback(
   end,
   emu.callbackType.exec,
   0x56C3, 0x56C3, CPU, MEM
+)
+
+emu.addMemoryCallback(
+  function(address, value)
+    hits.runtimeWrites = hits.runtimeWrites + 1
+    if hits.runtimeWrites <= 32 then
+      local c = cpu()
+      log(string.format(
+        "[runtime_write #%d] frame=%d addr=$%04X value=$%02X PC=$%04X %s",
+        hits.runtimeWrites, frame, address, value or 0, c.pc, mpr_string()
+      ))
+    end
+  end,
+  emu.callbackType.write,
+  0xA800, 0xBBAF, CPU, MEM
 )
 
 emu.addEventCallback(function()
@@ -150,8 +169,8 @@ end, emu.eventType.endFrame)
 emu.addEventCallback(function()
   log("=== PACKED ENGLISH SESSION SUMMARY ===")
   log(string.format(
-    "pre=%d hook=%d post=%d private=%d stock=%d",
-    hits.pre, hits.hook, hits.post, hits.private, hits.stock
+    "pre=%d hook=%d post=%d private=%d stock=%d runtime_writes=%d",
+    hits.pre, hits.hook, hits.post, hits.private, hits.stock, hits.runtimeWrites
   ))
   if logFile then
     logFile:flush()
