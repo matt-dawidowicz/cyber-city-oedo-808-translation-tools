@@ -103,7 +103,7 @@ TITLE_SCREEN_SOURCE_SHA256 = (
     "74319e81bfeba32b385620a8bf32848e78da19271c87b6337decf4991a2fe5c4"
 )
 
-RESOURCE_TEXT_FAMILIES = frozenset(
+RESOURCE_BINARY_UI_FAMILIES = frozenset(
     {
         "INVENTRY",
         "DEN_EREV",
@@ -312,10 +312,10 @@ def decode_ending_completion_stream(data: bytes) -> tuple[dict[str, Any], ...]:
 def resource_family_instances(payload: bytes) -> dict[str, list[dict[str, Any]]]:
     headers = discover_resource_headers(payload)
     regions = build_candidate_regions(headers, len(payload) // 2048)
-    grouped = {name: [] for name in sorted(RESOURCE_TEXT_FAMILIES)}
+    grouped = {name: [] for name in sorted(RESOURCE_BINARY_UI_FAMILIES)}
     for region in regions:
         name = region.header.name
-        if name not in RESOURCE_TEXT_FAMILIES:
+        if name not in RESOURCE_BINARY_UI_FAMILIES:
             continue
         raw = payload[region.start_offset : region.end_offset]
         grouped[name].append(
@@ -397,11 +397,11 @@ def build_text_engine_coverage_report(path: pathlib.Path) -> dict[str, Any]:
             "status": "source-guarded by build profile",
         },
         {
-            "name": "resource_local_ui_labels",
+            "name": "named_binary_ui_assets",
             "banks": "mission-specific resources",
-            "storage": "fixed tables inside INVENTRY/DEN_EREV/EREV/INTER/KANSHIKI/KIDOU/SHIRYO/H_JYOUHO",
-            "renderer": "resource-specific UI paths",
-            "status": "resource boundaries and complete source digests reported",
+            "storage": "name -> Track 2 sector/span/exact-length descriptors",
+            "renderer": "common resource lookup/cache/install path",
+            "status": "bounded/digested; direct Shift-JIS rejected by completion audit",
         },
         {
             "name": "ending_oedonet",
@@ -454,7 +454,7 @@ def build_text_engine_coverage_report(path: pathlib.Path) -> dict[str, Any]:
                 "2": "two position/control bytes + null-terminated ASCII; credits path",
             },
         },
-        "resource_text_families": resource_family_instances(payload),
+        "resource_binary_ui_assets": resource_family_instances(payload),
         "graphics_backed": {
             "opening_title_offset": "0x0000A000",
             "opening_title_bytes": TITLE_ASSET_BYTES,
@@ -468,9 +468,10 @@ def build_text_engine_coverage_report(path: pathlib.Path) -> dict[str, Any]:
                 "text-bearing row records and source extent are proven; not every "
                 "non-text formatting opcode has a game-facing semantic name"
             ),
-            "resource_local_renderers": (
-                "resource boundaries/text tables are covered here; individual "
-                "mission-specific UI caller semantics can still be expanded"
+            "named_binary_ui_assets": (
+                "resource boundaries are covered here; completion proof decodes "
+                "their descriptor/loader ownership and rejects direct Shift-JIS, "
+                "while individual binary asset schemas remain intentionally unknown"
             ),
             "graphics_backed": (
                 "the opening title is proven graphics-backed; other candidate "
