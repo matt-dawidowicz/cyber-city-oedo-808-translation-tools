@@ -25,13 +25,8 @@ from typing import Any
 from cyber_oedo.disc.game_layout import bank_for_offset
 from cyber_oedo.io import sha256_file
 from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
-from cyber_oedo.runtime.text_engine_coverage import (
-    COMMON_UI_BYTES,
-    DYNAMIC_LABEL_SOURCE,
-    ENDING_COMPLETION_STREAM,
-    ENDING_OEDONET_STREAM,
-    TITLE_ASSET_BYTES,
-)
+from cyber_oedo.graphics.title_screen import TITLE_ASSET_BYTES
+from cyber_oedo.runtime.text_engine_coverage import ENDING_OEDONET_STREAM
 
 
 INFORMATION_STREAM_HEADER = bytes.fromhex("02 01 05 01 06 00 00 50")
