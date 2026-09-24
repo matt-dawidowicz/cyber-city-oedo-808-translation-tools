@@ -69,7 +69,7 @@ cursor arithmetic because the runtime still sees one cell per pair.
 The build compiler scans final visible English and creates a deterministic
 dictionary of non-overlapping character pairs.
 
-The 2026-09-24 final-pass workbook uses 1,529 distinct pairs, leaving 915 free
+The 2026-09-24 final-pass workbook uses 1,522 distinct pairs, leaving 922 free
 private tokens. Its pair table requires 3,058 bytes.
 
 Each pair-table entry is only two one-byte glyph IDs.
