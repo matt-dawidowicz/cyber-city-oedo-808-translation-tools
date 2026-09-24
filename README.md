@@ -166,6 +166,18 @@ cyber-oedo prove-live-dialogue-snapshot registers.json memory.bin \
   --output live_3d_proof.json
 ```
 
+Bank-aware before/after state comparison for movement and other runtime
+archaeology:
+
+```bash
+cyber-oedo diff-live-state idle.json idle.bin right.json right.bin \
+  --output right_vs_idle.json
+```
+
+The state differ reports logical changes together with both MPR mappings; it is
+a candidate generator for breakpoint/disassembly work, not by itself proof of
+coordinate or movement semantics.
+
 The live validator requires the stopped PC, accumulator, all eight HuC6280 MPR
 values, and a complete 64 KiB logical memory dump. It rejects a reused logical
 address if the expected Mission 0 bank is not mapped.
@@ -250,3 +262,4 @@ Further documentation:
 - [`docs/development.md`](docs/development.md)
 - [`docs/modernization_roadmap.md`](docs/modernization_roadmap.md)
 - [`docs/stage1_runtime_failure.md`](docs/stage1_runtime_failure.md)
+- [`docs/text_movement_reverse_engineering.md`](docs/text_movement_reverse_engineering.md)

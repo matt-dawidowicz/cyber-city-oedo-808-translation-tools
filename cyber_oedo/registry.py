@@ -125,6 +125,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "diff-live-state",
+        "cyber_oedo.runtime.state_diff",
+        "Compare two bank-aware frozen runtime snapshots.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "clonecd-cue",
         "cyber_oedo.disc.clonecd_cue",
         "Create a non-destructive CUE view of a CloneCD set.",
