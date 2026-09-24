@@ -48,10 +48,12 @@ class WholeGameProofTests(unittest.TestCase):
         self.assertIn("preserved but not read", fields["+11/+12"])
         self.assertIn("reserved", fields["+15"])
 
-    def test_interaction_tail_is_handoff_not_local_semantics(self) -> None:
+    def test_interaction_progress_handoff_is_decoded(self) -> None:
         report = _object_and_interaction_report()
-        tail = report["interaction_result"]["local_consumers"]["+4..+8"]
-        self.assertIn("not read by the exploration overlay", tail)
+        fields = report["interaction_result"]["local_consumers"]
+        self.assertIn("$371F = value-$10", fields["+6 ($3709)"])
+        self.assertIn("not read", fields["+4/+5"])
+        self.assertIn("not read", fields["+7/+8"])
 
 
 if __name__ == "__main__":
