@@ -99,6 +99,22 @@ MOVEMENT_ARCHITECTURE_REGIONS = (
         "Refill newly exposed map columns/rows after camera tile-origin changes.",
     ),
     HashedRegion(
+        "entity_source_and_runtime_init",
+        MOVEMENT_MODULE_PAYLOAD_BASE,
+        0x5519,
+        0xD0,
+        "df88e2660de211210883615b5a7f6319c3927acf61fb3a7a19064c19819d2984",
+        "Expand 8-byte scene entity records into 16-byte runtime slots, register occupancy rectangles, and initialize animation state.",
+    ),
+    HashedRegion(
+        "entity_frame_update",
+        MOVEMENT_MODULE_PAYLOAD_BASE,
+        0x55E9,
+        0x11C,
+        "a17f500b4bcbc3c8492195d56e53ecf872b929b184d0b090362dd1e4a1b0388c",
+        "Iterate live 16-byte entity slots, update animation/state, and feed sprite rendering.",
+    ),
+    HashedRegion(
         "interaction_button_dispatch",
         MOVEMENT_MODULE_PAYLOAD_BASE,
         0x4B0B,
@@ -208,9 +224,20 @@ EXPLORATION_WRAPPER_BASES = (
 RENDERER_SIGNATURE = bytes.fromhex(
     "A5 00 48 A5 01 48 20 46 59 85 31 A5 30 C5 31"
 )
-MOVEMENT_SIGNATURE = bytes.fromhex(
-    "AD 28 22 82 0A B0 07 E8 E0 08 D0 F8 62 60"
-)
+MOVEMENT_SIGNATURES = {
+    "movement_dispatch": bytes.fromhex(
+        "A5 1C 48 A5 1D 48 A5 1E 48 A5 1F 48 20 F6 53 20 09 54"
+    ),
+    "coordinate_commit": bytes.fromhex(
+        "CE 69 27 AD 67 27 49 80 0A 62 E9 00 48 AD 60 27"
+    ),
+    "collision_lookup": bytes.fromhex(
+        "A5 1C 48 A5 1D 48 A5 1E 48 A5 1F 48 20 56 49"
+    ),
+    "animation_interpreter": bytes.fromhex(
+        "C6 21 D0 05 20 3B 45 80 13 C6 22 A5 22 1A"
+    ),
+}
 EXPLORATION_WRAPPER_SIGNATURE = bytes.fromhex(
     "AD 00 37 C9 FF D0 02 A0 01 A2 01 60"
 )
@@ -238,7 +265,10 @@ CONTROL_SEMANTICS = {
     "5C": "wait for a controller press and then full release",
     "7E": "consume one ASCII-like digit operand and set per-cell attribute $2763 to operand-$30",
     "3D": "consume two operands; use operand 1 to select one $A400 32-byte record and render its active text field",
-    "21": "wait until trigger bits $222D&3 are set or asynchronous state $37F1 becomes nonzero",
+    "21": (
+        "if asynchronous state $37F1 is nonzero, wait until trigger bits "
+        "$222D&3 are set; if $37F1 is zero, continue immediately"
+    ),
     ">80": "ordinary two-byte Shift-JIS glyph pair rendered through $5915",
     "<=80 other": "ignored by this dispatcher",
 }
@@ -355,7 +385,10 @@ def build_game_architecture_report(path: pathlib.Path) -> dict[str, Any]:
 
     renderer_hits = _find_all(payload, RENDERER_SIGNATURE)
     renderer_bases = tuple(hit - 0x5915 for hit in renderer_hits)
-    movement_hits = _find_all(payload, MOVEMENT_SIGNATURE)
+    movement_signature_hits = {
+        name: _find_all(payload, signature)
+        for name, signature in MOVEMENT_SIGNATURES.items()
+    }
     wrapper_hits = _find_all(payload, EXPLORATION_WRAPPER_SIGNATURE)
     wrapper_bases = tuple(hit - 0x40D5 for hit in wrapper_hits)
     parsers = _relocation_equivalent_parsers(payload)
@@ -378,6 +411,23 @@ def build_game_architecture_report(path: pathlib.Path) -> dict[str, Any]:
             "tile_refill_rule": (
                 "pixel scroll changes every committed movement unit; map row/column "
                 "refill occurs only when a low nibble crosses a 16-pixel boundary"
+            ),
+        },
+        "entities": {
+            "source_pointer": "$277E/$277F",
+            "source_stride": 8,
+            "source_terminator": "0xFF in source byte +0",
+            "runtime_base": "$2783",
+            "runtime_stride": 16,
+            "runtime_count": "$277D",
+            "runtime_position_offsets": "+0/+1 X, +2/+3 Y",
+            "occupancy_rectangle_index_offset": "+10",
+            "animation_selector_source_offset": "+13",
+            "model": (
+                "scene descriptor points to compact 8-byte entity records; "
+                "initialization expands each live entity to a 16-byte runtime slot, "
+                "registers an 8-byte occupancy rectangle, assigns animation state, "
+                "and the frame loop reloads/updates/writes back those slots"
             ),
         },
         "interaction": {
@@ -411,9 +461,16 @@ def build_game_architecture_report(path: pathlib.Path) -> dict[str, Any]:
             "cd_read_entry": "$E009",
         },
         "overlay_identity": {
-            "movement_signature_hits": len(movement_hits),
-            "movement_signature_offsets": [f"0x{hit:08X}" for hit in movement_hits],
-            "movement_common_core_is_singleton": len(movement_hits) == 1,
+            "movement_signature_hits": {
+                name: {
+                    "count": len(hits),
+                    "offsets": [f"0x{hit:08X}" for hit in hits],
+                }
+                for name, hits in movement_signature_hits.items()
+            },
+            "movement_common_core_is_singleton": all(
+                len(hits) == 1 for hits in movement_signature_hits.values()
+            ),
             "renderer_signature_hits": len(renderer_hits),
             "renderer_module_bases": [f"0x{base:08X}" for base in renderer_bases],
             "expected_renderer_module_bases_match": renderer_bases == TEXT_OVERLAY_BASES,
