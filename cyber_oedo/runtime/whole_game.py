@@ -46,10 +46,12 @@ BOOT_EVENT_ABSOLUTE_LBA = 0x106F
 EVENT_OVERLAY_OFFSET = (BOOT_EVENT_ABSOLUTE_LBA - TRACK2_START_LBA) * 2048
 EVENT_OVERLAY_BYTES = 0x800
 EVENT_OVERLAY_SHA256 = "197cc4ff5bda6978a14db6406d19c8995be2952068196abc7e22073cbefa813e"
-EVENT_PRIMARY_TABLE_CPU = 0xD827
-EVENT_PRIMARY_TABLE_RECORDS = 9
-EVENT_SECONDARY_TABLE_CPU = 0xD8CA
-EVENT_SECONDARY_TABLE_RECORDS = 10
+EVENT_TABLE_A_CPU = 0xD803
+EVENT_TABLE_A_RECORDS = 9
+EVENT_TABLE_B_CPU = 0xD827
+EVENT_TABLE_B_RECORDS = 9
+EVENT_TABLE_C_CPU = 0xD8CA
+EVENT_TABLE_C_RECORDS = 10
 EVENT_DISPATCH_TABLE_CPU = 0xD881
 
 SAVE_FILE_DESCRIPTOR = bytes.fromhex("07 00") + b"OEDO808   "
@@ -195,23 +197,31 @@ def _event_control_report(payload: bytes) -> dict[str, Any]:
     if len(block) != EVENT_OVERLAY_BYTES:
         raise ValueError("event overlay block is truncated")
 
-    primary_offset = EVENT_PRIMARY_TABLE_CPU - 0xD800
-    secondary_offset = EVENT_SECONDARY_TABLE_CPU - 0xD800
+    table_a_offset = EVENT_TABLE_A_CPU - 0xD800
+    table_b_offset = EVENT_TABLE_B_CPU - 0xD800
+    table_c_offset = EVENT_TABLE_C_CPU - 0xD800
     dispatch_offset = EVENT_DISPATCH_TABLE_CPU - 0xD800
 
-    primary = tuple(
+    table_a = tuple(
         _decode_cd_descriptor(
-            block[primary_offset + i * 4 : primary_offset + (i + 1) * 4],
+            block[table_a_offset + i * 4 : table_a_offset + (i + 1) * 4],
             i,
         )
-        for i in range(EVENT_PRIMARY_TABLE_RECORDS)
+        for i in range(EVENT_TABLE_A_RECORDS)
     )
-    secondary = tuple(
+    table_b = tuple(
         _decode_cd_descriptor(
-            block[secondary_offset + i * 4 : secondary_offset + (i + 1) * 4],
+            block[table_b_offset + i * 4 : table_b_offset + (i + 1) * 4],
             i,
         )
-        for i in range(EVENT_SECONDARY_TABLE_RECORDS)
+        for i in range(EVENT_TABLE_B_RECORDS)
+    )
+    table_c = tuple(
+        _decode_cd_descriptor(
+            block[table_c_offset + i * 4 : table_c_offset + (i + 1) * 4],
+            i,
+        )
+        for i in range(EVENT_TABLE_C_RECORDS)
     )
     dispatch = tuple(
         int.from_bytes(
@@ -239,23 +249,34 @@ def _event_control_report(payload: bytes) -> dict[str, Any]:
             {"selector_y": index, "target": "$%04X" % target}
             for index, target in enumerate(dispatch)
         ],
-        "progress_module_table": {
-            "cpu": "$%04X" % EVENT_PRIMARY_TABLE_CPU,
-            "record_bytes": 4,
-            "records": primary,
-            "selection": (
-                "$371F is multiplied by four and selects one CD descriptor; "
-                "the selected module is loaded to $4000 before exploration"
-            ),
-        },
-        "transition_module_table": {
-            "cpu": "$%04X" % EVENT_SECONDARY_TABLE_CPU,
-            "record_bytes": 4,
-            "records": secondary,
-            "selection": (
-                "transition/result state can select a second progress-indexed "
-                "module descriptor before returning to exploration"
-            ),
+        "module_tables": {
+            "A": {
+                "cpu": "$%04X" % EVENT_TABLE_A_CPU,
+                "record_bytes": 4,
+                "records": table_a,
+                "selection": (
+                    "Y=1 path loads this $371F-indexed module when saved X and "
+                    "Y selectors differ"
+                ),
+            },
+            "B": {
+                "cpu": "$%04X" % EVENT_TABLE_B_CPU,
+                "record_bytes": 4,
+                "records": table_b,
+                "selection": (
+                    "normal mission path indexes this table by $371F and loads "
+                    "the selected module to $4000"
+                ),
+            },
+            "C": {
+                "cpu": "$%04X" % EVENT_TABLE_C_CPU,
+                "record_bytes": 4,
+                "records": table_c,
+                "selection": (
+                    "when interaction result $3709 >= $10, subtract $10, store "
+                    "the result in $371F, index this table, and load to $4000"
+                ),
+            },
         },
         "descriptor_format": {
             "+0": "high CD LBA byte (CL)",
@@ -385,9 +406,17 @@ def _object_and_interaction_report() -> dict[str, Any]:
                 "+1/+2/+3": (
                     "for FF form, promoted to scene selector, entry selector, and position mode"
                 ),
-                "+4..+8": (
-                    "copied from the interaction record but not read by the exploration "
-                    "overlay; handoff bytes for subsequent scene/action code"
+                "+4/+5": (
+                    "copied from the interaction record; not read by the exploration "
+                    "overlay or startup mission controller"
+                ),
+                "+6 ($3709)": (
+                    "mission-controller result/progress selector: values >= $10 "
+                    "become $371F = value-$10 and select module table C"
+                ),
+                "+7/+8": (
+                    "copied from the interaction record; not read by the exploration "
+                    "overlay or startup mission controller"
                 ),
             },
         },
