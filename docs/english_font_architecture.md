@@ -46,8 +46,10 @@ At render time:
 3. the token is converted to a zero-based pair-table index;
 4. the pair table yields two one-byte glyph IDs;
 5. two 8x16 bitmap glyphs are composed side by side into one 16x16 cell;
-6. the existing transform, VDC upload, BAT write, cursor, grid, scroll, and
-   window code continues unchanged.
+6. those 16 rows x 2 bytes are written directly into the existing $4C6C
+   32-byte System Card font staging buffer;
+7. the existing $4E86 transform, VDC upload, BAT write, cursor, grid, scroll,
+   and window code continues unchanged.
 
 Normal Japanese/Shift-JIS glyphs continue through System Card EX_GETFNT.
 
@@ -92,8 +94,11 @@ be rasterized deterministically during the build.
 
 Use a high-legibility 8x16 design with strong x-height, clear lowercase,
 distinct I/l/1 and O/0, generous counters, and enough stroke weight to survive
-CRT/composite softness. It should be comfortable for thousands of lines rather
-than merely look futuristic in a screenshot.
+CRT/composite softness. Internal raster tests favor a heavy mono/sans face at
+roughly 13-14 px over thin terminal faces; a Noto Sans Mono SemiBold-class
+raster is the current visual reference, not a redistributed build dependency.
+It should be comfortable for thousands of lines rather than merely look
+futuristic in a screenshot.
 
 ### Menus
 
