@@ -184,22 +184,26 @@ multiple high-level scene/mission wrappers.
 
 ## Text overlay identity
 
-Ten renderer-bearing text overlays are present. Their module bases are:
+Ten renderer-bearing text overlays are present, but they map to **two Mission 0
+copies plus Missions 1-8**, not one copy per analysis bank:
 
 ```text
-00074800
-00131800
-00CE4000
-017B3800
-0222C000
-02B1C000
-03356800
-03B34000
-04281800
-04848000
+MISSION_0_A  00074800
+MISSION_0_B  00131800
+MISSION_1    00CE4000
+MISSION_2    017B3800
+MISSION_3    0222C000
+MISSION_4    02B1C000
+MISSION_5    03356800
+MISSION_6    03B34000
+MISSION_7    04281800
+MISSION_8    04848000
 ```
 
-The renderer/window machinery is byte-identical across all ten.
+The complete 1,750-byte renderer/window interval $5444-$5B19 is byte-identical
+across all ten copies. The ENDING bank contains neither this renderer signature
+nor the common parser anchor, so ending presentation is a separate text
+architecture.
 
 Their dialogue parser entries are relocated:
 
@@ -229,13 +233,18 @@ The common parser recognizes:
 | 5C | wait for controller press, then wait for full release |
 | 7E | consume one digit-like operand; set per-cell text attribute $2763 |
 | 3D | indexed $A400 dynamic-text insertion |
-| 21 | if $37F1 != 0, wait for $222D&3 trigger bits; if $37F1 == 0, continue immediately |
+| 21 | interruptible ADPCM voice barrier: while $37F1 holds an active voice/sample selector, wait for the ADPCM driver to clear it; $222D&3 skips the wait |
 | >80 | ordinary two-byte Shift-JIS glyph |
 | <=80 other | ignored by this dispatcher |
 
 Logical RAM addresses are overlay-local. In particular, text-overlay $2763 is
 the cell attribute used by 7E; it must not be confused with similarly numbered
 movement-overlay state.
+
+$37F1 is written by the reusable ADPCM playback driver when a voice starts. Its
+completion path polls System Card AD_STAT and clears $37F1 when playback becomes
+idle. This ties control 21 directly to voice synchronization rather than a
+generic asynchronous flag.
 
 ## Cursor, window, and text-grid state
 
@@ -313,5 +322,7 @@ structure discovery:
 - decode scene-specific meanings of the remaining non-transition interaction
   payload forms;
 - map sprite frame IDs to graphic assets;
-- inventory graphic-backed/non-dialogue text paths outside the common dialogue
-  renderer.
+- finish naming the non-text formatting opcodes in the ENDING OEDONET stream;
+- deepen caller semantics for individual resource-local UI families;
+- live-certify the now-mapped non-dialogue/ending paths in representative bank
+  states.
