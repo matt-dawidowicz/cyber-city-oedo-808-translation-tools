@@ -36,20 +36,59 @@ Startup has a relocated read-side implementation for the same BRAM file.
 No explicit game-side checksum is present in these guarded wrappers. Error
 handling follows backup-memory API return/status behavior.
 
-## Outer event/control boundary
+## Mission controller / outer event control
 
-Startup uses $371F to choose new-game/resume behavior and then loads one CD
-block directly to logical $D800 before jumping there.
+Startup uses $371F to choose new-game/resume behavior and loads absolute disc
+LBA $106F to logical $D800.
 
-This proves that $D800 is an **outer event/control overlay entry point** and is
-separate from the dialogue bytecode interpreter.
+Because Track 2 begins at disc LBA 3590, this block maps to Track 2 relative
+sector $0269 and payload offset $00134800. The complete 2 KiB controller is now
+source-guarded.
 
-The startup source is guarded, but the event opcode language is deliberately
-not invented from static disc offsets. The loader's CD block address does not
-map naively to `Track2 payload offset = sector * 2048`; the mapped $D800 bytes
-must be captured at runtime before assigning opcodes.
+The important architectural correction is that $D800 is **not another bytecode
+VM**. It is executable HuC6280 mission-control code.
 
-Use `tools/mesen_whole_game_live_capture.lua` to collect that evidence.
+Its entry saves the X/Y call selectors and uses Y as an indirect dispatcher.
+The seven static targets are:
+
+```text
+Y=0 -> $D800 / normal entry handling
+Y=1 -> $D897
+Y=2 -> $D948
+Y=3 -> $DA74
+Y=4 -> $D800
+Y=5 -> $DA4F
+Y=6 -> $D940
+```
+
+The controller contains two arrays of fixed four-byte CD descriptors. Their
+format is:
+
+```text
++0 high LBA byte
++1 low LBA byte
++2 middle LBA byte
++3 CD_READ block count
+```
+
+The primary table at $D827 has nine records. $371F is multiplied by four to
+select one of them; the chosen module is loaded to logical $4000 and the
+exploration engine is entered. A secondary table at $D8CA is used by transition
+results to select alternate modules before returning to exploration.
+
+So persistent progress is directly tied to mission-module selection:
+
+```text
+BRAM slot byte
+   -> $371F
+   -> progress-indexed 4-byte CD descriptor
+   -> module load at $4000
+   -> exploration / scene control
+```
+
+The Mesen capture remains useful for proving which selector paths occur during
+real play, but the controller's static architecture no longer depends on a new
+runtime dump.
 
 ## ADPCM voice architecture
 
@@ -211,11 +250,10 @@ sufficient runtime evidence.
 
 ## Remaining whole-game work
 
-After this static pass, the largest remaining unknown is the exact opcode/field
-language of the outer $D800 event overlay. New emulator captures are required
-to dump the actually mapped code safely.
+After this static pass, the $D800 controller itself is mapped as executable
+dispatcher code rather than an opcode language.
 
-Other remaining work is narrower:
+Remaining work is narrower:
 
 1. identify consumers of the interaction handoff tail $3707-$370B;
 2. determine whether preserved object auxiliary fields are used by another
