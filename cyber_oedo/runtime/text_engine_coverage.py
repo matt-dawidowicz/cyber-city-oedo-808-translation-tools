@@ -23,10 +23,7 @@ from cyber_oedo.build.profiles.startup import (
     STARTUP_V2_EXTRA_PATCHES,
 )
 from cyber_oedo.disc.game_layout import bank_for_offset
-from cyber_oedo.graphics.title_screen import (
-    TITLE_ASSET_BYTES,
-    TITLE_SCREEN_SOURCE_SHA256,
-)
+from cyber_oedo.graphics.title_screen import TITLE_ASSET_BYTES
 from cyber_oedo.io import sha256_file
 from cyber_oedo.resources import build_candidate_regions, discover_resource_headers
 from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
@@ -101,6 +98,10 @@ COMMON_UI_OVERLAY_BASES = (
 )
 COMMON_UI_RELATIVE_OFFSET = 0xC000
 COMMON_UI_BYTES = 0x250
+
+TITLE_SCREEN_SOURCE_SHA256 = (
+    "74319e81bfeba32b385620a8bf32848e78da19271c87b6337decf4991a2fe5c4"
+)
 
 RESOURCE_TEXT_FAMILIES = frozenset(
     {
