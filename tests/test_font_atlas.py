@@ -6,6 +6,7 @@ from cyber_oedo.text.font_atlas import (
     GLYPH_BYTES,
     PAIR_CELL_BYTES,
     FontAtlasError,
+    RasterConfig,
     RasterizedAtlas,
     compose_pair_cell,
     compose_pair_from_atlas,
@@ -37,10 +38,7 @@ class FontAtlasTests(unittest.TestCase):
             characters=" A",
             glyphs=(bytes([0x00]) * 16, bytes([0xAA]) * 16),
             source_sha256="00" * 32,
-            config=__import__(
-                "cyber_oedo.text.font_atlas",
-                fromlist=["RasterConfig"],
-            ).RasterConfig(),
+            config=RasterConfig(),
         )
         cell = compose_pair_from_atlas(atlas, 1, 0)
         self.assertEqual(cell, bytes((0xAA, 0x00)) * 16)
