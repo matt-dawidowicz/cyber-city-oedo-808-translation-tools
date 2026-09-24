@@ -173,10 +173,67 @@ $4B20 compares the class against $277B, loads the eight bound bytes, and calls
 $5186 to test the player X/Y pairs against them. A hit sets $2649 to FF and
 copies the final nine bytes to $3703-$370B.
 
-The nine-byte payload is deliberately still treated as opaque. Its consumer at
-the outer scene loop proves that at least one payload form can drive a
-subsequent scene/action result, but its full field schema has not yet been
-established.
+One transition-form payload is now decoded. When $3703 is FF, the scene loop
+promotes $3704-$3706 into $3700-$3702. Those active bytes are then consumed as:
+
+- $3700: scene/resource selector; it selects one 9-byte loader descriptor;
+- $3701: scene-entry selector; it selects a pointer to an entry record;
+- $3702: position mode; zero reloads player X/Y from that entry record, while
+  nonzero preserves the already-established position.
+
+Thus the FF payload form is a room/scene transition header. Other payload forms
+and bytes $3707-$370B remain intentionally unnamed until their consumers are
+observed.
+
+### Camera coupling
+
+The player/camera relationship is now statically direct. Every coordinate commit
+at $4A9E reaches $4ADB, which copies $2760-$2763 into $43F6. That routine
+applies the camera dead-zone/clamp and invokes the scroll steppers.
+
+The scroll state is:
+
+- horizontal: $220C/$220D;
+- vertical: $2210/$2211.
+
+The steppers move those values at pixel resolution. Whenever the low nibble
+crosses a 16-pixel boundary, they update the corresponding map-tile origin and
+stream a newly exposed row or column. Player coordinates, camera scroll, and
+tile refill are therefore separate but explicitly chained systems.
+
+### Live scene objects and meta-sprites
+
+Scene object definitions are read from the pointer at $277E/$277F as fixed
+8-byte source records until source byte 0 is FF. Initialization expands each
+object into a 16-byte live record at $2783 + index*16; $277D stores the count.
+
+The source record fields currently proven are:
+
+| Offset | Bytes | Static role |
+|---:|---:|---|
+| +0 | 1 | animation/type selector |
+| +1 | 1 | auxiliary byte, not yet named |
+| +2 | 2 | X position |
+| +4 | 2 | Y position |
+| +6 | 2 | auxiliary word, not yet named |
+
+The live record carries the position plus animation countdown/pointer and the
+derived collision-rectangle index. Each frame, the engine copies the 16-byte
+record to scratch, advances its animation, then writes the record back.
+
+Animation frame IDs index the meta-sprite table at $5A37. Each frame is:
+
+`component_count, [pattern_word, signed_x, signed_y, attribute_word]...`
+
+Each player frame $14-$27 has two components. The directional mapping is:
+
+- Down walk: $14-$17; idle: $25;
+- Left walk: $18-$1B; idle: $24;
+- Right walk: $1C-$1F; idle: $26;
+- Up walk: $20-$23; idle: $27.
+
+This resolves the player animation all the way from direction script to exact
+sprite pattern words and per-component offsets/attributes.
 
 ### Controlled capture matrix
 
@@ -210,13 +267,14 @@ intersect candidates across opposing inputs:
 4. World/screen X and Y representation and precision.
 5. Velocity or per-frame delta representation.
 6. Live-certify directional animation selection across representative scenes.
-7. Map sprite-frame identifiers to the actual player graphics.
+7. Live-correlate the now-decoded player meta-sprite pattern words with VRAM
+   graphics ownership.
 8. Live-certify collision bits and occupancy rectangles in representative rooms.
 9. Determine the source/loader lifetime of each scene's collision bitmap.
-10. Decode the nine-byte interaction payload schema.
-11. Camera/scroll coordinates and clamping.
-12. Door/room/map transition trigger.
-13. Identify higher-level NPC rendering/state records beyond interaction bounds.
+10. Decode non-transition interaction payload forms and bytes $3707-$370B.
+11. Live-certify camera dead-zone/clamp behavior across representative rooms.
+12. Live-certify the scene-transition selector/entry/mode triplet.
+13. Decode the remaining auxiliary fields in the 8-byte object source record.
 14. Overlay/MPR changes associated with movement/map transitions.
 
 ## Bank-aware state diff diagnostic
