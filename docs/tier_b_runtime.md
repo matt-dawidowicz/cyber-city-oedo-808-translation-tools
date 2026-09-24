@@ -207,6 +207,30 @@ self-consistent rather than live-certified. A frozen MPR capture at an active
 movement PC is the next gate for assigning the same mapping to individual
 scenes and later overlays.
 
+### Collision, animation, and interaction structure
+
+The same module now has source-guarded evidence for three deeper subsystems.
+
+**Collision bitmap.** $490A converts the movement probe to 16x16 tile
+coordinates, uses $264A as the map width, multiplies tile Y by that width with
+System Card MA_MUL8U ($E0BD), addresses a one-bit-per-tile bitmap through
+$275E/$275F, and returns the selected bit in carry. $5409 consumes that carry
+before movement commit.
+
+**Directional animation.** $2764 is the animation countdown and $2765/$2766
+is the active animation-script pointer. Direction codes 1..4 select walk
+scripts at $4649/$4654/$465F/$466A and idle/facing scripts at
+$4675/$467A/$467F/$4684. $451B interprets duration/frame pairs and treats
+FF plus a 16-bit pointer as a script redirect/loop.
+
+**World rectangles and interactions.** $265D counts 8-byte rectangles stored
+at $265E. These are fetched by the overlap path around $47D0. Separately,
+$2779/$277A points at 18-byte interaction records. Their static layout is one
+class byte, eight bound bytes, and nine payload bytes. $4B20 filters by $277B,
+uses $5186 for the player-in-bounds test, and copies a successful payload to
+$3703-$370B. The nine-byte payload remains intentionally opaque until all of
+its consumers are mapped.
+
 ## Gates before Tier-B mutation
 
 A record-local selector or another engine modification may be designed only
