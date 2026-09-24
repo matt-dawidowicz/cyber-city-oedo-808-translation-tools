@@ -41,6 +41,17 @@ BOOT_EVENT_LOADER_OFFSET = 0x00001AD3
 BOOT_EVENT_LOADER_BYTES = 0x41
 BOOT_EVENT_LOADER_SHA256 = "af9dcecd7d068422f2b33a40b9e4deac0a89b21e7e92267a437b56ad55810708"
 
+TRACK2_START_LBA = 3590
+BOOT_EVENT_ABSOLUTE_LBA = 0x106F
+EVENT_OVERLAY_OFFSET = (BOOT_EVENT_ABSOLUTE_LBA - TRACK2_START_LBA) * 2048
+EVENT_OVERLAY_BYTES = 0x800
+EVENT_OVERLAY_SHA256 = "197cc4ff5bda6978a14db6406d19c8995be2952068196abc7e22073cbefa813e"
+EVENT_PRIMARY_TABLE_CPU = 0xD827
+EVENT_PRIMARY_TABLE_RECORDS = 9
+EVENT_SECONDARY_TABLE_CPU = 0xD8CA
+EVENT_SECONDARY_TABLE_RECORDS = 10
+EVENT_DISPATCH_TABLE_CPU = 0xD881
+
 SAVE_FILE_DESCRIPTOR = bytes.fromhex("07 00") + b"OEDO808   "
 SAVE_SLOT_BYTES = 4
 SAVE_RUNTIME_BUFFER = "$268F-$2692"
@@ -162,6 +173,98 @@ def _save_report(payload: bytes) -> dict[str, Any]:
         },
         "common_copies": copies,
         "boot_regions": tuple(_guard(payload, region) for region in boot_regions),
+    }
+
+
+
+def _decode_cd_descriptor(raw: bytes, index: int) -> dict[str, Any]:
+    if len(raw) != 4:
+        raise ValueError("CD descriptor must be four bytes")
+    lba = raw[1] | raw[2] << 8 | raw[0] << 16
+    return {
+        "index": index,
+        "raw_hex": raw.hex(),
+        "absolute_lba": "0x%06X" % lba,
+        "track2_relative_sector": lba - TRACK2_START_LBA,
+        "block_count": raw[3],
+    }
+
+
+def _event_control_report(payload: bytes) -> dict[str, Any]:
+    block = payload[EVENT_OVERLAY_OFFSET : EVENT_OVERLAY_OFFSET + EVENT_OVERLAY_BYTES]
+    if len(block) != EVENT_OVERLAY_BYTES:
+        raise ValueError("event overlay block is truncated")
+
+    primary_offset = EVENT_PRIMARY_TABLE_CPU - 0xD800
+    secondary_offset = EVENT_SECONDARY_TABLE_CPU - 0xD800
+    dispatch_offset = EVENT_DISPATCH_TABLE_CPU - 0xD800
+
+    primary = tuple(
+        _decode_cd_descriptor(
+            block[primary_offset + i * 4 : primary_offset + (i + 1) * 4],
+            i,
+        )
+        for i in range(EVENT_PRIMARY_TABLE_RECORDS)
+    )
+    secondary = tuple(
+        _decode_cd_descriptor(
+            block[secondary_offset + i * 4 : secondary_offset + (i + 1) * 4],
+            i,
+        )
+        for i in range(EVENT_SECONDARY_TABLE_RECORDS)
+    )
+    dispatch = tuple(
+        int.from_bytes(
+            block[dispatch_offset + i * 2 : dispatch_offset + (i + 1) * 2],
+            "little",
+        )
+        for i in range(7)
+    )
+
+    return {
+        "overlay": {
+            "absolute_lba": "0x%04X" % BOOT_EVENT_ABSOLUTE_LBA,
+            "track2_start_lba": TRACK2_START_LBA,
+            "payload_offset": "0x%08X" % EVENT_OVERLAY_OFFSET,
+            "bytes": EVENT_OVERLAY_BYTES,
+            "sha256": _sha256(block),
+            "matched": _sha256(block) == EVENT_OVERLAY_SHA256,
+            "load_destination": "$D800",
+        },
+        "architecture": (
+            "executable mission-control overlay with a Y-indexed indirect "
+            "dispatcher; not a serialized opcode stream"
+        ),
+        "dispatch": [
+            {"selector_y": index, "target": "$%04X" % target}
+            for index, target in enumerate(dispatch)
+        ],
+        "progress_module_table": {
+            "cpu": "$%04X" % EVENT_PRIMARY_TABLE_CPU,
+            "record_bytes": 4,
+            "records": primary,
+            "selection": (
+                "$371F is multiplied by four and selects one CD descriptor; "
+                "the selected module is loaded to $4000 before exploration"
+            ),
+        },
+        "transition_module_table": {
+            "cpu": "$%04X" % EVENT_SECONDARY_TABLE_CPU,
+            "record_bytes": 4,
+            "records": secondary,
+            "selection": (
+                "transition/result state can select a second progress-indexed "
+                "module descriptor before returning to exploration"
+            ),
+        },
+        "descriptor_format": {
+            "+0": "high CD LBA byte (CL)",
+            "+1": "low CD LBA byte (DL)",
+            "+2": "middle CD LBA byte (CH)",
+            "+3": "CD_READ block count",
+        },
+        "progress_state": "$371F",
+        "exploration_entry": "$4000",
     }
 
 
@@ -308,22 +411,12 @@ def build_whole_game_report(path: pathlib.Path) -> dict[str, Any]:
                     BOOT_EVENT_LOADER_BYTES,
                     BOOT_EVENT_LOADER_SHA256,
                     (
-                        "Load one CD block to logical $D800 through CD_READ and "
-                        "jump to $D800 with new-game/resume selectors."
+                        "Load absolute disc LBA $106F to logical $D800 through "
+                        "CD_READ and jump to the mission-control overlay."
                     ),
                 ),
             ),
-            "entry": "$D800",
-            "progress_input": "$371F",
-            "proof": (
-                "startup establishes a separate outer event/control overlay; "
-                "its opcode language is not conflated with dialogue bytecode"
-            ),
-            "static_limit": (
-                "the loader's CD block address does not map naively to "
-                "Track2-payload sector*2048, so mapped runtime bytes are required "
-                "before assigning event opcodes"
-            ),
+            "controller": _event_control_report(payload),
         },
         "adpcm": _adpcm_report(payload),
         "objects_and_interactions": _object_and_interaction_report(),
@@ -340,9 +433,10 @@ def build_whole_game_report(path: pathlib.Path) -> dict[str, Any]:
             ),
         },
         "remaining": {
-            "event_vm": (
-                "mission-specific outer event/control overlays still require a dedicated "
-                "opcode/operand map; they must remain distinct from dialogue bytecode"
+            "event_control": (
+                "the startup $D800 controller is decoded as executable dispatch plus "
+                "progress-indexed CD descriptor tables; later mission-specific control "
+                "modules can now be compared against this architecture"
             ),
             "binary_ui_assets": (
                 "ownership is proven; individual packed schemas should be decoded only "
@@ -379,7 +473,10 @@ def main(argv: list[str] | None = None) -> int:
         for row in report["save"]["common_copies"]
     ) and all(row["matched"] for row in report["save"]["boot_regions"])
     adpcm_ok = all(row["matched"] for row in report["adpcm"]["regions"])
-    event_ok = report["event_control_boundary"]["boot_loader"]["matched"]
+    event_ok = (
+        report["event_control_boundary"]["boot_loader"]["matched"]
+        and report["event_control_boundary"]["controller"]["overlay"]["matched"]
+    )
     return 0 if report["payload_authenticated"] and save_ok and adpcm_ok and event_ok else 1
 
 
