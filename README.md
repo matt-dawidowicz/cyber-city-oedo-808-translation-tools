@@ -174,6 +174,15 @@ cyber-oedo diff-live-state idle.json idle.bin right.json right.bin \
   --output right_vs_idle.json
 ```
 
+Static source-guarded text-renderer and exploration-movement proofs:
+
+```bash
+cyber-oedo prove-text-renderer-runtime track02_mode1_2048.bin \
+  --output text_renderer_proof.json
+cyber-oedo prove-movement-runtime track02_mode1_2048.bin \
+  --output movement_static_proof.json
+```
+
 The state differ reports logical changes together with both MPR mappings; it is
 a candidate generator for breakpoint/disassembly work, not by itself proof of
 coordinate or movement semantics.

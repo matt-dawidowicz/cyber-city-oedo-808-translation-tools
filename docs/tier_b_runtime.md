@@ -139,6 +139,74 @@ static code window byte-for-byte, authenticates the Mission 0 indexed-table
 source, reports the historical zero region without promoting its ownership,
 and correlates `3D` operand pairs from a Tier-A dialogue TSV.
 
+
+## Mission 0 stock glyph pipeline
+
+The stock text renderer is now source-guarded through its font and VDC path,
+rather than stopping at the cell dispatcher.
+
+At $56AB, the renderer copies the two-byte glyph code from $02/$03 into the
+System Card font-service argument block, sets destination $4C6C and mode 0, and
+calls EX_GETFNT at $E060. The fetched 16x16 glyph is then transformed by $4E86
+from the $4C6C staging area into a second view beginning at $4C8C.
+
+At $570C the game selects VDC MAWR and VWR, then calls $5772 twice to stream
+sixteen word pairs from the transformed and original staging views through the
+VDC data ports. $4A38 separately computes the BAT/tilemap address from the
+caller's cell index and the base in $34/$35, selects MAWR/VWR, and writes the
+16-bit cell entry.
+
+The cell dispatcher at $5915 still owns the 11-cell ordinary width and
+12-cell punctuation exception. Its $59B7 staging path records the glyph into
+the text-grid buffer and uses $2827 with the low joypad bits at $2228 to
+shorten per-glyph delay while input is held.
+
+Run:
+
+```text
+cyber-oedo prove-text-renderer-runtime track02_mode1_2048.bin \
+  --output text_renderer_proof.json
+```
+
+This closes the static font-staging and VDC-transfer questions for the
+authenticated Mission 0 source. Exact live VRAM/BAT ownership and later-mission
+identity remain runtime certification tasks.
+
+## Exploration movement static proof
+
+A separate source-guarded candidate module at Track 2 payload base 0x000A4800
+contains a coherent exploration input/movement path.
+
+- $46F2 reads $2228 and normalizes the first active joypad bit to codes 1..8.
+- $51E0 stores current and previous input at $276C/$276D.
+- $52AA filters codes 1..4 into current/previous movement directions
+  $276E/$276F.
+- The direction tables encode Left, Down, Right, Up as both signed unit vectors
+  and signed 16-pixel projection vectors.
+- $2760/$2761 and $2762/$2763 are the 16-bit X/Y pairs read and updated by this
+  movement path.
+- $2767/$2768 hold the signed per-step X/Y vector.
+- $2769 is initialized to $10; $4A9E decrements it and commits the signed unit
+  vector to the X/Y pairs.
+- $5409/$490A perform the pre-commit map/collision gate.
+
+The older $220C/$2210 observations belong to a distinct tile-scroll path:
+that code updates the values at sub-tile resolution and, at 16-pixel
+boundaries, draws newly exposed map rows/columns to VRAM. They should therefore
+not be used as player-position names.
+
+Run:
+
+```text
+cyber-oedo prove-movement-runtime track02_mode1_2048.bin \
+  --output movement_static_proof.json
+```
+
+The movement report deliberately labels its module identity as statically
+self-consistent rather than live-certified. A frozen MPR capture at an active
+movement PC is the next gate for assigning the same mapping to individual
+scenes and later overlays.
+
 ## Gates before Tier-B mutation
 
 A record-local selector or another engine modification may be designed only
@@ -148,7 +216,9 @@ after these remaining live facts are captured in an emulator trace:
 - the live `$7F/$80` stream pointer for representative dialogue;
 - confirmation that `$A400` remains owned for the relevant scene lifetime;
 - the selected record and state byte for at least two distinct `3D` operands;
-- glyph buffer/VDC destination through `$5915` and BIOS font service; and
+- live VRAM/BAT ownership for the now source-guarded glyph transfer path;
+- live MPR/bank certification for the exploration movement candidate module;
+- scene/mission coverage proving which text and movement variants are reused;
 - evidence that any proposed injection storage is owned for the full lifetime
   of the hook.
 

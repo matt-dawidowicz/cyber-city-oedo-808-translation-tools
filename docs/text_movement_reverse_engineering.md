@@ -46,11 +46,26 @@ controlled changes produce the expected behavioral effect.
 - System Card font-service involvement;
 - bank-aware frozen snapshot validation for the Mission 0 3D path.
 
+### Newly source-guarded static renderer proof
+
+The Mission 0 stock renderer is now traced beyond the cell dispatcher:
+
+- glyph bytes in $02/$03 are passed to System Card EX_GETFNT at $56C0;
+- the requested 16x16 font data is staged at $4C6C;
+- $4E86 transforms sixteen two-byte rows into a second staging area at $4C8C;
+- $570C selects VDC MAWR/VWR and feeds both staging views through $5772;
+- $5772 writes sixteen word pairs through VDC data ports $0002/$0003;
+- $4A38 computes the BAT/tilemap address and writes the resulting cell entry;
+- $5915 remains the 11/12-cell dispatcher and advances the cell column; and
+- $59B7 ties per-glyph pacing to $2827 and the low joypad bits at $2228.
+
+Run `cyber-oedo prove-text-renderer-runtime` against the authenticated Track 2
+payload to validate the exact code windows.
+
 ### Remaining proof targets
 
-1. Trace 5915 through glyph acquisition to the exact RAM staging buffer.
-2. Identify the VDC write/transfer routine and VRAM destinations.
-3. Record cursor X/Y state before and after ordinary glyphs and controls.
+1. Live-correlate the proven VDC writes with the exact VRAM/BAT ownership.
+2. Record cursor X/Y state before and after ordinary glyphs and controls.
 4. Prove 40, 2F, 21, and 5C in multiple live contexts, including repeated
    controls and input-skipped cases.
 5. Determine the runtime meaning of 37F1.
@@ -64,8 +79,36 @@ controlled changes produce the expected behavioral effect.
 
 ## Movement workstream
 
-Movement currently lacks an equivalent Tier-B model. Build it from controlled
-runtime transitions.
+Movement now has a source-guarded static core, but still needs live bank and
+scene certification.
+
+The current candidate exploration module at payload base 0x000A4800 contains a
+self-consistent CPU-relative movement engine:
+
+- $46F2 reads System Card joy state $2228 and normalizes the first active bit
+  into codes 1..8;
+- $51E0 stores current/previous input in $276C/$276D;
+- $52AA retains only codes 1..4 as current/previous movement directions in
+  $276E/$276F;
+- the direction tables encode Left=(-1,0), Down=(0,+1), Right=(+1,0),
+  Up=(0,-1), plus corresponding 16-pixel projection vectors;
+- $2760/$2761 and $2762/$2763 are the 16-bit X/Y pairs consumed and updated by
+  the movement code;
+- $2767/$2768 hold the signed unit step vector;
+- $2769 is loaded with $10 and decremented by the step-commit routine;
+- $5409/$490A gate the move before $4A9E commits signed coordinate changes.
+
+This also separates player movement from the older $220C/$2210 observations.
+A different source-guarded routine increments those values at sub-tile
+resolution and, on 16-pixel boundaries, streams newly exposed map tiles to VRAM
+through System Card EX_SETWRT. Those values therefore belong to scrolling/map
+rendering machinery and must not be labeled player coordinates without stronger
+evidence.
+
+Run `cyber-oedo prove-movement-runtime` against the authenticated payload to
+validate the static movement windows. A live MPR capture is still required to
+certify that this candidate module is the active exploration overlay in each
+scene.
 
 ### Controlled capture matrix
 
