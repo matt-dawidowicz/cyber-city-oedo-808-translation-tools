@@ -149,6 +149,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "prove-text-engine-completion",
+        "cyber_oedo.runtime.text_engine_completion",
+        "Validate information-page commands and resource ownership.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "diff-live-state",
         "cyber_oedo.runtime.state_diff",
         "Compare two bank-aware frozen runtime snapshots.",

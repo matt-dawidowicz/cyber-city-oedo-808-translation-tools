@@ -197,6 +197,17 @@ cyber-oedo prove-text-engine-coverage track02_mode1_2048.bin \
   --output text_engine_coverage.json
 ```
 
+Information-page commands, named resource ownership, and relocation policy:
+
+```bash
+cyber-oedo prove-text-engine-completion track02_mode1_2048.bin \
+  --output text_engine_completion.json
+```
+
+For later-mission and ENDING runtime certification, load
+`tools/mesen_text_engine_live_capture.lua` in Mesen. The script is read-only
+and records parser/renderer hits together with all eight MPR values.
+
 The state differ reports logical changes together with both MPR mappings; it is
 a candidate generator for breakpoint/disassembly work, not by itself proof of
 coordinate or movement semantics.
@@ -288,3 +299,4 @@ Further documentation:
 - [`docs/text_movement_reverse_engineering.md`](docs/text_movement_reverse_engineering.md)
 - [`docs/gamewide_runtime_architecture.md`](docs/gamewide_runtime_architecture.md)
 - [`docs/text_engine_coverage.md`](docs/text_engine_coverage.md)
+- [`docs/text_engine_completion.md`](docs/text_engine_completion.md)
