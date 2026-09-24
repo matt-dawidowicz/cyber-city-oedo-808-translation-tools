@@ -183,6 +183,13 @@ cyber-oedo prove-movement-runtime track02_mode1_2048.bin \
   --output movement_static_proof.json
 ```
 
+Game-wide cross-overlay architecture validation:
+
+```bash
+cyber-oedo prove-game-architecture track02_mode1_2048.bin \
+  --output game_architecture.json
+```
+
 The state differ reports logical changes together with both MPR mappings; it is
 a candidate generator for breakpoint/disassembly work, not by itself proof of
 coordinate or movement semantics.
@@ -272,3 +279,4 @@ Further documentation:
 - [`docs/modernization_roadmap.md`](docs/modernization_roadmap.md)
 - [`docs/stage1_runtime_failure.md`](docs/stage1_runtime_failure.md)
 - [`docs/text_movement_reverse_engineering.md`](docs/text_movement_reverse_engineering.md)
+- [`docs/gamewide_runtime_architecture.md`](docs/gamewide_runtime_architecture.md)

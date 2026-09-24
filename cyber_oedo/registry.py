@@ -137,6 +137,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "prove-game-architecture",
+        "cyber_oedo.runtime.game_architecture",
+        "Validate the cross-overlay runtime architecture map.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "diff-live-state",
         "cyber_oedo.runtime.state_diff",
         "Compare two bank-aware frozen runtime snapshots.",
