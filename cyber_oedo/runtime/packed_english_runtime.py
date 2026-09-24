@@ -16,10 +16,13 @@ For a private token the hook:
 Everything after the font fetch remains stock: the local transform, VDC
 transfer, BAT write, cursor, grid, scroll, timing, and page/window behavior.
 
-The initial proof uses the authenticated Mission 0-B resident overlay's
-$A300-$BFFF padding region.  That region is source-guarded by an exact SHA-256
-and exact byte pattern.  This is a bounded Mission 0 runtime proof, not yet a
-claim that the same storage is safe in every mission overlay.
+The initial proof extends the already-proven Mission 0 indexed-table CD load.
+The original loader reads 0x301 bytes from absolute LBA $107D into $A400.  The
+patched loader reads 0x1C00 bytes from the same source: the original table is
+unchanged at $A400, while a source-guarded padding tail is populated with the
+English runtime and lands explicitly at $A800-$BFFF.  This is a bounded
+Mission 0 runtime proof, not a claim that the same storage is safe in every
+mission overlay.
 """
 
 from __future__ import annotations
@@ -29,6 +32,11 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from cyber_oedo.disc.cdrom_mode1 import PayloadPatch
+from cyber_oedo.runtime.dialogue_interpreter import (
+    INDEXED_RECORD_BASE,
+    INDEXED_TABLE_TRANSFER_BYTES,
+    indexed_table_source_offset,
+)
 from cyber_oedo.text.font_atlas import GLYPH_HEIGHT, RasterizedAtlas
 from cyber_oedo.text.packed_english import (
     PRIVATE_LEADS,
@@ -45,12 +53,20 @@ FONT_FETCH_HOOK_EXPECTED = bytes.fromhex("20 60 E0")
 SYSTEM_CARD_EX_GETFNT = 0xE060
 FONT_STAGE_BUFFER = 0x4C6C
 
-RUNTIME_CODE_CPU = 0xA300
-PAIR_TABLE_CPU = 0xA500
+INDEXED_TABLE_LENGTH_PATCH_CPU = 0x64DF
+INDEXED_TABLE_LENGTH_PATCH_OFFSET = (
+    MISSION0_B_PAYLOAD_BASE + INDEXED_TABLE_LENGTH_PATCH_CPU
+)
+INDEXED_TABLE_LENGTH_EXPECTED = bytes.fromhex("A9 01 85 06 A9 03 85 07")
+EXTENDED_INDEXED_TABLE_LOAD_BYTES = 0x1C00
+INDEXED_TABLE_LENGTH_REPLACEMENT = bytes.fromhex("A9 00 85 06 A9 1C 85 07")
+
+RUNTIME_CODE_CPU = 0xA800
+PAIR_TABLE_CPU = 0xAA00
 RUNTIME_REGION_END_CPU = 0xC000
-PADDING_SPLIT_CPU = 0xA800
-RUNTIME_REGION_SHA256 = (
-    "c4b3d9d150441e0fb914e0d8f8ffaf0e73c6b7e7037759fff4eb8a7c762fe18b"
+RUNTIME_SOURCE_RELATIVE_START = RUNTIME_CODE_CPU - INDEXED_RECORD_BASE
+EXTENDED_SOURCE_SHA256 = (
+    "a2a62c29b20d87e7bcad28542d670a6446c62ab8d661c49a4d013317a985767f"
 )
 
 # The redraw path copies the first stored glyph byte to $03 and the second to
@@ -239,33 +255,50 @@ def _align_up(value: int, alignment: int) -> int:
     return (value + alignment - 1) & ~(alignment - 1)
 
 
-def _expected_padding(cpu_start: int, length: int) -> bytes:
-    """Return the exact authenticated M0-B padding pattern for a subrange."""
+def runtime_source_offset(cpu_address: int) -> int:
+    """Map an explicitly loaded $A400-$BFFF address back to its CD source."""
+
+    if not INDEXED_RECORD_BASE <= cpu_address < RUNTIME_REGION_END_CPU:
+        raise PackedRuntimeError("runtime CPU address lies outside $A400-$BFFF")
+    return indexed_table_source_offset() + (cpu_address - INDEXED_RECORD_BASE)
+
+
+def _expected_runtime_source(cpu_start: int, length: int) -> bytes:
+    """Return the authenticated padding bytes used for the added runtime.
+
+    The original indexed-table source occupies offsets 0x000-0x300 of the
+    extended load. Bytes 0x301-0x7FF are exact zero fill and bytes
+    0x800-0x1BFF are exact E5 fill.
+    """
 
     if length <= 0:
         raise PackedRuntimeError("runtime patch length must be positive")
     cpu_end = cpu_start + length
     if cpu_start < RUNTIME_CODE_CPU or cpu_end > RUNTIME_REGION_END_CPU:
-        raise PackedRuntimeError("runtime data lies outside the guarded M0-B region")
-    return bytes(
-        0x00 if address < PADDING_SPLIT_CPU else 0xE5
-        for address in range(cpu_start, cpu_end)
-    )
+        raise PackedRuntimeError("runtime data lies outside $A800-$BFFF")
+    result = bytearray()
+    for cpu_address in range(cpu_start, cpu_end):
+        source_relative = cpu_address - INDEXED_RECORD_BASE
+        result.append(0x00 if source_relative < 0x800 else 0xE5)
+    return bytes(result)
 
 
 def validate_runtime_region(payload: bytes) -> bool:
-    """Authenticate the complete $A300-$BFFF Mission 0-B candidate region."""
+    """Authenticate the complete source interval consumed by the extended load."""
 
-    start = MISSION0_B_PAYLOAD_BASE + RUNTIME_CODE_CPU
-    end = MISSION0_B_PAYLOAD_BASE + RUNTIME_REGION_END_CPU
+    start = indexed_table_source_offset()
+    end = start + EXTENDED_INDEXED_TABLE_LOAD_BYTES
     actual = payload[start:end]
-    expected_length = RUNTIME_REGION_END_CPU - RUNTIME_CODE_CPU
-    if len(actual) != expected_length:
+    if len(actual) != EXTENDED_INDEXED_TABLE_LOAD_BYTES:
         return False
-    if hashlib.sha256(actual).hexdigest() != RUNTIME_REGION_SHA256:
+    if hashlib.sha256(actual).hexdigest() != EXTENDED_SOURCE_SHA256:
         return False
-    return actual == _expected_padding(RUNTIME_CODE_CPU, expected_length)
-
+    padding = actual[INDEXED_TABLE_TRANSFER_BYTES:]
+    zero_count = 0x800 - INDEXED_TABLE_TRANSFER_BYTES
+    return (
+        padding[:zero_count] == bytes(zero_count)
+        and padding[zero_count:] == bytes((0xE5,)) * (0x1400)
+    )
 
 def _emit_runtime_code(
     pair_count: int,
@@ -451,9 +484,18 @@ def build_runtime(
 
 
 def runtime_payload_patches(runtime: PackedRuntime) -> tuple[PayloadPatch, ...]:
-    """Return the source-guarded hook/code/table/atlas payload patches."""
+    """Return source-guarded loader/hook/code/table/atlas payload patches."""
 
     return (
+        PayloadPatch(
+            offset=INDEXED_TABLE_LENGTH_PATCH_OFFSET,
+            expected=INDEXED_TABLE_LENGTH_EXPECTED,
+            replacement=INDEXED_TABLE_LENGTH_REPLACEMENT,
+            label=(
+                "Mission 0 indexed-table loader: extend $A400 transfer through "
+                "$BFFF so English runtime is explicitly resident"
+            ),
+        ),
         PayloadPatch(
             offset=FONT_FETCH_HOOK_OFFSET,
             expected=FONT_FETCH_HOOK_EXPECTED,
@@ -470,20 +512,20 @@ def runtime_payload_patches(runtime: PackedRuntime) -> tuple[PayloadPatch, ...]:
             ),
         ),
         PayloadPatch(
-            offset=MISSION0_B_PAYLOAD_BASE + RUNTIME_CODE_CPU,
-            expected=_expected_padding(RUNTIME_CODE_CPU, len(runtime.code)),
+            offset=runtime_source_offset(RUNTIME_CODE_CPU),
+            expected=_expected_runtime_source(RUNTIME_CODE_CPU, len(runtime.code)),
             replacement=runtime.code,
             label="Mission 0-B packed-English private-token decoder/compositor",
         ),
         PayloadPatch(
-            offset=MISSION0_B_PAYLOAD_BASE + PAIR_TABLE_CPU,
-            expected=_expected_padding(PAIR_TABLE_CPU, len(runtime.pair_table)),
+            offset=runtime_source_offset(PAIR_TABLE_CPU),
+            expected=_expected_runtime_source(PAIR_TABLE_CPU, len(runtime.pair_table)),
             replacement=runtime.pair_table,
             label="Mission 0-B packed-English pair dictionary",
         ),
         PayloadPatch(
-            offset=MISSION0_B_PAYLOAD_BASE + runtime.atlas_cpu,
-            expected=_expected_padding(runtime.atlas_cpu, len(runtime.atlas_row_major)),
+            offset=runtime_source_offset(runtime.atlas_cpu),
+            expected=_expected_runtime_source(runtime.atlas_cpu, len(runtime.atlas_row_major)),
             replacement=runtime.atlas_row_major,
             label="Mission 0-B row-major 8x16 English glyph atlas",
         ),
@@ -539,7 +581,14 @@ def validate_proof_against_payload(
 ) -> tuple[dict[str, int | str | bool], ...]:
     """Validate every proof patch against an authenticated Track 2 payload."""
 
-    rows = []
+    rows = [
+        {
+            "label": "Mission 0 extended indexed-table source interval",
+            "offset": f"0x{indexed_table_source_offset():08X}",
+            "bytes": EXTENDED_INDEXED_TABLE_LOAD_BYTES,
+            "matched": validate_runtime_region(payload),
+        }
+    ]
     for patch in proof.patches:
         actual = payload[patch.offset : patch.end_offset]
         rows.append(
