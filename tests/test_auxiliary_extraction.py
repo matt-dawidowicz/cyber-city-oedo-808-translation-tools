@@ -175,6 +175,45 @@ class AuxiliaryDialogueShadowTests(unittest.TestCase):
         self.assertEqual(len(auxiliary), 1)
         self.assertEqual(rejected, [])
 
+
+    def test_shifted_sjis_byte_match_is_not_treated_as_text_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            resource_map = root / "resource.tsv"
+            dialogue = root / "dialogue.tsv"
+            likely = root / "likely.tsv"
+            auxiliary = root / "auxiliary.tsv"
+            rejected = root / "rejected.tsv"
+
+            dialogue_text = "＝０"
+            dialogue_raw = b"\x27\x28" + dialogue_text.encode("shift_jis") + b"\x00"
+            candidate_text = "≠"
+            candidate_raw = candidate_text.encode("shift_jis")
+            data = bytearray(4096)
+            data[:4] = b"TEST"
+            data[0x100 : 0x100 + len(dialogue_raw)] = dialogue_raw
+            data[0x300 : 0x300 + len(candidate_raw)] = candidate_raw
+            write_tsv(resource_map, RESOURCE_FIELDS, [resource_row()])
+            write_tsv(
+                dialogue,
+                DIALOGUE_V1.fields,
+                [dialogue_row(0x100, dialogue_raw, dialogue_text, dialogue_text)],
+            )
+            write_tsv(likely, LIKELY_FIELDS, [likely_row(0x300, candidate_text)])
+
+            stats = write_auxiliary_text(
+                likely,
+                dialogue,
+                auxiliary,
+                resource_map=resource_map,
+                data=bytes(data),
+                rejected_output=rejected,
+            )
+
+            self.assertEqual(stats.dialogue_shadows, 0)
+            self.assertEqual(len(read_tsv(auxiliary)), 1)
+            self.assertEqual(read_tsv(rejected), [])
+
     def test_distant_substring_coincidence_is_retained(self) -> None:
         stats, auxiliary, rejected = self._run_fixture(
             candidate_offset=0xC00,
@@ -333,6 +372,39 @@ class AuxiliaryDialogueShadowTests(unittest.TestCase):
                     data=bytes(data),
                 )
 
+
+    def test_overlapping_stale_candidate_still_fails_source_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            resource_map = root / "resource.tsv"
+            dialogue = root / "dialogue.tsv"
+            likely = root / "likely.tsv"
+            auxiliary = root / "auxiliary.tsv"
+            dialogue_text = "これは完全な文章です"
+            dialogue_raw = b"\x27\x28" + dialogue_text.encode("shift_jis") + b"\x00"
+            candidate_text = "完全な文章"
+            data = bytearray(4096)
+            data[:4] = b"TEST"
+            data[0x100 : 0x100 + len(dialogue_raw)] = dialogue_raw
+            candidate = likely_row(0x100, candidate_text)
+            candidate["bytes"] = len(dialogue_raw)
+            write_tsv(resource_map, RESOURCE_FIELDS, [resource_row()])
+            write_tsv(
+                dialogue,
+                DIALOGUE_V1.fields,
+                [dialogue_row(0x100, dialogue_raw, dialogue_text, dialogue_text)],
+            )
+            write_tsv(likely, LIKELY_FIELDS, [candidate])
+
+            with self.assertRaisesRegex(ValueError, "candidate source mismatch"):
+                write_auxiliary_text(
+                    likely,
+                    dialogue,
+                    auxiliary,
+                    resource_map=resource_map,
+                    data=bytes(data),
+                )
+
     def test_stale_dialogue_fails_source_guard(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
@@ -386,6 +458,34 @@ class AuxiliaryDialogueShadowTests(unittest.TestCase):
             write_tsv(dialogue, DIALOGUE_V1.fields, [])
             write_tsv(likely, LIKELY_FIELDS, [])
             with self.assertRaisesRegex(ValueError, "resource source mismatch"):
+                write_auxiliary_text(
+                    likely,
+                    dialogue,
+                    auxiliary,
+                    resource_map=resource_map,
+                    data=bytes(data),
+                )
+
+
+    def test_resource_map_must_include_complete_boundary_sequence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            resource_map = root / "resource.tsv"
+            dialogue = root / "dialogue.tsv"
+            likely = root / "likely.tsv"
+            auxiliary = root / "auxiliary.tsv"
+            data = bytearray(4096)
+            data[:5] = b"FIRST"
+            data[2048 : 2048 + 6] = b"SECOND"
+            write_tsv(
+                resource_map,
+                RESOURCE_FIELDS,
+                [resource_row(start=0, end=4096, name="FIRST")],
+            )
+            write_tsv(dialogue, DIALOGUE_V1.fields, [])
+            write_tsv(likely, LIKELY_FIELDS, [])
+
+            with self.assertRaisesRegex(ValueError, "resource boundary sequence mismatch"):
                 write_auxiliary_text(
                     likely,
                     dialogue,
