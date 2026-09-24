@@ -57,6 +57,8 @@ def physical_address(cpu_address: int, mprs: tuple[int, ...]) -> str:
 
     if not 0 <= cpu_address < CPU_ADDRESS_SPACE:
         raise ValueError("CPU address must fit in 16 bits")
+    if len(mprs) != MPR_COUNT:
+        raise ValueError("exactly eight MPR values are required")
     slot = cpu_address // MPR_WINDOW_BYTES
     page = mprs[slot]
     offset = cpu_address & (MPR_WINDOW_BYTES - 1)
@@ -70,7 +72,10 @@ def _changed_runs(before: bytes, after: bytes) -> tuple[tuple[int, int], ...]:
     start: int | None = None
     for address, (left, right) in enumerate(zip(before, after)):
         if left != right:
-            if start is None:
+            if start is not None and address % MPR_WINDOW_BYTES == 0:
+                runs.append((start, address))
+                start = address
+            elif start is None:
                 start = address
         elif start is not None:
             runs.append((start, address))
