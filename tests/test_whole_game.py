@@ -7,6 +7,8 @@ from cyber_oedo.runtime.whole_game import (
     ADPCM_RECORD_BYTES,
     SAVE_FILE_DESCRIPTOR,
     SAVE_SLOT_BYTES,
+    TRACK2_START_LBA,
+    _decode_cd_descriptor,
     _decode_adpcm_record,
     _object_and_interaction_report,
 )
@@ -17,6 +19,14 @@ class WholeGameProofTests(unittest.TestCase):
         self.assertEqual(SAVE_SLOT_BYTES, 4)
         self.assertEqual(SAVE_FILE_DESCRIPTOR[:2], b"\x07\x00")
         self.assertEqual(SAVE_FILE_DESCRIPTOR[2:], b"OEDO808   ")
+
+
+    def test_event_cd_descriptor_uses_absolute_disc_lba(self) -> None:
+        row = _decode_cd_descriptor(bytes.fromhex("00 71 10 0C"), 0)
+        self.assertEqual(TRACK2_START_LBA, 3590)
+        self.assertEqual(row["absolute_lba"], "0x001071")
+        self.assertEqual(row["track2_relative_sector"], 0x1071 - 3590)
+        self.assertEqual(row["block_count"], 0x0C)
 
     def test_adpcm_record_is_six_bytes(self) -> None:
         row = _decode_adpcm_record(bytes.fromhex("01 8A 50 0D 10 67"), 1)
