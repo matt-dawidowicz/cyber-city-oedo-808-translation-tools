@@ -30,6 +30,15 @@ DIRECTION_PREVIOUS = 0x276F
 STEP_X = 0x2767
 STEP_Y = 0x2768
 STEP_TIMER = 0x2769
+ANIMATION_COUNTDOWN = 0x2764
+ANIMATION_SCRIPT_POINTER = 0x2765
+COLLISION_BITMAP_BASE = 0x275E
+MAP_WIDTH_TILES = 0x264A
+COLLISION_RECT_COUNT = 0x265D
+COLLISION_RECT_BASE = 0x265E
+INTERACTION_TABLE_POINTER = 0x2779
+INTERACTION_CLASS = 0x277B
+INTERACTION_RESULT = 0x3703
 
 INPUT_CODES = {
     1: "left",
@@ -53,6 +62,23 @@ TILE_VECTORS = {
     3: (16, 0),
     4: (0, -16),
 }
+
+WALK_ANIMATION_SCRIPTS = {
+    1: 0x4649,
+    2: 0x4654,
+    3: 0x465F,
+    4: 0x466A,
+}
+IDLE_ANIMATION_SCRIPTS = {
+    1: 0x4675,
+    2: 0x467A,
+    3: 0x467F,
+    4: 0x4684,
+}
+INTERACTION_RECORD_BYTES = 18
+INTERACTION_BOUNDS_BYTES = 8
+INTERACTION_PAYLOAD_BYTES = 9
+COLLISION_RECT_BYTES = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +155,132 @@ MOVEMENT_REGIONS = (
             "deltas to the 16-bit player position pairs."
         ),
     ),
+    MovementRegion(
+        "collision_bitmap_lookup",
+        0x490A,
+        bytes.fromhex(
+            "A5 1C 48 A5 1D 48 A5 1E 48 A5 1F 48 20 56 49 "
+            "A5 20 49 80 0A 62 E9 00 48 A5 1C 18 65 20 85 1C "
+            "68 65 1D 85 1D A5 21 49 80 0A 62 E9 00 48 A5 1E "
+            "18 65 21 85 1E 68 65 1F 85 1F 20 77 49 20 CC 49 "
+            "68 85 1F 68 85 1E 68 85 1D 68 85 1C 60 "
+            "46 1D 66 1C 46 1D 66 1C 46 1D 66 1C 46 1D 66 1C "
+            "46 1F 66 1E 46 1F 66 1E 46 1F 66 1E 46 1F 66 1E 60 "
+            "A5 1C 48 A5 1D 48 A5 1E 85 F8 AD 4A 26 85 FA 20 BD E0 "
+            "A5 FC 85 1E A5 FD 85 1F 46 1F 66 1E 46 1F 66 1E "
+            "46 1F 66 1E 46 1D 66 1C 46 1D 66 1C 46 1D 66 1C "
+            "A5 1E 18 65 1C 85 1E A5 1F 65 1D 85 1F "
+            "A5 1E 18 6D 5E 27 85 1E A5 1F 6D 5F 27 85 1F "
+            "68 85 1D 68 85 1C 60 A5 1C 29 07 A8 B2 1E 85 1C "
+            "98 F0 05 06 1C 88 80 F8 06 1C 60"
+        ),
+        (
+            "Convert the query point to 16x16-tile coordinates, combine Y with "
+            "the map width through BIOS MA_MUL8U, address the bit-packed "
+            "collision bitmap at $275E/$275F, and return the selected bit in carry."
+        ),
+    ),
+    MovementRegion(
+        "collision_gate",
+        0x5409,
+        bytes.fromhex(
+            "AD 60 27 85 1C AD 61 27 85 1D A5 1C 38 E9 08 85 1C "
+            "B0 02 C6 1D AD 62 27 85 1E AD 63 27 85 1F A5 1E "
+            "38 E9 10 85 1E B0 02 C6 1F AD 67 27 85 20 "
+            "AD 68 27 85 21 20 0A 49 B0 26"
+        ),
+        (
+            "Probe the collision bitmap from the player's offset footprint and "
+            "branch on carry before any movement step is committed."
+        ),
+    ),
+    MovementRegion(
+        "animation_interpreter",
+        0x451B,
+        bytes.fromhex(
+            "C6 21 D0 05 20 3B 45 80 13 C6 22 A5 22 1A D0 02 C6 23 "
+            "B2 22 85 20 E6 22 D0 02 E6 23 20 7C 45 60 "
+            "B2 22 C9 FF F0 05 20 4A 45 80 03 20 5F 45 60 "
+            "B2 22 85 21 E6 22 D0 02 E6 23 B2 22 85 20 E6 22 D0 02 E6 23 60 "
+            "E6 22 D0 02 E6 23 B2 22 48 E6 22 D0 02 E6 23 "
+            "B2 22 48 68 85 23 68 85 22 20 4A 45 60"
+        ),
+        (
+            "Run animation scripts as duration/frame pairs; FF followed by a "
+            "16-bit pointer redirects the script, providing the loop primitive."
+        ),
+    ),
+    MovementRegion(
+        "direction_animation_scripts",
+        0x4649,
+        bytes.fromhex(
+            "06 18 06 19 06 1A 06 1B FF 49 46 "
+            "06 14 06 15 06 16 06 17 FF 54 46 "
+            "06 1C 06 1D 06 1E 06 1F FF 5F 46 "
+            "06 20 06 21 06 22 06 23 FF 6A 46 "
+            "00 24 FF 75 46 00 25 FF 7A 46 "
+            "00 26 FF 7F 46 00 27 FF 84 46"
+        ),
+        (
+            "Four looping walk scripts and four looping one-frame idle/facing "
+            "scripts selected by direction codes 1..4."
+        ),
+    ),
+    MovementRegion(
+        "collision_rectangle_registry",
+        0x470C,
+        bytes.fromhex(
+            "9C 5D 26 60 A5 24 48 AD 5D 26 85 24 20 25 47 "
+            "68 85 24 AD 5D 26 EE 5D 26 60 A5 24 0A 0A 0A A8 "
+            "A5 1C 99 5E 26 C8 A5 1D 99 5E 26 C8 "
+            "A5 1E 99 5E 26 C8 A5 1F 99 5E 26 C8 "
+            "A5 20 99 5E 26 C8 A5 21 99 5E 26 C8 "
+            "A5 22 99 5E 26 C8 A5 23 99 5E 26 60"
+        ),
+        (
+            "Maintain a counted $265E array of 8-byte rectangles; each entry "
+            "stores four two-byte bounds/coordinates."
+        ),
+    ),
+    MovementRegion(
+        "interaction_record_search",
+        0x4B20,
+        bytes.fromhex(
+            "A5 1C 48 A5 1D 48 A5 1E 48 A5 1F 48 A5 20 48 A5 21 48 "
+            "A5 22 48 A5 23 48 A5 24 48 A5 25 48 AD 79 27 85 24 "
+            "AD 7A 27 85 25 82 8A 20 9B 4B A8 E8 B1 24 C8 C9 FF "
+            "F0 17 CD 7B 27 D0 EE DA 20 AF 4B 20 86 51 FA 90 E4 "
+            "A9 FF 8D 49 26 20 D8 4B 68 85 25 68 85 24 68 85 23 "
+            "68 85 22 68 85 21 68 85 20 68 85 1F 68 85 1E "
+            "68 85 1D 68 85 1C 60 "
+            "85 1D 0A 85 1C 0A 0A 0A 18 65 1C 18 65 1D 60 "
+            "0A 85 1C 0A 0A 0A 18 65 1C 60 "
+            "85 1C 0A 0A 0A 0A 18 65 1C 60 "
+            "B1 24 85 1C C8 B1 24 85 1D C8 B1 24 85 1E C8 "
+            "B1 24 85 1F C8 B1 24 85 20 C8 B1 24 85 21 C8 "
+            "B1 24 85 22 C8 B1 24 85 23 C8 60 "
+            "82 B1 24 9D 03 37 C8 E8 E0 09 D0 F5 60"
+        ),
+        (
+            "Scan 18-byte interaction records from the pointer in $2779/$277A: "
+            "one class byte, eight bound bytes, and nine payload bytes. A matching "
+            "class plus player-in-bounds test copies the payload to $3703-$370B."
+        ),
+    ),
+    MovementRegion(
+        "player_inside_interaction_bounds",
+        0x5186,
+        bytes.fromhex(
+            "AD 60 27 C5 1C 90 2F AD 61 27 C5 1D 90 28 "
+            "A5 20 CD 60 27 90 21 A5 21 CD 61 27 90 1A "
+            "AD 62 27 C5 1E 90 13 AD 63 27 C5 1F 90 0C "
+            "A5 22 CD 62 27 90 05 A5 23 CD 63 27 60"
+        ),
+        (
+            "Test the player X/Y pairs against the eight bound bytes loaded "
+            "from the selected interaction record; carry is the in-bounds result."
+        ),
+    ),
 )
 
 
@@ -171,6 +323,36 @@ def build_movement_report(payload: pathlib.Path) -> dict[str, Any]:
             "step_x": "$2767",
             "step_y": "$2768",
             "step_timer": "$2769",
+            "animation_countdown": "$2764",
+            "animation_script_pointer": "$2765/$2766",
+            "collision_bitmap_base": "$275E/$275F",
+            "map_width_tiles": "$264A",
+            "collision_rectangle_count": "$265D",
+            "collision_rectangle_base": "$265E",
+            "interaction_table_pointer": "$2779/$277A",
+            "interaction_class": "$277B",
+            "interaction_result_payload": "$3703-$370B",
+        },
+        "animation": {
+            "walk_scripts": {str(key): f"0x{value:04X}" for key, value in WALK_ANIMATION_SCRIPTS.items()},
+            "idle_scripts": {str(key): f"0x{value:04X}" for key, value in IDLE_ANIMATION_SCRIPTS.items()},
+            "script_format": "duration, frame; FF lo hi redirects/loops",
+        },
+        "collision": {
+            "tile_size_pixels": 16,
+            "storage": "one bit per map tile",
+            "row_width_tiles_address": "$264A",
+            "bitmap_base_address": "$275E/$275F",
+            "lookup": "byte_index=(tile_y*map_width_tiles+tile_x)//8; bit=tile_x&7",
+            "rectangle_bytes": COLLISION_RECT_BYTES,
+        },
+        "interaction_records": {
+            "record_bytes": INTERACTION_RECORD_BYTES,
+            "class_bytes": 1,
+            "bounds_bytes": INTERACTION_BOUNDS_BYTES,
+            "payload_bytes": INTERACTION_PAYLOAD_BYTES,
+            "terminator": "0xFF in class byte",
+            "payload_destination": "$3703-$370B",
         },
         "input_codes": INPUT_CODES,
         "unit_vectors": {str(key): value for key, value in UNIT_VECTORS.items()},
@@ -182,8 +364,13 @@ def build_movement_report(payload: pathlib.Path) -> dict[str, Any]:
                 "capture is still required to certify the runtime bank identity"
             ),
             "collision_semantics": (
-                "movement is carry-gated through $5409/$490A before commit; "
-                "the underlying map/collision representation needs further proof"
+                "static code proves a bit-packed 16x16-tile collision bitmap and "
+                "a separate 8-byte rectangle registry; live scene capture is still "
+                "needed to assign game-facing meanings to individual bits/rectangles"
+            ),
+            "interaction_payload_semantics": (
+                "record geometry and payload copying are proven; the nine payload "
+                "bytes are preserved as opaque until their consumers are fully mapped"
             ),
         },
     }
