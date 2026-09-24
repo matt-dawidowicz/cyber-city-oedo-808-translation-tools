@@ -27,6 +27,10 @@ from cyber_oedo.graphics.title_screen import TITLE_ASSET_BYTES
 from cyber_oedo.io import sha256_file
 from cyber_oedo.resources import build_candidate_regions, discover_resource_headers
 from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
+from cyber_oedo.runtime.presentation_stream import (
+    decode_presentation_stream,
+    unknown_binary_records,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -342,6 +346,11 @@ def build_text_engine_coverage_report(path: pathlib.Path) -> dict[str, Any]:
         ENDING_COMPLETION_STREAM.offset :
         ENDING_COMPLETION_STREAM.offset + ENDING_COMPLETION_STREAM.length
     ]
+    oedonet_data = payload[
+        ENDING_OEDONET_STREAM.offset :
+        ENDING_OEDONET_STREAM.offset + ENDING_OEDONET_STREAM.length
+    ]
+    oedonet_records = decode_presentation_stream(oedonet_data)
 
     profile_validation = validate_profile_text(payload)
     title_bytes = payload[40960 : 40960 + TITLE_ASSET_BYTES]
@@ -446,6 +455,22 @@ def build_text_engine_coverage_report(path: pathlib.Path) -> dict[str, Any]:
         "dynamic_labels": decode_dynamic_label_records(labels_data),
         "ending": {
             "common_dialogue_overlay_present": False,
+            "oedonet_records": [
+                {
+                    "offset": f"0x{record.offset:04X}",
+                    "raw_hex": record.raw.hex(" "),
+                    "kind": record.kind,
+                    "x": record.x,
+                    "row": record.row,
+                    "text": record.text,
+                    "formatting_role": record.formatting_role,
+                }
+                for record in oedonet_records
+            ],
+            "oedonet_unknown_binary_records": [
+                record.raw.hex(" ") for record in unknown_binary_records(oedonet_records)
+            ],
+            "oedonet_formatting_complete": not unknown_binary_records(oedonet_records),
             "completion_records": decode_ending_completion_stream(ending_data),
             "completion_stream_terminator": "0xFF",
             "opcode_formats": {
@@ -465,8 +490,9 @@ def build_text_engine_coverage_report(path: pathlib.Path) -> dict[str, Any]:
         "families": families,
         "limits": {
             "ending_oedonet_commands": (
-                "text-bearing row records and source extent are proven; not every "
-                "non-text formatting opcode has a game-facing semantic name"
+                "all ENDING OEDONET records are structurally classified; formatting "
+                "roles are named by stable placement while low-level VDC effects "
+                "remain a live-trace question"
             ),
             "resource_local_renderers": (
                 "resource boundaries/text tables are covered here; individual "
@@ -511,6 +537,7 @@ def main(argv: list[str] | None = None) -> int:
         and profiles_ok
         and ui_ok
         and report["graphics_backed"]["opening_title_source_hash_matches"]
+        and report["ending"]["oedonet_formatting_complete"]
     ) else 1
 
 
