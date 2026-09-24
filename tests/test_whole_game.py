@@ -6,6 +6,7 @@ from cyber_oedo.runtime.whole_game import (
     ADPCM_PROVEN_RECORDS,
     ADPCM_RECORD_BYTES,
     SAVE_FILE_DESCRIPTOR,
+    MISSION_SCRIPT_OPCODES,
     SAVE_SLOT_BYTES,
     TRACK2_START_LBA,
     _decode_cd_descriptor,
@@ -20,6 +21,12 @@ class WholeGameProofTests(unittest.TestCase):
         self.assertEqual(SAVE_FILE_DESCRIPTOR[:2], b"\x07\x00")
         self.assertEqual(SAVE_FILE_DESCRIPTOR[2:], b"OEDO808   ")
 
+
+
+    def test_mission_script_opcode_set_is_explicit(self) -> None:
+        self.assertEqual(len(MISSION_SCRIPT_OPCODES), 27)
+        self.assertIn(0x49, MISSION_SCRIPT_OPCODES)
+        self.assertEqual(MISSION_SCRIPT_OPCODES[-1], 0x4C)
 
     def test_event_cd_descriptor_uses_absolute_disc_lba(self) -> None:
         row = _decode_cd_descriptor(bytes.fromhex("00 71 10 0C"), 0)
