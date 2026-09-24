@@ -110,6 +110,74 @@ validate the static movement windows. A live MPR capture is still required to
 certify that this candidate module is the active exploration overlay in each
 scene.
 
+### Collision map
+
+The movement collision path is now statically resolved:
+
+1. $5409 starts from the player's 16-bit X/Y pairs and offsets the footprint by
+   X-8 and Y-16.
+2. $490A divides both coordinates by 16 to obtain 16x16 tile coordinates and
+   applies the signed unit movement vector.
+3. $4977 multiplies tile Y by the map width byte at $264A using System Card
+   MA_MUL8U ($E0BD), combines it with tile X, divides the linear tile index by
+   eight, and adds the collision bitmap base pointer at $275E/$275F.
+4. $49CC uses tile-X low bits to select the individual collision bit from that
+   byte and returns it in carry.
+5. $5409 branches on that carry before movement can reach the commit path.
+
+The static representation is therefore **one collision bit per 16x16 map
+tile**. Individual bit meanings and scene-specific bitmap ownership still need
+live certification.
+
+### Facing and animation
+
+Facing is represented by the directional animation script selected for the
+player rather than by a separate direction byte:
+
+- $2764: animation countdown;
+- $2765/$2766: current animation-script pointer;
+- walk Left/Down/Right/Up: $4649/$4654/$465F/$466A;
+- idle Left/Down/Right/Up: $4675/$467A/$467F/$4684.
+
+$451B interprets scripts as repeated `duration, frame` pairs. Opcode byte FF
+is followed by a little-endian pointer and redirects the script, which the
+directional sequences use to loop. The moving sequences each contain four
+six-tick frames; idle scripts hold one facing frame and loop to themselves.
+
+### Occupancy and interaction records
+
+Two separate structures are now proven and should not be conflated.
+
+**Collision/occupancy rectangles**
+
+- count at $265D;
+- base at $265E;
+- 8 bytes per entry;
+- $4725 writes four two-byte values per entry;
+- $47D0 fetches an indexed entry and feeds it to the rectangle-overlap logic.
+
+These are transient physical rectangles used by collision/occupancy checks.
+
+**Interaction records**
+
+The pointer at $2779/$277A addresses an 18-byte record array. $4B9B computes
+`index * 18`, proving the stride. Each record is:
+
+| Offset | Bytes | Static role |
+|---:|---:|---|
+| +0 | 1 | interaction class; FF terminates the table |
+| +1 | 8 | four two-byte player-bound values |
+| +9 | 9 | matched interaction payload |
+
+$4B20 compares the class against $277B, loads the eight bound bytes, and calls
+$5186 to test the player X/Y pairs against them. A hit sets $2649 to FF and
+copies the final nine bytes to $3703-$370B.
+
+The nine-byte payload is deliberately still treated as opaque. Its consumer at
+the outer scene loop proves that at least one payload form can drive a
+subsequent scene/action result, but its full field schema has not yet been
+established.
+
 ### Controlled capture matrix
 
 | Baseline | Changed state | Main purpose |
@@ -141,14 +209,14 @@ intersect candidates across opposing inputs:
 3. Active actor/entity selector.
 4. World/screen X and Y representation and precision.
 5. Velocity or per-frame delta representation.
-6. Facing direction.
-7. Animation state, frame index, and timer.
-8. Collision query and collision response.
-9. Walkability/tile or geometry source.
-10. Interaction target/range checks.
+6. Live-certify directional animation selection across representative scenes.
+7. Map sprite-frame identifiers to the actual player graphics.
+8. Live-certify collision bits and occupancy rectangles in representative rooms.
+9. Determine the source/loader lifetime of each scene's collision bitmap.
+10. Decode the nine-byte interaction payload schema.
 11. Camera/scroll coordinates and clamping.
 12. Door/room/map transition trigger.
-13. Entity table layout and stride for NPCs/actors.
+13. Identify higher-level NPC rendering/state records beyond interaction bounds.
 14. Overlay/MPR changes associated with movement/map transitions.
 
 ## Bank-aware state diff diagnostic
