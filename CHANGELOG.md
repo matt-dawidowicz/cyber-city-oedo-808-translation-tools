@@ -18,6 +18,8 @@ profiles and runtime research retain their own evidence and validation notes in
 - Contributor, security, development, release, and modernization documentation.
 - Separate issue forms for tooling defects and reverse-engineering evidence.
 - Package-surface, packaging-metadata, and command-forwarding regression tests.
+- Auditable `auxiliary_rejected.tsv` output for conservatively suppressed
+  dialogue-shadow fragments.
 
 ### Changed
 
@@ -29,9 +31,17 @@ profiles and runtime research retain their own evidence and validation notes in
   architecture rather than a hypothetical future conversion.
 - Package discovery accepts future `cyber_oedo` subpackages without another
   distribution-layout change.
+- Auxiliary-text extraction now rejects only source-guarded, resource-local,
+  nearby proper substrings of structured dialogue that terminate into long zero
+  fill, while retaining ambiguous candidates for human review.
+- The consolidated Tier-A pipeline performs auxiliary shadow filtering inside
+  its existing Track 2 mapping, avoiding another full-payload read.
 
 ### Compatibility
 
 - Existing root-level script entry points remain supported.
+- The legacy three-positional-argument auxiliary extractor invocation remains
+  available and performs overlap-only subtraction; source-guarded shadow
+  filtering is enabled when the resource map and Track 2 payload are supplied.
 - No parser rules, binary formats, patch coordinates, translation text, or game
   bytes are intentionally changed by the tooling-foundation modernization.
