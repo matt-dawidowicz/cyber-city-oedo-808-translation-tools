@@ -1,23 +1,22 @@
 from __future__ import annotations
 
-import hashlib
 import unittest
 
 from cyber_oedo.runtime.packed_english_runtime import (
     BARTENDER_PROOF_ENGLISH,
     BARTENDER_PROOF_SOURCE,
+    EXTENDED_INDEXED_TABLE_LOAD_BYTES,
     FONT_FETCH_HOOK_EXPECTED,
-    MISSION0_B_PAYLOAD_BASE,
+    INDEXED_TABLE_LENGTH_EXPECTED,
     PAIR_TABLE_CPU,
-    PADDING_SPLIT_CPU,
     RUNTIME_CODE_CPU,
     RUNTIME_REGION_END_CPU,
-    RUNTIME_REGION_SHA256,
     PackedRuntimeError,
     build_bartender_proof,
     build_runtime,
     compact_repertoire_for_texts,
     encode_fixed_footprint,
+    runtime_source_offset,
     validate_proof_against_payload,
     validate_runtime_region,
 )
@@ -50,24 +49,13 @@ class PackedEnglishRuntimeTests(unittest.TestCase):
         )
         return dictionary, synthetic_atlas(repertoire.characters)
 
-    def test_authenticated_padding_contract_matches_documented_hash(self) -> None:
-        region = (
-            b"\x00" * (PADDING_SPLIT_CPU - RUNTIME_CODE_CPU)
-            + b"\xE5" * (RUNTIME_REGION_END_CPU - PADDING_SPLIT_CPU)
-        )
-        self.assertEqual(
-            hashlib.sha256(region).hexdigest(),
-            RUNTIME_REGION_SHA256,
-        )
+    def test_runtime_source_is_explicitly_inside_extended_indexed_load(self) -> None:
+        from cyber_oedo.runtime.dialogue_interpreter import indexed_table_source_offset
 
-        payload = bytearray(
-            MISSION0_B_PAYLOAD_BASE + RUNTIME_REGION_END_CPU
-        )
-        start = MISSION0_B_PAYLOAD_BASE + RUNTIME_CODE_CPU
-        payload[start : start + len(region)] = region
-        self.assertTrue(validate_runtime_region(bytes(payload)))
-        payload[start + 17] ^= 1
-        self.assertFalse(validate_runtime_region(bytes(payload)))
+        source = indexed_table_source_offset()
+        self.assertEqual(runtime_source_offset(0xA800), source + 0x400)
+        self.assertEqual(runtime_source_offset(0xBFFF), source + 0x1BFF)
+        self.assertEqual(EXTENDED_INDEXED_TABLE_LOAD_BYTES, 0x1C00)
 
     def test_runtime_fits_guarded_mission0_region(self) -> None:
         dictionary, atlas = self._dictionary_and_atlas(
@@ -104,30 +92,27 @@ class PackedEnglishRuntimeTests(unittest.TestCase):
     def test_bartender_proof_contains_only_one_text_patch_plus_runtime(self) -> None:
         dictionary, atlas = self._dictionary_and_atlas()
         proof = build_bartender_proof(dictionary, atlas)
-        self.assertEqual(len(proof.patches), 5)
-        self.assertEqual(proof.patches[0].expected, FONT_FETCH_HOOK_EXPECTED)
+        self.assertEqual(len(proof.patches), 6)
+        self.assertEqual(proof.patches[0].expected, INDEXED_TABLE_LENGTH_EXPECTED)
+        self.assertEqual(proof.patches[1].expected, FONT_FETCH_HOOK_EXPECTED)
         self.assertEqual(proof.patches[-1].expected, BARTENDER_PROOF_SOURCE)
         self.assertEqual(proof.english, BARTENDER_PROOF_ENGLISH)
 
-    def test_proof_validates_against_synthetic_guarded_payload(self) -> None:
+    def test_complete_source_interval_gate_cannot_be_bypassed(self) -> None:
         dictionary, atlas = self._dictionary_and_atlas()
         proof = build_bartender_proof(dictionary, atlas)
         end = max(patch.end_offset for patch in proof.patches)
         payload = bytearray(end)
 
-        # Populate the complete authenticated runtime padding region.
-        runtime_start = MISSION0_B_PAYLOAD_BASE + RUNTIME_CODE_CPU
-        runtime_region = (
-            b"\x00" * (PADDING_SPLIT_CPU - RUNTIME_CODE_CPU)
-            + b"\xE5" * (RUNTIME_REGION_END_CPU - PADDING_SPLIT_CPU)
-        )
-        payload[runtime_start : runtime_start + len(runtime_region)] = runtime_region
-
-        for patch in (proof.patches[0], proof.patches[-1]):
+        # Make every individual patch source match while deliberately leaving
+        # the rest of the extended indexed-table source interval synthetic.
+        for patch in proof.patches:
             payload[patch.offset : patch.end_offset] = patch.expected
 
         rows = validate_proof_against_payload(bytes(payload), proof)
-        self.assertTrue(all(row["matched"] for row in rows))
+        self.assertFalse(rows[0]["matched"])
+        self.assertTrue(all(row["matched"] for row in rows[1:]))
+        self.assertFalse(validate_runtime_region(bytes(payload)))
 
     def test_mismatched_atlas_order_is_rejected(self) -> None:
         dictionary, atlas = self._dictionary_and_atlas()
