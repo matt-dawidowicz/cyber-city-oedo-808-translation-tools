@@ -182,8 +182,48 @@ TEXT_ARCHITECTURE_REGIONS = (
         "c546d838a61d818eba27bed3c880bd3d2258367c6167c27142fbdc75efef953f",
         "Install dialogue BAT base $7900 and glyph-pattern VRAM base $6D00.",
     ),
+    HashedRegion(
+        "complete_dialogue_renderer_window",
+        MISSION0_TEXT_BASE,
+        0x5444,
+        0x6D6,
+        "9dbd71a43738468bfe4019f35eb789e65ecf34bbd447916c2039644c0e5346be",
+        "Complete shared font, VDC, cursor, grid, scroll, pacing, and cell-renderer window through $5B19.",
+    ),
 )
 
+ADPCM_DRIVER_BASE = 0x02230800
+ADPCM_ARCHITECTURE_REGIONS = (
+    HashedRegion(
+        "voice_start_and_state_latch",
+        ADPCM_DRIVER_BASE,
+        0x8108,
+        0x40,
+        "c306a3ee6a42e5723567b05fa7fc4d3be900d7148e8cb7156d93909d7b03c209",
+        "Start ADPCM playback and latch the active sample/voice selector into $37F1.",
+    ),
+    HashedRegion(
+        "voice_completion_and_state_clear",
+        ADPCM_DRIVER_BASE,
+        0x837A,
+        0x30,
+        "ce0c620f85ef6c52f5956109646ae4de2d57fe25436f69b0d5da87e967e6c27d",
+        "Poll System Card AD_STAT and clear $37F1 when ADPCM playback becomes idle.",
+    ),
+)
+
+TEXT_OVERLAY_LABELS = (
+    "MISSION_0_A",
+    "MISSION_0_B",
+    "MISSION_1",
+    "MISSION_2",
+    "MISSION_3",
+    "MISSION_4",
+    "MISSION_5",
+    "MISSION_6",
+    "MISSION_7",
+    "MISSION_8",
+)
 TEXT_OVERLAY_BASES = (
     0x00074800,
     0x00131800,
@@ -266,8 +306,9 @@ CONTROL_SEMANTICS = {
     "7E": "consume one ASCII-like digit operand and set per-cell attribute $2763 to operand-$30",
     "3D": "consume two operands; use operand 1 to select one $A400 32-byte record and render its active text field",
     "21": (
-        "if asynchronous state $37F1 is nonzero, wait until trigger bits "
-        "$222D&3 are set; if $37F1 is zero, continue immediately"
+        "interruptible ADPCM voice barrier: continue immediately when $37F1 "
+        "is zero; while a voice/sample selector is latched in $37F1, wait for "
+        "the ADPCM driver to clear it, unless controller trigger bits $222D&3 skip the wait"
     ),
     ">80": "ordinary two-byte Shift-JIS glyph pair rendered through $5915",
     "<=80 other": "ignored by this dispatcher",
@@ -333,7 +374,9 @@ def _relocation_equivalent_parsers(payload: bytes) -> tuple[dict[str, Any], ...]
         for offset in PARSER_RELOC_WORD_OFFSETS
         for byte in (offset, offset + 1)
     }
-    for expected_base, expected_entry in zip(TEXT_OVERLAY_BASES, TEXT_PARSER_ENTRIES):
+    for label, expected_base, expected_entry in zip(
+        TEXT_OVERLAY_LABELS, TEXT_OVERLAY_BASES, TEXT_PARSER_ENTRIES, strict=True
+    ):
         entry = _parser_entry(payload, expected_base)
         blob = (
             payload[expected_base + entry : expected_base + entry + 0xA0]
@@ -365,6 +408,7 @@ def _relocation_equivalent_parsers(payload: bytes) -> tuple[dict[str, Any], ...]
         )
         results.append(
             {
+                "label": label,
                 "module_base": f"0x{expected_base:08X}",
                 "parser_entry": None if entry is None else f"0x{entry:04X}",
                 "expected_entry": f"0x{expected_entry:04X}",
@@ -378,10 +422,30 @@ def _relocation_equivalent_parsers(payload: bytes) -> tuple[dict[str, Any], ...]
     return tuple(results)
 
 
+def _renderer_equivalent_copies(payload: bytes) -> tuple[dict[str, Any], ...]:
+    canonical_start = MISSION0_TEXT_BASE + 0x5444
+    canonical = payload[canonical_start : canonical_start + 0x6D6]
+    results: list[dict[str, Any]] = []
+    for label, base in zip(TEXT_OVERLAY_LABELS, TEXT_OVERLAY_BASES, strict=True):
+        start = base + 0x5444
+        actual = payload[start : start + 0x6D6]
+        results.append(
+            {
+                "label": label,
+                "module_base": f"0x{base:08X}",
+                "renderer_offset": f"0x{start:08X}",
+                "sha256": _sha256(actual),
+                "byte_identical_to_mission0_b": actual == canonical,
+            }
+        )
+    return tuple(results)
+
+
 def build_game_architecture_report(path: pathlib.Path) -> dict[str, Any]:
     payload = path.read_bytes()
     movement_regions = validate_hashed_regions(payload, MOVEMENT_ARCHITECTURE_REGIONS)
     text_regions = validate_hashed_regions(payload, TEXT_ARCHITECTURE_REGIONS)
+    adpcm_regions = validate_hashed_regions(payload, ADPCM_ARCHITECTURE_REGIONS)
 
     renderer_hits = _find_all(payload, RENDERER_SIGNATURE)
     renderer_bases = tuple(hit - 0x5915 for hit in renderer_hits)
@@ -392,6 +456,10 @@ def build_game_architecture_report(path: pathlib.Path) -> dict[str, Any]:
     wrapper_hits = _find_all(payload, EXPLORATION_WRAPPER_SIGNATURE)
     wrapper_bases = tuple(hit - 0x40D5 for hit in wrapper_hits)
     parsers = _relocation_equivalent_parsers(payload)
+    renderer_copies = _renderer_equivalent_copies(payload)
+    ending_start = 39435 * 2048
+    ending_renderer_hits = _find_all(payload[ending_start:], RENDERER_SIGNATURE)
+    ending_parser_anchor_hits = _find_all(payload[ending_start:], PARSER_ANCHOR)
 
     return {
         "scope": "game-wide static architecture correlation",
@@ -399,6 +467,7 @@ def build_game_architecture_report(path: pathlib.Path) -> dict[str, Any]:
         "payload_authenticated": sha256_file(path) == TRACK2_PAYLOAD_SHA256,
         "movement_regions": movement_regions,
         "text_regions": text_regions,
+        "adpcm_regions": adpcm_regions,
         "camera": {
             "player_position": "$2760-$2763",
             "desired_origin": (
@@ -474,6 +543,24 @@ def build_game_architecture_report(path: pathlib.Path) -> dict[str, Any]:
             "renderer_signature_hits": len(renderer_hits),
             "renderer_module_bases": [f"0x{base:08X}" for base in renderer_bases],
             "expected_renderer_module_bases_match": renderer_bases == TEXT_OVERLAY_BASES,
+            "renderer_overlays": renderer_copies,
+            "all_renderer_overlays_byte_identical": all(
+                item["byte_identical_to_mission0_b"] for item in renderer_copies
+            ),
+            "common_dialogue_overlay_labels": list(TEXT_OVERLAY_LABELS),
+            "common_dialogue_banks": [
+                "MISSION_0",
+                "MISSION_1",
+                "MISSION_2",
+                "MISSION_3",
+                "MISSION_4",
+                "MISSION_5",
+                "MISSION_6",
+                "MISSION_7",
+                "MISSION_8",
+            ],
+            "ending_uses_common_dialogue_renderer": bool(ending_renderer_hits),
+            "ending_uses_common_dialogue_parser_anchor": bool(ending_parser_anchor_hits),
             "exploration_wrapper_hits": len(wrapper_hits),
             "exploration_wrapper_bases": [f"0x{base:08X}" for base in wrapper_bases],
             "expected_exploration_wrapper_bases_match": wrapper_bases == EXPLORATION_WRAPPER_BASES,
@@ -503,6 +590,15 @@ def build_game_architecture_report(path: pathlib.Path) -> dict[str, Any]:
             },
             "direct_positioned_cell_renderer": "$5693",
             "controls": CONTROL_SEMANTICS,
+            "voice_sync": {
+                "state": "$37F1",
+                "meaning": "active ADPCM voice/sample selector while playback is in progress",
+                "skip_input": "$222D & 3",
+                "start_driver_cpu": "$8108",
+                "completion_poll_cpu": "$837A",
+                "completion_source": "System Card AD_STAT at $E045",
+                "completion_action": "clear $37F1 when ADPCM is idle",
+            },
         },
         "architecture_chain": [
             "disc scene/overlay descriptor",
@@ -557,8 +653,12 @@ def main(argv: list[str] | None = None) -> int:
         report["payload_authenticated"]
         and all(item["matched"] for item in report["movement_regions"])
         and all(item["matched"] for item in report["text_regions"])
+        and all(item["matched"] for item in report["adpcm_regions"])
         and report["overlay_identity"]["movement_common_core_is_singleton"]
         and report["overlay_identity"]["expected_renderer_module_bases_match"]
+        and report["overlay_identity"]["all_renderer_overlays_byte_identical"]
+        and not report["overlay_identity"]["ending_uses_common_dialogue_renderer"]
+        and not report["overlay_identity"]["ending_uses_common_dialogue_parser_anchor"]
         and report["overlay_identity"]["expected_exploration_wrapper_bases_match"]
         and report["overlay_identity"]["all_parser_overlays_relocation_equivalent"]
     )
