@@ -131,6 +131,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "prove-movement-runtime",
+        "cyber_oedo.runtime.movement",
+        "Validate source-guarded exploration movement evidence.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "diff-live-state",
         "cyber_oedo.runtime.state_diff",
         "Compare two bank-aware frozen runtime snapshots.",
