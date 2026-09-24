@@ -136,6 +136,49 @@ The first 64 six-byte descriptors are source-guarded as a proven table prefix.
 This links the previously decoded dialogue `21` command to concrete voice
 records rather than an opaque asynchronous flag.
 
+
+## Mission script command language
+
+The progress-selected mission modules loaded at $4000 contain a second control
+layer below the $D800 controller and above dialogue.
+
+All nine progress modules contain the same ordered set of 27 command IDs:
+
+```text
+32 30 22 23 2E 3B 38 3C 2F 2B 06 24 2D 27
+3A 36 33 34 35 44 46 48 4B 49 47 4A 4C
+```
+
+Each dispatch entry is exactly three bytes:
+
+```text
+u8  command
+u16 handler
+```
+
+The handler addresses relocate slightly between missions, but the command set
+and order remain invariant from Mission 0 through Mission 8. This is the
+game-wide **mission script language**; it must not be confused with the
+dialogue bytecode controls.
+
+Command $49 is already decoded. Its Mission 0 handler repeatedly invokes the
+script operand decoder and writes:
+
+```text
+$3709      first result byte
+$370A/B    16-bit result field
+$370C/D    16-bit result field
+$370E      final result byte
+```
+
+If the first parsed value is $FF, it consumes/discards the remaining operands
+instead. Both forms set script-completion state $34A6 to $FF and stop active
+ADPCM.
+
+The $D800 mission controller subsequently consumes $3709. Values $10 and above
+become `$371F = $3709 - $10` and select module table C, directly connecting
+mission script results to persistent progress and module transitions.
+
 ## NPC / live object state
 
 Each scene starts with fixed eight-byte object source records:
@@ -275,6 +318,7 @@ Remaining work is narrower:
 4. decode individual binary UI/graphics assets only where modification needs
    them.
 
-The save, ADPCM, movement, collision, object runtime layout, scene loader,
-camera, sprite, text, and major graphics architecture are otherwise
-substantially source-mapped.
+The save, mission controller, common 27-command mission script dispatch,
+ADPCM, movement, collision, object runtime layout, scene loader, camera,
+sprite, text, and major graphics architecture are otherwise substantially
+source-mapped.
