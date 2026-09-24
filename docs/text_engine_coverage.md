@@ -16,7 +16,9 @@ The major split is:
    one byte-identical stock renderer/window implementation.
 2. Startup/opening screens use several fixed and row-addressed Shift-JIS
    formats outside that dialogue bytecode.
-3. Mission resources contain local UI/name/location tables.
+3. Mission overlays also use named binary UI/overlay resources resolved by a
+   shared descriptor/cache/loader path; these are not another direct Shift-JIS
+   text family.
 4. The ENDING bank does not contain the common dialogue overlay. It uses
    separate presentation command streams, including a dedicated ASCII credit
    path.
@@ -28,6 +30,10 @@ Run:
 cyber-oedo prove-text-engine-coverage track02_mode1_2048.bin \
   --output text_engine_coverage.json
 ```
+
+For the final information-page, descriptor, and translation-ownership layer, see
+[`text_engine_completion.md`](text_engine_completion.md) and run
+`cyber-oedo prove-text-engine-completion`.
 
 The command authenticates the payload, validates fixed source regions, validates
 the existing startup/Media Mix/dossier source models, compares common UI copies,
@@ -149,8 +155,8 @@ cursor/grid/pacing update
 | Mission titles | fixed Shift-JIS | M1-M8 and duplicates | title presentation | source-guarded |
 | Opening dossiers | 00 0C row + Shift-JIS | opening | row-addressed dossier interpreter | source-guarded |
 | Media Mix | 00 01 row + Shift-JIS | startup extras | information-screen interpreter | source-guarded |
-| Resource-local UI | fixed local tables | mission resources | resource-specific | bounded/digested |
-| ENDING OEDONET | row/format command stream | ending | ending news interpreter | source-guarded, partially decoded |
+| Named binary UI assets | 16-byte name -> sector/span/length descriptors | mission overlays | common lookup/cache/install path | source-guarded; no direct Shift-JIS |
+| Information pages / OEDONET | opcodes 00-0A with positioned Shift-JIS and BAT commands | startup, missions, ending | shared information-page interpreter family | command language decoded/source-guarded |
 | ENDING completion/save | opcode 0/1 + position + Shift-JIS | ending | ending mixed interpreter | decoded/source-guarded |
 | ENDING credits | opcode 2 + position + ASCII | ending | dedicated ASCII credit path | decoded/source-guarded |
 | Opening title | 960 planar tiles | startup | graphics | source-hash guarded |
@@ -184,26 +190,30 @@ a distinct startup-era variant and is not silently treated as the same table.
 This finding also corrects a prior classification error: many labels that look
 "graphic" in screenshots are genuine text-table entries.
 
-## Resource-local UI
+## Named binary UI/overlay assets
 
-Named mission resources carrying local text/UI data include:
+Names such as `INVENTRY`, `DEN_EREV`, `INTER`, `KANSHIKI`, `KIDOU`,
+`SHIRYO`, and `H_JYOUHO` are runtime resource identifiers, not evidence that
+the corresponding blobs are text tables.
 
-- INVENTRY;
-- DEN_EREV;
-- EREV;
-- INTER;
-- KANSHIKI;
-- KIDOU;
-- SHIRYO;
-- H_JYOUHO.
+The completion proof decodes their fixed 16-byte descriptors as:
 
-The coverage report discovers these from the authenticated resource headers and
-records every instance's bank, byte range, size, and SHA-256. Their internal
-renderers can still be documented more deeply per resource, but their ownership
-boundaries are no longer inferred from broad string scanning.
+```text
+char name[10]
+u16  Track 2 sector
+u8   sector span
+u24  exact byte length
+```
 
-Elevator/location resources are an example: they carry local fixed label tables
-for destinations rather than using the normal dialogue record format.
+The common overlay resolves these names through a descriptor lookup, resident
+resource cache, byte loader, and generic TII install/copy path. Mission 0 live
+capture data agrees with the descriptor fields; for example, `INVENTRY` maps to
+sector $10ED and exact length $0890 in both static and runtime evidence.
+
+A conservative audit across all targeted descriptor-backed instances finds no
+credible direct null-terminated Shift-JIS. These resources are therefore
+classified as **binary UI/overlay assets**, not as another hidden text family.
+Their individual binary schemas remain unassigned until a consumer proves them.
 
 ## ENDING architecture
 
@@ -211,13 +221,20 @@ ENDING deliberately sits outside the common Mission 0-8 dialogue architecture.
 
 ### OEDONET/news stream
 
-The source range beginning at payload $0500A800 contains the OEDONET
-information/news presentation. It includes row-addressed Shift-JIS records plus
-additional formatting/page commands.
+The ENDING OEDONET stream at payload $0500A800 is one instance of the shared
+information-page language also used by startup Media Mix and multiple mission
+banks. The common Mission 2-8/ENDING dispatcher and handler window is
+byte-identical.
 
-Its text-bearing row structure is proven, and the entire command-stream source
-extent is hash-guarded. Some non-text formatting commands remain intentionally
-unnamed rather than guessed.
+The 0-10 command language is now decoded at the machine-behavior level:
+positioned Shift-JIS, glyph VRAM-page selection, glyph delay, termination,
+display-phase/update controls, positioned transient state, rectangular BAT/tile
+draws, ADPCM/display-marker synchronization, input wait, and display reset.
+
+In particular, opcode 00 is **X + Y + null-terminated Shift-JIS**, not a
+style/row record, and opcode 07 is a five-operand rectangular tile-block draw.
+The OEDONET tail `08 09 03` is synchronization/marker cleanup, input wait, then
+termination.
 
 ### Mission-complete/save/credit stream
 
@@ -252,14 +269,15 @@ runtime provenance must be checked first.
 
 ## What remains
 
-The large architectural uncertainties are now substantially reduced. Remaining
-work is narrower:
+Static text-engine discovery is now largely complete. Remaining work is
+certification and translation engineering:
 
-- assign semantics to every non-text OEDONET formatting command;
-- deepen caller/renderer mappings for each resource-local UI family;
-- classify any remaining graphic assets that contain literal Japanese pixels;
-- live-certify representative overlays and ending paths with bank/MPR captures;
-- use the resulting ownership map to drive complete safe relocation/translation.
+- collect representative later-mission and ENDING live MPR traces with the
+  read-only generic Mesen capture script;
+- decode an individual named binary UI asset only when translation requires
+  modifying that asset;
+- implement relocation only for text families whose pointer ownership,
+  destination storage, and lifetime are explicitly proven.
 
-These are completion and certification tasks rather than discovery of another
+These are certification/implementation tasks rather than discovery of another
 unknown universal text engine.
