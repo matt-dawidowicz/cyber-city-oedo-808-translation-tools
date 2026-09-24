@@ -1,0 +1,28 @@
+{
+  "evidence": "Mesen 2.2.1 read-only translation architecture capture V5",
+  "scope": "representative Mission 0 lifecycle: bartender dialogue, menu/options, exit/re-entry, repeated interaction",
+  "frames": 12510,
+  "parser_hits": 302,
+  "renderer_hits": 287,
+  "cd_reads": 36,
+  "byte_loader_entries": 7,
+  "nonspace_glyph_captures": 20,
+  "representative_parser_stop": {
+    "pc": "0x9543",
+    "stream_pointer": "0xC692",
+    "mprs": ["0xFF", "0xF8", "0x80", "0x81", "0x82", "0x83", "0x84", "0x00"]
+  },
+  "physical_cd_ram_activity": {
+    "bank_0x85": {"reads": 212682, "writes": 80257, "executes": 231065},
+    "bank_0x87": {"reads": 0, "writes": 0, "executes": 0}
+  },
+  "interpretation": {
+    "mission0_common_parser_renderer_live_certified": true,
+    "font_service_and_nonspace_glyph_transfer_observed": true,
+    "loader_and_cd_read_path_observed": true,
+    "bank_0x87_nonuse_is_lifecycle_evidence_not_global_ownership_proof": true,
+    "later_missions_live_certified": false,
+    "ending_live_certified": false
+  },
+  "provenance_note": "Summarized from the retained V5 capture log; no game payload, BIOS, or full memory dump is committed."
+}
