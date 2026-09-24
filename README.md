@@ -316,3 +316,4 @@ Further documentation:
 - [`docs/text_engine_completion.md`](docs/text_engine_completion.md)
 - [`docs/localization_style_guide.md`](docs/localization_style_guide.md)
 - [`docs/english_font_architecture.md`](docs/english_font_architecture.md)
+- [`docs/packed_english_m0_runtime.md`](docs/packed_english_m0_runtime.md)
