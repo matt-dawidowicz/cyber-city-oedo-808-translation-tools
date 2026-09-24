@@ -10,7 +10,10 @@ from cyber_oedo.runtime.movement import (
     INTERACTION_BOUNDS_BYTES,
     INTERACTION_PAYLOAD_BYTES,
     INTERACTION_RECORD_BYTES,
+    LIVE_OBJECT_BYTES,
     MOVEMENT_REGIONS,
+    PLAYER_FRAME_COMPONENTS,
+    STATIC_OBJECT_SOURCE_BYTES,
     TILE_VECTORS,
     UNIT_VECTORS,
     WALK_ANIMATION_SCRIPTS,
@@ -76,6 +79,35 @@ class MovementProofTests(unittest.TestCase):
             self.assertEqual(
                 report["state"]["animation_script_pointer"],
                 "$2765/$2766",
+            )
+
+
+    def test_object_record_sizes_and_player_metasprites(self) -> None:
+        self.assertEqual(STATIC_OBJECT_SOURCE_BYTES, 8)
+        self.assertEqual(LIVE_OBJECT_BYTES, 16)
+        self.assertEqual(len(PLAYER_FRAME_COMPONENTS), 20)
+        self.assertEqual(
+            PLAYER_FRAME_COMPONENTS[0x18],
+            ((652, -16, -48, 385), (656, -16, -32, 4481)),
+        )
+        self.assertEqual(
+            PLAYER_FRAME_COMPONENTS[0x27],
+            ((880, -16, -32, 4481), (888, -16, 0, 385)),
+        )
+
+    def test_report_exposes_scene_camera_and_object_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._write_synthetic_payload(pathlib.Path(directory))
+            report = build_movement_report(path)
+            self.assertEqual(report["state"]["scene_index"], "$3700")
+            self.assertEqual(report["state"]["scene_entry_index"], "$3701")
+            self.assertEqual(report["objects"]["source_record_bytes"], 8)
+            self.assertEqual(report["objects"]["live_record_bytes"], 16)
+            self.assertEqual(report["camera"]["scroll_x"], "$220C/$220D")
+            self.assertEqual(report["camera"]["tile_refill_boundary_pixels"], 16)
+            self.assertEqual(
+                report["interaction_records"]["transition_header"],
+                "$3703 == FF promotes $3704-$3706 to $3700-$3702",
             )
 
     def test_all_source_guards_match_synthetic_payload(self) -> None:
