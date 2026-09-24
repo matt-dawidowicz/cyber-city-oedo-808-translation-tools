@@ -143,6 +143,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "prove-text-engine-coverage",
+        "cyber_oedo.runtime.text_engine_coverage",
+        "Validate game-wide dialogue and non-dialogue text families.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "diff-live-state",
         "cyber_oedo.runtime.state_diff",
         "Compare two bank-aware frozen runtime snapshots.",
