@@ -205,6 +205,10 @@ def compact_repertoire_for_texts(texts: Iterable[str]) -> GlyphRepertoire:
 
     material = tuple(texts)
     used = set("".join(material))
+    # Space is required for odd-length pair padding and '?' is the runtime
+    # corruption/fallback glyph even when neither happens to appear in a
+    # particular proof corpus.
+    used.update((" ", "?"))
     from cyber_oedo.text.packed_english import DEFAULT_DISPLAY_CHARACTERS
 
     unknown = used.difference(DEFAULT_DISPLAY_CHARACTERS)
