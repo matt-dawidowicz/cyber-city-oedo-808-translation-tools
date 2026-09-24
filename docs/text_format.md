@@ -34,17 +34,25 @@ record format.
 
 ## Control dispatch confirmed from code
 
-| Byte | Observed count in the initial dialogue corpus | Status |
+| Byte | Observed count in the initial dialogue corpus | Proven behavior |
 |---|---:|---|
-| `40` | 1,538 | invokes page/window handling, then advances a row |
-| `2F` | 1,004 | waits up to 20 vertical blanks unless input skips it |
-| `21` | 831 | waits for `$37F1` to clear unless input skips it |
-| `5C` | 18 | waits for an input press and subsequent release |
+| `40` | 1,538 | explicit line advance; scroll when advancing into row 3 |
+| `2F` | 1,004 | wait up to 20 vertical blanks unless held input shortens it |
+| `21` | 831 | wait for active ADPCM voice playback to finish unless trigger input skips it |
+| `5C` | 18 | wait for an input press and subsequent full release |
+| `2A` | not part of the original extraction allowlist | consume one digit-like operand and set glyph delay `$2827 = operand-$30` |
+| `7E` | not part of the original extraction allowlist | consume one digit-like operand and set cell attribute `$2763 = operand-$30` |
+| `3D` | structured dynamic insertion | select one 32-byte `$A400` record and render its active text field |
 
-`COMMON_DIALOGUE_CONTROLS` in `game_layout.py` is an extraction allowlist. It
-does not assign semantics. The descriptions above are confirmed from the active
-Mission 0 parser at CPU `$9543`; the higher-level purpose of `$37F1` still
-needs runtime correlation.
+`COMMON_DIALOGUE_CONTROLS` in `game_layout.py` is an extraction allowlist,
+not the complete interpreter opcode set. The runtime dispatcher is now compared
+across both Mission 0 copies and Missions 1-8 and is relocation-equivalent in
+all ten overlays.
+
+For `21`, `$37F1` is no longer an unknown flag. The reusable ADPCM driver
+writes the active voice/sample selector there when playback starts, polls System
+Card `AD_STAT`, and clears `$37F1` when playback becomes idle. The parser
+therefore uses `21` as an interruptible voice-synchronization barrier.
 
 Before assigning a more specific user-facing name:
 
@@ -178,6 +186,56 @@ the original even rows.
 Every replacement remains fullwidth Shift-JIS and exactly matches its source
 byte length. Short English is padded with fullwidth spaces; record opcodes,
 null terminators, order, portrait data, and unmodified fields remain unchanged.
+
+
+## Ending mixed text records
+
+The ENDING bank does not contain the common Mission 0-8 dialogue overlay. Its
+mission-complete/save/credit presentation uses a separate command stream:
+
+```text
+00 PP RR [null-terminated Shift-JIS]
+01 PP RR [null-terminated Shift-JIS]
+02 PP RR [null-terminated ASCII]
+FF
+```
+
+The two bytes labeled `PP RR` are position/control operands consumed by the
+ending-specific handlers.
+
+- opcode `00`: Shift-JIS through the generic ending text path;
+- opcode `01`: Shift-JIS through an ending-specific `EX_GETFNT` path;
+- opcode `02`: fixed-width ASCII, used by the credits;
+- `FF`: stream terminator.
+
+The credits are therefore text-backed ASCII records, not a flattened graphic.
+
+The separate ENDING OEDONET/news stream also contains row-addressed Shift-JIS
+records, but mixes them with additional formatting/page commands. Its complete
+source extent is guarded while the remaining non-text opcodes stay explicitly
+partially decoded.
+
+## Fixed command/system UI table
+
+The common Mission 0-B and Mission 1-8 text overlays contain a fixed table of
+37 16-byte entries beginning at relative `$C000`. Each entry begins with a
+null-terminated Shift-JIS label followed by per-entry metadata.
+
+This table contains visible commands and system functions such as Look, Talk,
+Examine, Inventory, System, Move, mode selection, forensic tools, and Varsus
+functions. These labels are therefore text-backed even when their on-screen
+presentation resembles pre-rendered UI graphics.
+
+The earlier Mission 0-A overlay has a distinct variant and is treated
+separately.
+
+## Dynamic name/place/item records
+
+The 769-byte source block later installed at `$A400` contains 24 32-byte
+records, each with a primary text slot, an alternate text slot, and state bytes.
+The strings include people, generic descriptors, places, and item/object labels,
+so this is a general dynamic-label system rather than only a character-name
+table.
 
 ## Extraction-confidence labels
 
