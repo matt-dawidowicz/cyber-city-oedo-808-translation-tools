@@ -31,6 +31,7 @@ from cyber_oedo.runtime.presentation_stream import (
     decode_presentation_stream,
     unknown_binary_records,
 )
+from cyber_oedo.runtime.resource_text_ownership import find_resource_load_sites
 
 
 @dataclass(frozen=True, slots=True)
@@ -353,6 +354,7 @@ def build_text_engine_coverage_report(path: pathlib.Path) -> dict[str, Any]:
     oedonet_records = decode_presentation_stream(oedonet_data)
 
     profile_validation = validate_profile_text(payload)
+    resource_load_sites = find_resource_load_sites(payload, RESOURCE_TEXT_FAMILIES)
     title_bytes = payload[40960 : 40960 + TITLE_ASSET_BYTES]
 
     families = (
@@ -480,6 +482,18 @@ def build_text_engine_coverage_report(path: pathlib.Path) -> dict[str, Any]:
             },
         },
         "resource_text_families": resource_family_instances(payload),
+        "resource_loader_sites": [
+            {
+                "name": site.name,
+                "resource_offset": f"0x{site.resource_offset:08X}",
+                "relative_sector": site.relative_sector,
+                "absolute_lba": f"0x{site.absolute_lba:04X}",
+                "directory_name_offset": f"0x{site.directory_name_offset:08X}",
+                "descriptor_offset": f"0x{site.descriptor_offset:08X}",
+                "descriptor_hex": site.descriptor.hex(" "),
+            }
+            for site in resource_load_sites
+        ],
         "graphics_backed": {
             "opening_title_offset": "0x0000A000",
             "opening_title_bytes": TITLE_ASSET_BYTES,
@@ -495,8 +509,9 @@ def build_text_engine_coverage_report(path: pathlib.Path) -> dict[str, Any]:
                 "remain a live-trace question"
             ),
             "resource_local_renderers": (
-                "resource boundaries/text tables are covered here; individual "
-                "mission-specific UI caller semantics can still be expanded"
+                "named resources are now tied back to exact loader-directory "
+                "entries by name+LBA; the downstream resource-specific draw "
+                "routine still requires per-family execution tracing"
             ),
             "graphics_backed": (
                 "the opening title is proven graphics-backed; other candidate "
