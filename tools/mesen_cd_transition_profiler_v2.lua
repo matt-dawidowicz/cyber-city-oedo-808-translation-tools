@@ -3,7 +3,9 @@
 --
 -- READ ONLY.  This version measures every System Card CD_READ from BIOS entry
 -- to its exact caller return target, instead of timing only the two known scene
--- wrappers. It also times generic byte-loader calls and AD_TRANS transfers,
+-- wrappers. It also records CD_EXEC overlay loads to their first target
+-- instruction, CD_PLAY/CD_PAUSE mode switches, generic byte-loader calls, and
+-- AD_TRANS transfers, exact AD_READ/AD_WRITE memory-transfer timing,
 -- records ADPCM stop/status/fade activity, counts EX_VSYNC calls, and records
 -- when dialogue parsing becomes active again.
 --
@@ -32,10 +34,15 @@ local CARDRAM = emu.memType.pceCardRam
 local TRACK2_START_LBA = 3590
 local frame = 0
 local readOrdinal = 0
+local cdExecOrdinal = 0
+local cdPlayCalls = 0
+local cdPauseCalls = 0
 local byteLoaderOrdinal = 0
 local dialogueGroups = 0
 local parserHits = 0
 local adTransOrdinal = 0
+local adReadOrdinal = 0
+local adWriteOrdinal = 0
 local adStopCalls = 0
 local adStatCalls = 0
 local cdFadeCalls = 0
@@ -46,9 +53,13 @@ local logFile = nil
 
 local pendingReadsByReturn = {}
 local registeredReturnTargets = {}
+local pendingExecByTarget = {}
+local registeredExecTargets = {}
 local pendingByteLoader = nil
 local pendingAdTransByReturn = {}
 local registeredAdTransReturns = {}
+local pendingAdMemoryByReturn = {}
+local registeredAdMemoryReturns = {}
 local fadeCommandStartFrame = nil
 local fadeWaitStartFrame = nil
 local fadeWaitSamples = 0
@@ -149,7 +160,7 @@ local function sceneState()
 end
 
 local addressTypeNames = {
-  [0x00]="LOCAL_BYTES",
+  [0x00]="UNDOCUMENTED_00",
   [0x01]="LOCAL_SECTORS",
   [0x02]="BANK_MPR2",
   [0x03]="BANK_MPR3",
@@ -186,6 +197,131 @@ local function ensureReturnCallback(target)
   )
 end
 
+local function ensureExecTargetCallback(target)
+  if registeredExecTargets[target] then return end
+  registeredExecTargets[target] = true
+  emu.addMemoryCallback(
+    function()
+      local queue = pendingExecByTarget[target]
+      if not queue or #queue == 0 then return end
+      local item = table.remove(queue, 1)
+      local elapsed = frame - item.startFrame
+      log(string.format(
+        "[CD_EXEC_TARGET %03d] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
+        "sector=$%06X blocks=$%02X target=$%04X %s %s",
+        item.ordinal, frame, elapsed, elapsed / 60.0,
+        item.sector, item.blocks, target, sceneState(), mprString()
+      ))
+    end,
+    emu.callbackType.exec,
+    target, target, CPU, MEM
+  )
+end
+
+local function onCdExec()
+  cdExecOrdinal = cdExecOrdinal + 1
+  local addressType = r8(0x20FF)
+  local item = {
+    ordinal=cdExecOrdinal,
+    startFrame=frame,
+    sector=(r8(0x20FC) << 16) | (r8(0x20FD) << 8) | r8(0x20FE),
+    blocks=r8(0x20F8),
+    addressType=addressType,
+    bx=r16(0x20FA),
+  }
+
+  -- In documented LOCAL mode ($01), BX is the destination/execute address.
+  -- In MPR modes ($02-$06), BL is a bank number; BX must not be interpreted
+  -- as a logical PC target without additional runtime proof.
+  if addressType == 0x01 then
+    item.target = item.bx
+    if not pendingExecByTarget[item.target] then
+      pendingExecByTarget[item.target] = {}
+    end
+    table.insert(pendingExecByTarget[item.target], item)
+    ensureExecTargetCallback(item.target)
+  end
+
+  log(string.format(
+    "[CD_EXEC %03d] frame=%d sector=$%06X blocks=$%02X type=$%02X " ..
+    "bx=$%04X local_target=%s %s %s",
+    item.ordinal, frame, item.sector, item.blocks, item.addressType, item.bx,
+    item.target and string.format("$%04X", item.target) or "unproven",
+    sceneState(), mprString()
+  ))
+end
+
+local function onCdPlay()
+  cdPlayCalls = cdPlayCalls + 1
+  log(string.format(
+    "[CD_PLAY %03d] frame=%d mode=$%02X return=$%04X %s %s",
+    cdPlayCalls, frame, r8(0x20FF), stackReturnTarget(), sceneState(), mprString()
+  ))
+end
+
+local function onCdPause()
+  cdPauseCalls = cdPauseCalls + 1
+  log(string.format(
+    "[CD_PAUSE %03d] frame=%d return=$%04X %s %s",
+    cdPauseCalls, frame, stackReturnTarget(), sceneState(), mprString()
+  ))
+end
+
+local function ensureAdMemoryReturnCallback(target)
+  if registeredAdMemoryReturns[target] then return end
+  registeredAdMemoryReturns[target] = true
+  emu.addMemoryCallback(
+    function()
+      local queue = pendingAdMemoryByReturn[target]
+      if not queue or #queue == 0 then return end
+      local item = table.remove(queue, 1)
+      local elapsed = frame - item.startFrame
+      local state = cpu()
+      log(string.format(
+        "[%s_RETURN %03d] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
+        "adpcm=$%04X mem=$%04X bytes=$%04X type=$%02X return=$%04X " ..
+        "A=$%02X X=$%02X %s %s",
+        item.kind, item.ordinal, frame, elapsed, elapsed / 60.0,
+        item.adpcm, item.memory, item.length, item.addressType, target,
+        state.a or 0, state.x or 0, sceneState(), mprString()
+      ))
+    end,
+    emu.callbackType.exec,
+    target, target, CPU, MEM
+  )
+end
+
+local function onAdMemory(kind)
+  local ordinal
+  if kind == "AD_READ" then
+    adReadOrdinal = adReadOrdinal + 1
+    ordinal = adReadOrdinal
+  else
+    adWriteOrdinal = adWriteOrdinal + 1
+    ordinal = adWriteOrdinal
+  end
+  local item = {
+    kind=kind,
+    ordinal=ordinal,
+    startFrame=frame,
+    adpcm=r16(0x20FC),
+    memory=r16(0x20FA),
+    length=r16(0x20F8),
+    addressType=r8(0x20FF),
+    returnTarget=stackReturnTarget(),
+  }
+  if not pendingAdMemoryByReturn[item.returnTarget] then
+    pendingAdMemoryByReturn[item.returnTarget] = {}
+  end
+  table.insert(pendingAdMemoryByReturn[item.returnTarget], item)
+  ensureAdMemoryReturnCallback(item.returnTarget)
+  log(string.format(
+    "[%s %03d] frame=%d adpcm=$%04X mem=$%04X bytes=$%04X " ..
+    "type=$%02X caller_return=$%04X %s %s",
+    kind, ordinal, frame, item.adpcm, item.memory, item.length,
+    item.addressType, item.returnTarget, sceneState(), mprString()
+  ))
+end
 local function ensureAdTransReturnCallback(target)
   if registeredAdTransReturns[target] then return end
   registeredAdTransReturns[target] = true
@@ -317,7 +453,7 @@ local function onCdRead()
   local returnTarget = stackReturnTarget()
   local relative = lba - TRACK2_START_LBA
   local payloadOffset = relative >= 0 and relative * 0x800 or -1
-  local unit = (addressType == 0x00 or addressType == 0xFE) and "bytes" or "sectors"
+  local unit = addressType == 0xFE and "bytes" or "sectors"
 
   if frame - lastCdFrame > 90 then
     log(string.format("[CD_BURST_START] frame=%d", frame))
@@ -402,7 +538,12 @@ log("Read-only instrumentation: YES")
 armCardRamMonitor()
 
 emu.addMemoryCallback(onCdRead, emu.callbackType.exec, 0xE009, 0xE009, CPU, MEM)
+emu.addMemoryCallback(onCdExec, emu.callbackType.exec, 0xE00F, 0xE00F, CPU, MEM)
+emu.addMemoryCallback(onCdPlay, emu.callbackType.exec, 0xE012, 0xE012, CPU, MEM)
+emu.addMemoryCallback(onCdPause, emu.callbackType.exec, 0xE018, 0xE018, CPU, MEM)
 emu.addMemoryCallback(onAdTrans, emu.callbackType.exec, 0xE033, 0xE033, CPU, MEM)
+emu.addMemoryCallback(function() onAdMemory("AD_READ") end, emu.callbackType.exec, 0xE036, 0xE036, CPU, MEM)
+emu.addMemoryCallback(function() onAdMemory("AD_WRITE") end, emu.callbackType.exec, 0xE039, 0xE039, CPU, MEM)
 emu.addMemoryCallback(onAdStop, emu.callbackType.exec, 0xE042, 0xE042, CPU, MEM)
 emu.addMemoryCallback(onAdStat, emu.callbackType.exec, 0xE045, 0xE045, CPU, MEM)
 emu.addMemoryCallback(onCdFade, emu.callbackType.exec, 0xE02D, 0xE02D, CPU, MEM)
@@ -423,9 +564,9 @@ emu.addEventCallback(function()
       pendingCount = pendingCount + #queue
     end
     log(string.format(
-      "[HEARTBEAT] frame=%d reads=%d pending_reads=%d ad_trans=%d " ..
+      "[HEARTBEAT] frame=%d reads=%d cd_exec=%d pending_reads=%d ad_trans=%d ad_read=%d ad_write=%d " ..
       "byte_loaders=%d dialogue_groups=%d vsync=%d %s",
-      frame, readOrdinal, pendingCount, adTransOrdinal,
+      frame, readOrdinal, cdExecOrdinal, pendingCount, adTransOrdinal, adReadOrdinal, adWriteOrdinal,
       byteLoaderOrdinal, dialogueGroups, vsyncCalls, sceneState()
     ))
   end
@@ -437,10 +578,11 @@ emu.addEventCallback(function()
     pendingCount = pendingCount + #queue
   end
   log(string.format(
-    "[SUMMARY] frames=%d reads=%d pending_reads=%d ad_trans=%d ad_stop=%d " ..
+    "[SUMMARY] frames=%d reads=%d cd_exec=%d cd_play=%d cd_pause=%d pending_reads=%d ad_trans=%d ad_read=%d ad_write=%d ad_stop=%d " ..
     "ad_stat=%d cd_fade=%d vsync=%d byte_loaders=%d dialogue_groups=%d parser_hits=%d " ..
     "card_ram_size=%d card_ram_R/W/X=%d/%d/%d",
-    frame, readOrdinal, pendingCount, adTransOrdinal, adStopCalls,
+    frame, readOrdinal, cdExecOrdinal, cdPlayCalls, cdPauseCalls,
+    pendingCount, adTransOrdinal, adReadOrdinal, adWriteOrdinal, adStopCalls,
     adStatCalls, cdFadeCalls, vsyncCalls, byteLoaderOrdinal, dialogueGroups, parserHits,
     cardRam.size, cardRam.R, cardRam.W, cardRam.X
   ))

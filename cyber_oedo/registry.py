@@ -179,6 +179,24 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-dialogue-residency",
+        "cyber_oedo.runtime.dialogue_residency",
+        "Map dialogue-bank residency, audio state, voices, and VRAM overlap.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "analyze-vram-dirty",
+        "cyber_oedo.runtime.vram_dirty_profile",
+        "Measure selective exploration-VRAM restore cost from Mesen logs.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "analyze-adpcm-memory",
+        "cyber_oedo.runtime.adpcm_memory_architecture",
+        "Map Mission 0 ADPCM snapshot and RAM-transfer architecture.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-cd-hot-assets",
         "cyber_oedo.runtime.cd_load_optimization",
         "Measure hot scene assets and candidate load compression.",

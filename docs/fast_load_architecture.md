@@ -119,14 +119,54 @@ reads with RAM copies and cache selected portraits for RAM-to-VRAM copies.
 The complete bar working set is 110,656 bytes, which occupies 14 packed 8 KiB
 banks and leaves ten Card RAM banks (81,920 bytes) available.
 
-The documented AD_WRITE bank-source form names the ordinary CD RAM banks
-$80-$87, not the Super System Card banks $68-$7F. Therefore the accelerated
-path must not assume direct AD_WRITE access to Card RAM. Candidate approaches
-are to temporarily map a $68-$7F bank into a logical CPU window and use
-AD_WRITE's local-memory form, or to stage through a proven $80-$87 buffer. Both
-require live certification.
+The previous working note misidentified BIOS entry $E03F as AD_WRITE. The
+System Card jump table actually places AD_WRITE at $E039 and AD_CPLAY at
+$E03F.
 
-### D. Scene graphics
+The follow-up reverse engineering closes most of that uncertainty. Mission 0
+already contains a native 8 KiB ADPCM snapshot/restore path:
+
+- temporarily map physical CD-RAM bank $86 at logical $A000;
+- AD_READ an 8 KiB window from ADPCM $E000 into CPU $A000;
+- later call AD_WRITE $E039 with CX=$E000, BX=$A000, AX=$2000, DH=$00;
+- restore the caller's MPR5.
+
+The historical V5 MPR trace independently records the short MPR5=$86 mappings
+predicted by this code.
+
+Therefore an accelerated Super Card cache does **not** need a new low-level
+ADPCM writer. The clean experiment is to map a cached $68-$7F Card-RAM bank at
+logical $A000 and reuse AD_WRITE's local-memory mode. If live profiling shows
+the BIOS preserves/uses the caller's mapping as expected, this removes the
+extra ordinary-CD-RAM staging copy entirely. If it does not, bank $87 remains
+a candidate 8 KiB staging bank, subject to its separate lifetime gate.
+
+### D. Independent benchmark matrix
+
+Four source-guarded mutations now exist independently so timing changes can be
+attributed instead of bundled together:
+
+1. **resident module only** - wire the game's existing JMP-entrypoint probe to
+   the stock loader epilogue on a cache hit;
+2. **speaker-local retention only** - preserve $8FDE across command-0/command-5
+   teardown so the stock two-sector speaker cache can remain valid;
+3. **short exploration wait only** - reduce the explicit 120-frame loop to a
+   selected 1-120 frame value (8 frames is the current conservative benchmark);
+4. **combined fast-load stack** - resident module + retained speaker cache +
+   8-frame exploration wait + the separate immediate-audio-teardown benchmark.
+
+All remain benchmark-only. The resident-module path still requires live proof
+that the two self-modified operand bytes at $8617/$8618 are in a valid state
+when an optical reload is skipped.
+
+### E. ADPCM snapshot timing
+
+The transition profiler now times AD_READ $E036 and AD_WRITE $E039
+entry-to-return in addition to AD_TRANS. This closes another hole in the
+earlier timing budget: the stock module moves an entire 8 KiB ADPCM window to
+bank $86 and back without using CD_READ.
+
+### F. Scene graphics
 
 Separately, make the 7-sector, 3-sector, and 60,928-byte exploration scene
 components contiguous and benchmark 16-bit PackBits on the large VRAM block.

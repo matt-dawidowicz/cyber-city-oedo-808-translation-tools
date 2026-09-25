@@ -33,6 +33,8 @@ LOCAL_SCENE_LOADER_BYTES = bytes.fromhex(
     "B1 1E 85 F8 A5 1C 85 FA A5 1D 85 FB A9 01 85 FF "
     "20 09 E0 AA D0 DA 60"
 )
+VSYNC_WAIT_SUFFIX = bytes.fromhex("20 7B E0 88 D0 FA")
+
 VRAM_SCENE_LOADER_BYTES = bytes.fromhex(
     "B2 1E 85 FC A0 01 B1 1E 85 FE C8 B1 1E 85 FD C8 "
     "B1 1E 85 F8 C8 B1 1E 85 F9 A5 1C 85 FA A5 1D "
@@ -205,6 +207,30 @@ def unpackbits_words(encoded: bytes, expected_bytes: int | None = None) -> bytes
     return bytes(output)
 
 
+def find_fixed_vsync_waits(payload: bytes) -> tuple[dict[str, object], ...]:
+    """Find direct LDY-count / JSR-$E07B / DEY / BNE waits.
+
+    This is deliberately a narrow signature for explicit frame-count waits.
+    It does not classify every use of the System Card vertical-sync service.
+    """
+
+    rows: list[dict[str, object]] = []
+    for offset in range(0, len(payload) - 7):
+        if payload[offset] != 0xA0:
+            continue
+        if payload[offset + 2 : offset + 8] != VSYNC_WAIT_SUFFIX:
+            continue
+        count = payload[offset + 1]
+        rows.append(
+            {
+                "payload_offset": f"0x{offset:08X}",
+                "frames": count,
+                "seconds_at_60hz": count / 60.0,
+            }
+        )
+    return tuple(rows)
+
+
 def validate_scene_loaders(payload: bytes) -> dict[str, bool]:
     """Validate the two blocking scene CD_READ wrappers byte-for-byte.
 
@@ -297,8 +323,23 @@ def analyze_hot_assets(payload: bytes) -> dict[str, object]:
         + main["main_scene_vram"]["packbits_word_sectors"]
     )
 
+    fixed_waits = find_fixed_vsync_waits(payload)
+
     return {
         "scene_loader_guards": loader_guards,
+        "fixed_vsync_waits": fixed_waits,
+        "mission0_transition_wait": {
+            "payload_offset": "0x000A88E0",
+            "movement_cpu": "$40E0",
+            "routine": "$40DB-$40E8",
+            "frames": 120,
+            "seconds_at_60hz": 2.0,
+            "sequence": "LDY #$78; JSR $E07B; DEY; BNE",
+            "meaning": (
+                "explicit high-level transition delay surrounding the scene loaders; "
+                "the loaders themselves still contain no deliberate frame wait"
+            ),
+        },
         "scene_loader_semantics": {
             "local_cpu": "$423B-$4261",
             "vram_cpu": "$4262-$428D",

@@ -218,6 +218,13 @@ cyber-oedo prove-text-engine-completion track02_mode1_2048.bin \
   --output text_engine_completion.json
 ```
 
+Dialogue residency, audio-transition state, voice extent, and VRAM overlap:
+
+```bash
+cyber-oedo analyze-dialogue-residency track02_mode1_2048.bin \
+  --output dialogue_residency.json
+```
+
 For later-mission and ENDING runtime certification, load
 `tools/mesen_text_engine_live_capture.lua` in Mesen. The script is read-only
 and records parser/renderer hits together with all eight MPR values.
@@ -319,3 +326,4 @@ Further documentation:
 - [`docs/packed_english_m0_runtime.md`](docs/packed_english_m0_runtime.md)
 - [`docs/cd_load_optimization.md`](docs/cd_load_optimization.md)
 - [`docs/fast_load_architecture.md`](docs/fast_load_architecture.md)
+- [`docs/dialogue_residency_fastpath.md`](docs/dialogue_residency_fastpath.md)
