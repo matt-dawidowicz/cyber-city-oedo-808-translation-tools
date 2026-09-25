@@ -318,6 +318,31 @@ This is stronger than a generic "logical overlap" warning, but it still does
 not select which case occurs. The missing proof is specifically MPR4 at the
 `$22DE` load (or an equivalent physical CD-RAM checksum).
 
+### C5. Static MPR and same-room call-reference diagnostics
+
+Two additional diagnostics narrow the remaining runtime gates without treating
+raw byte matches as instruction-boundary proof.
+
+`analyze-resource-lifetime --payload <track2-payload>` now linearly decodes
+the authenticated scene/room setup and scene-loader code regions and reports
+only decoded `TAM`/`TMA` operations that touch MPR4 or MPR5. An exploration
+MPR4 value is called statically resolved only if every decoded MPR4 write in
+those guarded regions is an immediately adjacent, identical `LDA #imm; TAM`
+sequence. Otherwise the report deliberately leaves physical bank identity
+unresolved and retains the live-MPR/checksum gate.
+
+`analyze-same-room-reentry <track2-payload>` now also decodes direct
+`JSR`/`JMP` references from the authenticated scene-orchestration region to
+the known entry-selection, object-initialization, collision-registry, and
+camera routines. This distinguishes a routine merely existing in the overlay
+from scene orchestration actually containing a direct reference to it. Indirect
+or data-driven dispatch remains a separate runtime/static-control-flow question.
+
+These diagnostics do not make the speaker-retention or same-room fast-return
+benchmarks release-safe by themselves. They reduce the remaining proof to
+specific unresolved mappings/call paths rather than broad architectural
+uncertainty.
+
 ### D. Independent benchmark matrix
 
 Four source-guarded mutations now exist independently so timing changes can be
