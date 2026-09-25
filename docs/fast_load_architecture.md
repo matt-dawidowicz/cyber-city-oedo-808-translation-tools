@@ -264,6 +264,60 @@ not imply equal CD-RAM banks. But it changes the static risk assessment:
 
 The benchmarks remain independent for exactly this reason.
 
+### C3. Same-room re-entry state
+
+The source-guarded scene-entry routine exposes a useful asymmetry for dialogue
+returns. `$3702` already acts as a position-preservation policy: when it is
+nonzero, the routine does not reload player X/Y at `$2760-$2763`.
+
+Other room-entry state is reinstalled unconditionally by that routine:
+
+- room feature byte -> `$264C`;
+- object-source pointer -> `$277E/$277F`;
+- interaction-table pointer -> `$2779/$277A`;
+- two room-loader parameter pairs -> zero page `$1E/$1F` and
+  `$421E/$421F`.
+
+Separately, the guarded object initializer rebuilds 16-byte live object state
+from compact scene records, and the occupancy-rectangle subsystem has an
+explicit count-reset/populate path. This means a future dialogue->same-room
+fast return must decide whether live object/occupancy/camera state is meant to
+survive rather than simply skipping the stock setup wholesale.
+
+The maintained diagnostic is:
+
+    cyber-oedo analyze-same-room-reentry <track2-payload>
+
+Static evidence does not yet prove which of those initialization routines are
+actually entered on every dialogue return. That remains a live phase-boundary
+gate, but the state that would be destroyed or preserved is now mapped.
+
+### C4. Physical MPR geometry of the speaker-cache risk
+
+The logical overlap can be narrowed further without assuming a runtime MPR
+value. HuC6280 logical `$8000-$9FFF` is one MPR4 window. In the proven dialogue
+layout, MPR4 maps physical page `$85`:
+
+- module: page-$85 offsets `0x0000-0x0F50`;
+- BSS: offsets `0x0F51-0x0FFF`;
+- speaker-local block: offsets `0x1000-0x1FFF`.
+
+The exploration 3-sector load to `$9000-$A7FF` splits exactly at the MPR
+boundary:
+
+- `$9000-$9FFF`: 4 KiB through MPR4, page offsets `0x1000-0x1FFF`;
+- `$A000-$A7FF`: 2 KiB through MPR5, page offsets `0x0000-0x07FF`.
+
+Therefore:
+
+- if exploration MPR4 is still `$85`, the first 4 KiB overwrites exactly the
+  speaker-local half while leaving the module body intact;
+- if exploration MPR4 is another page, physical page `$85` survives.
+
+This is stronger than a generic "logical overlap" warning, but it still does
+not select which case occurs. The missing proof is specifically MPR4 at the
+`$22DE` load (or an equivalent physical CD-RAM checksum).
+
 ### D. Independent benchmark matrix
 
 Four source-guarded mutations now exist independently so timing changes can be
