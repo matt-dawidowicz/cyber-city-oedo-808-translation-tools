@@ -108,6 +108,35 @@ class DialogueLoadWindow:
     def event_cache_hit(self) -> bool:
         return self.event_resource_read is None
 
+    @property
+    def phase_gaps_frames(self) -> dict[str, int]:
+        """Split one transition by observed CD-start/parser-ready boundaries."""
+
+        result = {
+            "module_first_to_remainder": (
+                self.reads[1].frame - self.reads[0].frame
+            ),
+        }
+        if self.event_resource_read is None:
+            result["module_remainder_to_common"] = (
+                self.reads[2].frame - self.reads[1].frame
+            )
+            common_index = 2
+        else:
+            result["module_remainder_to_event"] = (
+                self.reads[2].frame - self.reads[1].frame
+            )
+            result["event_to_common"] = self.reads[3].frame - self.reads[2].frame
+            common_index = 3
+        portrait_index = common_index + 1
+        result["common_to_portrait"] = (
+            self.reads[portrait_index].frame - self.reads[common_index].frame
+        )
+        result["portrait_to_parser_ready"] = (
+            self.ready_frame - self.reads[portrait_index].frame
+        )
+        return result
+
 
 def parse_dialogue_group_starts(text: str) -> tuple[DialogueGroupStart, ...]:
     """Extract historical dialogue-group start markers from a Mesen log."""
@@ -256,6 +285,11 @@ def build_transition_latency_report(text: str) -> dict[str, object]:
                 "absolute_source_seek_distance_sectors": (
                     window.absolute_seek_distance
                 ),
+                "phase_gaps_frames": window.phase_gaps_frames,
+                "phase_gaps_seconds": {
+                    key: frames / 60.0
+                    for key, frames in window.phase_gaps_frames.items()
+                },
                 "reads": [_read_json(item) for item in window.reads],
             }
         )
@@ -269,8 +303,21 @@ def build_transition_latency_report(text: str) -> dict[str, object]:
             return None
         return sum(item.load_to_ready_frames for item in items) / len(items) / 60.0
 
+    phase_values: dict[str, list[int]] = {}
+    for item in windows:
+        for key, value in item.phase_gaps_frames.items():
+            phase_values.setdefault(key, []).append(value)
+    phase_means = {
+        key: sum(values) / len(values)
+        for key, values in phase_values.items()
+    }
+
     return {
         "window_count": len(windows),
+        "mean_phase_gaps_frames": phase_means,
+        "mean_phase_gaps_seconds": {
+            key: value / 60.0 for key, value in phase_means.items()
+        },
         "cold_event_resource_windows": len(cold),
         "cached_event_resource_windows": len(cached),
         "measured_load_to_dialogue_frames": latencies,
