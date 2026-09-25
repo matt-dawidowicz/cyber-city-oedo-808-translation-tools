@@ -19,6 +19,7 @@ import pathlib
 import zlib
 from dataclasses import dataclass
 
+from cyber_oedo.disc.game_layout import TRACK2_START_LBA
 from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
 
 SECTOR_BYTES = 2048
@@ -50,7 +51,10 @@ class HotAsset:
 
     @property
     def payload_offset(self) -> int:
-        return self.sector * SECTOR_BYTES
+        relative_sector = self.sector - TRACK2_START_LBA
+        if relative_sector < 0:
+            raise ValueError("asset absolute LBA precedes Track 2")
+        return relative_sector * SECTOR_BYTES
 
 
 HOT_ASSETS = (
@@ -58,7 +62,7 @@ HOT_ASSETS = (
         "main_scene_local_a",
         0x228E,
         7 * SECTOR_BYTES,
-        "1004a4eff6f1c35300373280200d30774a37ab7efb567d5f61bfd54da8906a99",
+        "cfa2098d00ceef753602d7576dc624a697b6eeb2b45d31bfcf74664584a52e23",
         "$4000",
         "local scene data",
     ),
@@ -66,7 +70,7 @@ HOT_ASSETS = (
         "main_scene_local_b",
         0x22DE,
         3 * SECTOR_BYTES,
-        "f406ef6ad83879282c9c92a6ec6ea100fbd6dafb1cbb63989d97cbc8b334c41c",
+        "77781001bbad95259f43101b8117afb4174266019f417c9ca1d5c84b85f5d52e",
         "$9000",
         "local scene data",
     ),
@@ -74,7 +78,7 @@ HOT_ASSETS = (
         "main_scene_vram",
         0x22E8,
         0xEE00,
-        "f84ffc6ac0fa7d593bb856dcb6c9d512eb893aa824833a7b4a475561e2a1f0a2",
+        "a91b4539f74520a6ead8f61a14fbde9ebc6ef3a2117ebe661d6c9664f14475fa",
         "VRAM $0900",
         "large scene graphics",
     ),
@@ -82,7 +86,7 @@ HOT_ASSETS = (
         "alternate_scene_local",
         0x25B8,
         5 * SECTOR_BYTES,
-        "9dc46cf6f0ab27cb6ff80dab37e50273f6724d90acd21dbfc3c9992a25a0564e",
+        "252a92c17d03a4cb474996bc638f963bbf021d73dad0f51c4a216193a3a83155",
         "$9000",
         "alternate local scene data",
     ),
@@ -90,7 +94,7 @@ HOT_ASSETS = (
         "alternate_scene_vram",
         0x25C2,
         0xEE00,
-        "d7a711980e0af3ca267f0fea5fc24cc85d56e26038470809bfb0449b5d9458d3",
+        "4808990453bb9e33c900b5dd22193cd02dd1804ca48ae0dce0c0d8e2ffdd2833",
         "VRAM $0900",
         "alternate large scene graphics",
     ),
@@ -98,7 +102,7 @@ HOT_ASSETS = (
         "portrait_common",
         0x1458,
         0x2020,
-        "8c577cb4b5d09ba139b051a0d901be3bea80757832fef0a3b285f8b126206315",
+        "1e2cfc1192c332d8169ea0944da015ec8111cd260690203de16023364b8fedf8",
         "VRAM $4000",
         "portrait/UI graphics",
     ),
@@ -106,7 +110,7 @@ HOT_ASSETS = (
         "portrait_variant",
         0x1561,
         0x2020,
-        "bf152970abc46af85109158eadce881cad96f132123614d2c54ace81a960469a",
+        "531c2f9ed4b3f8000dbf1d38ba2167301964c41c1b17450687bf7ff143fef7b6",
         "VRAM $4000",
         "portrait/UI graphics",
     ),
@@ -258,7 +262,10 @@ def analyze_hot_assets(payload: bytes) -> dict[str, object]:
         rows.append(
             {
                 "name": asset.name,
-                "sector": f"0x{asset.sector:04X}",
+                "absolute_lba": f"0x{asset.sector:04X}",
+                "track2_relative_sector": (
+                    f"0x{asset.sector - TRACK2_START_LBA:04X}"
+                ),
                 "payload_offset": f"0x{asset.payload_offset:08X}",
                 "destination": asset.destination,
                 "role": asset.role,
