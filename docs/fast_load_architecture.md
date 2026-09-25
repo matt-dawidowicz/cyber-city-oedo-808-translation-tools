@@ -119,50 +119,34 @@ and percentages.
 This avoids the earlier accounting error of summing nested byte-loader and
 CD_READ timings as if they were independent costs.
 
-### A3. Static scene-transition phase boundaries
+### A3. Static scene-transition call structure
 
-The movement overlay now has a source-guarded phase model independent of live
-timing:
+The authenticated movement overlay separates the explicit wait gate from the
+scene orchestration entry:
 
     $40DB-$40E8  exploration audio transition
                   CD_FADE mode $0C + fixed 120-frame EX_VSYNC loop
 
-    $40E9-$423A  scene/room setup
-                  scene descriptor selection, collision/entity/interaction
-                  pointer installation, optional spawn restoration
+    $40E9...      scene/room orchestration
+                  descriptor selection, runtime setup, and resource-loader calls
 
-    $423B-$428D  blocking scene CD_READ wrappers
-                  descriptor -> BIOS parameter translation + immediate retry
+The blocking CD_READ helpers live at `$423B-$4261` (local memory) and
+`$4262-$428D` (VRAM). Their code is address-adjacent to the guarded
+`$40E9-$423A` setup region, but they are **nested callees**, not a later
+sequential phase. Existing profiling observes loader returns while scene setup
+is still pending.
 
-These boundaries are contiguous in the authenticated payload. In particular,
-the 120-frame policy ends immediately before scene/room setup begins, and the
-scene/room setup region ends exactly at the loader entry. The two blocking
-CD_READ wrappers contain no explicit EX_VSYNC delay.
+Therefore two conclusions are safe:
 
-This proves that the two-second wait is separable from optical transfer and can
-be benchmarked independently. It also gives later profiling a clean boundary
-between resource transfer and setup/display work.
+- the 120-frame wait ends before scene orchestration begins;
+- the CD_READ wrappers contain no explicit EX_VSYNC delay.
 
-The maintained diagnostic command is:
+But setup time and loader time must not be double-counted as separate serial
+phases. The maintained diagnostic is:
 
     cyber-oedo analyze-scene-transition <track2-payload>
 
 No speed mutation is enabled by this analyzer.
-
-### A3. Static exploration-transition phase boundaries
-
-The movement overlay now has a source-guarded phase model exposed by
-`cyber-oedo analyze-scene-transition`:
-
-1. `$40DB-$40E8`: CD fade mode `$0C` plus the explicit 120-frame
-   `EX_VSYNC` loop;
-2. `$40E9-$423A`: scene/room descriptor selection and runtime setup;
-3. `$423B-$428D`: the blocking scene `CD_READ` wrappers.
-
-The wait ends exactly where scene/room setup begins, and setup ends exactly at
-the first scene-loader entry. This proves the two-second policy delay is not
-hidden inside the CD wrappers and can be benchmarked independently from
-disc-layout or transfer optimizations.
 
 ### B. Short transition teardown
 
