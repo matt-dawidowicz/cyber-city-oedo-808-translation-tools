@@ -4,6 +4,7 @@ import unittest
 
 from cyber_oedo.runtime.dialogue_residency import (
     EXPECTED_ALL_RESIDENT_CHECKS,
+    EXPECTED_DIALOGUE_LOADERS,
     EXPECTED_STANDARD_LOADERS,
     MODULE_BSS_BYTES,
     MODULE_CPU_END_EXCLUSIVE,
@@ -55,6 +56,7 @@ class DialogueResidencyTests(unittest.TestCase):
 
     def test_expected_gamewide_copy_counts_are_explicit(self) -> None:
         self.assertEqual(EXPECTED_STANDARD_LOADERS, 11)
+        self.assertEqual(EXPECTED_DIALOGUE_LOADERS, 10)
         self.assertEqual(EXPECTED_ALL_RESIDENT_CHECKS, 12)
 
     def test_voice_extent_contiguity_helper(self) -> None:
