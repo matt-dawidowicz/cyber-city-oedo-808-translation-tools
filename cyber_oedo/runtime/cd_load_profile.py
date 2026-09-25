@@ -22,6 +22,7 @@ from typing import Iterable
 
 SECTOR_BYTES = 2048
 CD_SECTORS_PER_SECOND = 75
+TRACK2_START_LBA = 3590
 
 _CD_READ_RE = re.compile(
     r"\[CD_READ\s+(?P<ordinal>\d+)\s+B(?P<burst>\d+)\]\s+"
@@ -144,8 +145,17 @@ def group_bursts(reads: Iterable[CdRead]) -> tuple[LoadBurst, ...]:
 def _signature_row(signature: tuple[int, int, int, int, str]) -> dict[str, object]:
     sector, address_type, destination, length, unit = signature
     byte_count = length * SECTOR_BYTES if unit == "sectors" else length
+    relative_sector = sector - TRACK2_START_LBA
     return {
-        "sector": f"0x{sector:06X}",
+        "absolute_lba": f"0x{sector:06X}",
+        "track2_relative_sector": (
+            f"0x{relative_sector:04X}" if relative_sector >= 0 else None
+        ),
+        "track2_payload_offset": (
+            f"0x{relative_sector * SECTOR_BYTES:08X}"
+            if relative_sector >= 0
+            else None
+        ),
         "address_type": f"0x{address_type:02X}",
         "destination": f"0x{destination:04X}",
         "length": length,
