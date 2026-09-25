@@ -173,6 +173,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-dialogue-load-architecture",
+        "cyber_oedo.runtime.dialogue_load_architecture",
+        "Map Mission 0 dialogue/audio/portrait load layout.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-cd-hot-assets",
         "cyber_oedo.runtime.cd_load_optimization",
         "Measure hot scene assets and candidate load compression.",
