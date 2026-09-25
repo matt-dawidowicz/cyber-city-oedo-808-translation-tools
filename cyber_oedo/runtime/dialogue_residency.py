@@ -41,7 +41,18 @@ STANDARD_RESIDENT_LOADER_PREFIX = bytes.fromhex(
     "A9 00 85 00 A9 80 85 01 A9 00 85 02"
 )
 EXPECTED_STANDARD_LOADERS = 11
+EXPECTED_DIALOGUE_LOADERS = 10
 EXPECTED_ALL_RESIDENT_CHECKS = 12
+
+DIALOGUE_OVERLAY_LABELS = (
+    "MISSION_0_A", "MISSION_0_B", "MISSION_1", "MISSION_2", "MISSION_3",
+    "MISSION_4", "MISSION_5", "MISSION_6", "MISSION_7", "MISSION_8",
+)
+DIALOGUE_OVERLAY_BASES = (
+    0x00074800, 0x00131800, 0x00CE4000, 0x017B3800, 0x0222C000,
+    0x02B1C000, 0x03356800, 0x03B34000, 0x04281800, 0x04848000,
+)
+DIALOGUE_LOADER_RELATIVE = 0x48A6
 
 MODULE_CPU_START = 0x8000
 MODULE_CPU_END_EXCLUSIVE = MODULE_CPU_START + DIALOGUE_MODULE_LENGTH
@@ -257,6 +268,17 @@ def analyze_dialogue_residency(payload: bytes) -> dict[str, object]:
     outer_start = MISSION0_B_PAYLOAD_BASE + OUTER_EXIT_CPU
     movement_start = MOVEMENT_MODULE_PAYLOAD_BASE + MOVEMENT_EXIT_CPU
     standard_loaders = find_standard_resident_loaders(payload)
+    loader_by_offset = {item.payload_offset: item for item in standard_loaders}
+    dialogue_loaders = tuple(
+        (
+            label,
+            base + DIALOGUE_LOADER_RELATIVE,
+            loader_by_offset.get(base + DIALOGUE_LOADER_RELATIVE),
+        )
+        for label, base in zip(
+            DIALOGUE_OVERLAY_LABELS, DIALOGUE_OVERLAY_BASES, strict=True
+        )
+    )
     voices = parse_voice_descriptors(module)
 
     return {
@@ -294,19 +316,51 @@ def analyze_dialogue_residency(payload: bytes) -> dict[str, object]:
             "expected_all_check_hits": EXPECTED_ALL_RESIDENT_CHECKS,
             "standard_loader_copies": len(standard_loaders),
             "expected_standard_loader_copies": EXPECTED_STANDARD_LOADERS,
+            "dialogue_loader_copies": sum(
+                item is not None for _label, _offset, item in dialogue_loaders
+            ),
+            "expected_dialogue_loader_copies": EXPECTED_DIALOGUE_LOADERS,
             "m0_loader_source_guard": hashlib.sha256(m0_loader).hexdigest()
             == MISSION0_MODULE_LOADER_SHA256,
             "check": "LDA $8000; ORA $8003; CMP #$4C",
             "comparison_result_used_by_branch": False,
-            "standard_loaders": [
+            "dialogue_loaders": [
+                {
+                    "label": label,
+                    "payload_offset": "0x%08X" % offset,
+                    "present": item is not None,
+                    "lba": None if item is None else "0x%04X" % item.lba,
+                    "byte_length": None if item is None else item.byte_length,
+                    "bss_bytes_before_9000": (
+                        None if item is None else 0x1000 - item.byte_length
+                    ),
+                    "sectors_touched": None if item is None else item.sectors_touched,
+                    "source_entrypoints_are_jmp": (
+                        False
+                        if item is None
+                        else payload[
+                            payload_offset_for_lba(item.lba)
+                        ] == 0x4C
+                        and payload[
+                            payload_offset_for_lba(item.lba) + 3
+                        ] == 0x4C
+                    ),
+                }
+                for label, offset, item in dialogue_loaders
+            ],
+            "extra_standard_loaders": [
                 {
                     "payload_offset": "0x%08X" % item.payload_offset,
                     "lba": "0x%04X" % item.lba,
                     "byte_length": item.byte_length,
-                    "sectors_touched": item.sectors_touched,
                     "loader_entry": "$%04X" % item.loader_entry,
                 }
                 for item in standard_loaders
+                if item.payload_offset
+                not in {
+                    base + DIALOGUE_LOADER_RELATIVE
+                    for base in DIALOGUE_OVERLAY_BASES
+                }
             ],
         },
         "source_guards": {
@@ -473,6 +527,12 @@ def main(argv: list[str] | None = None) -> int:
         and loader["all_check_hits"] == loader["expected_all_check_hits"]
         and loader["standard_loader_copies"]
         == loader["expected_standard_loader_copies"]
+        and loader["dialogue_loader_copies"]
+        == loader["expected_dialogue_loader_copies"]
+        and all(
+            row["source_entrypoints_are_jmp"]
+            for row in loader["dialogue_loaders"]
+        )
         and voice["contiguous"]
         and vram["scene_exactly_ends_at_vram_top"]
         and vram["portrait_inside_scene_image"]
