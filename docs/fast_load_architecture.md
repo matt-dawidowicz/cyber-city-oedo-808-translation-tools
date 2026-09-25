@@ -148,6 +148,35 @@ phases. The maintained diagnostic is:
 
 No speed mutation is enabled by this analyzer.
 
+### A3. Static scene-transition call structure
+
+The authenticated movement overlay separates the explicit wait gate from the
+scene orchestration entry:
+
+    $40DB-$40E8  exploration audio transition
+                  CD_FADE mode $0C + fixed 120-frame EX_VSYNC loop
+
+    $40E9...      scene/room orchestration
+                  descriptor selection, runtime setup, and resource-loader calls
+
+The blocking CD_READ helpers live at `$423B-$4261` (local memory) and
+`$4262-$428D` (VRAM). Their code is address-adjacent to the guarded
+`$40E9-$423A` setup region, but they are **nested callees**, not a later
+sequential phase. Existing profiling observes loader returns while scene setup
+is still pending.
+
+Therefore two conclusions are safe:
+
+- the 120-frame wait ends before scene orchestration begins;
+- the CD_READ wrappers contain no explicit EX_VSYNC delay.
+
+But setup time and loader time must not be double-counted as separate serial
+phases. The maintained diagnostic is:
+
+    cyber-oedo analyze-scene-transition <track2-payload>
+
+No speed mutation is enabled by this analyzer.
+
 ### B. Short transition teardown
 
 If live timing confirms the fade is critical-path time, prototype a
@@ -217,6 +246,24 @@ The transition profiler now times AD_READ $E036 and AD_WRITE $E039
 entry-to-return in addition to AD_TRANS. This closes another hole in the
 earlier timing budget: the stock module moves an entire 8 KiB ADPCM window to
 bank $86 and back without using CD_READ.
+
+### E2. Main-scene source topology
+
+The main exploration restore uses three source extents:
+
+- `$228E-$2294`: 7 sectors;
+- `$22DE-$22E0`: 3 sectors;
+- `$22E8-$2305`: 30 sectors touched by the 60,928-byte VRAM read.
+
+So the complete source span is 120 sectors but only 40 sectors are transferred.
+The actual unused gaps between loaded extents are **73 sectors** and **7
+sectors**. The older 80/10 figures are start-to-start deltas, not literal
+unread gaps.
+
+This means one contiguous duplicate/relocation could preserve the same 40
+sectors of payload while eliminating 80 skipped sectors of source span. It does
+not by itself prove a specific seek-time saving; that still requires live timing
+and an owned destination extent.
 
 ### F. Scene graphics
 
