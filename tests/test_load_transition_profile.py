@@ -39,7 +39,7 @@ class LoadTransitionProfileTests(unittest.TestCase):
             window.source_start_deltas,
             (1, -0x349, 0x364, 0x17),
         )
-        self.assertEqual(window.absolute_seek_distance, 1729)
+        self.assertEqual(window.absolute_seek_distance, 1733)
 
     def test_finds_cache_hit_transition_without_event_cd_read(self) -> None:
         windows = find_m0_dialogue_load_windows(CACHED_SHAPE)
