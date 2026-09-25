@@ -14,11 +14,7 @@ from cyber_oedo.runtime.dialogue_load_architecture import (
     PORTRAIT_TABLE_CPU,
     SECTOR_BYTES,
     SPEAKER_BLOCK_SECTORS,
-    analyze_dialogue_load_architecture,
     payload_offset_for_lba,
-    portrait_slots,
-    speaker_load_pairs,
-    validate_dialogue_module,
 )
 
 
