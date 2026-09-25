@@ -197,6 +197,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "describe-transition-state-machine",
+        "cyber_oedo.runtime.transition_state_machine",
+        "Describe direction-specific Mission 0 transition latency and gates.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-adpcm-memory",
         "cyber_oedo.runtime.adpcm_memory_architecture",
         "Map Mission 0 ADPCM snapshot and RAM-transfer architecture.",
