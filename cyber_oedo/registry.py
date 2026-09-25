@@ -221,6 +221,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-resource-lifetime",
+        "cyber_oedo.runtime.resource_lifetime",
+        "Map logical dialogue/exploration overlap and MPR lifetime risks.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "clonecd-cue",
         "cyber_oedo.disc.clonecd_cue",
         "Create a non-destructive CUE view of a CloneCD set.",
