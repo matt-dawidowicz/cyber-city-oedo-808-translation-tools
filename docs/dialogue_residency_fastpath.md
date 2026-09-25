@@ -59,6 +59,16 @@ Immutable-body SHA-256 excluding those two bytes:
 
 A future cache hit can authenticate the immutable module body, restore $8617/$8618 to their source values, retain the BSS as the stock partial reload already does, and skip the optical module reload. That mutation remains gated on live residency proof.
 
+## Why the stock module load costs two CD commands
+
+The Mission 0 module is $0F51 bytes long: one complete 2 KiB sector plus a $751-byte remainder. The System Card CD_READ interface provides LOCAL transfers in whole-record units; the arbitrary byte-count form is the VRAM-specific $FE mode, not a general LOCAL byte-copy mode. The stock generic byte loader therefore:
+
+    $1425 -> $8000   one full record
+    $1426 -> bounce RAM   one full record
+    bounce -> $8800       copy only the $751-byte remainder
+
+This preserves the $8F51-$8FFF BSS tail. In the historical trace the two CD_READ starts are 67 frames apart. A resident-module cache removes both commands and the bounce-copy path without requiring a nonexistent exact-length LOCAL BIOS transfer.
+
 ## Historical residency evidence
 
 The old Mission 0 V5 capture shows physical bank $85 remaining mapped/active during dialogue and long periods of exploration. Bank-$85 activity plateaus for multi-thousand-frame exploration windows, then increases by only a tiny amount at the next interaction before the stock module reload.
