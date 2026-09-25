@@ -1,8 +1,9 @@
 """Source-guarded exploration scene-transition architecture.
 
-This module turns the already authenticated movement-overlay regions into an
-ordered transition model.  It deliberately separates the explicit audio/wait
-gate from scene/room setup and from the blocking CD_READ wrappers.
+This module turns the already authenticated movement-overlay regions into a
+transition model.  It separates the explicit audio/wait gate from scene/room
+orchestration while treating the blocking CD_READ wrappers as nested callees,
+not as a later sequential phase.
 """
 
 from __future__ import annotations
@@ -54,7 +55,7 @@ def analyze_scene_transition_architecture(payload: bytes) -> dict[str, object]:
 
     return {
         "source_guards": checks,
-        "ordered_phases": [
+        "high_level_sequence": [
             {
                 "phase": "exploration_audio_transition",
                 "cpu": "$40DB-$40E8",
@@ -63,36 +64,45 @@ def analyze_scene_transition_architecture(payload: bytes) -> dict[str, object]:
                 "fixed_seconds_at_60hz": 2.0,
             },
             {
-                "phase": "scene_and_room_setup",
-                "cpu": "$40E9-$423A",
+                "phase": "scene_and_room_orchestration",
+                "cpu_region": "$40E9-$423A",
                 "operation": (
                     "select scene/room descriptors; install collision, entity, "
-                    "interaction, and optional spawn state"
+                    "interaction, optional spawn state, and call resource loaders"
                 ),
             },
+        ],
+        "nested_resource_loaders": [
             {
-                "phase": "blocking_scene_cd_reads",
-                "cpu": "$423B-$428D",
-                "operation": (
-                    "translate descriptors into System Card CD_READ parameter "
-                    "blocks and retry immediately on nonzero status"
-                ),
+                "cpu": "$423B-$4261",
+                "role": "local-memory CD_READ wrapper",
+                "nested_within": "scene_and_room_orchestration",
+                "contains_explicit_vsync_wait": False,
+            },
+            {
+                "cpu": "$4262-$428D",
+                "role": "VRAM CD_READ wrapper",
+                "nested_within": "scene_and_room_orchestration",
                 "contains_explicit_vsync_wait": False,
             },
         ],
-        "boundary_facts": {
-            "wait_precedes_scene_setup": (
+        "address_layout_facts": {
+            "wait_ends_at_orchestration_entry": (
                 TRANSITION_WAIT_CPU + len(TRANSITION_WAIT_BYTES)
                 == SCENE_SETUP_CPU_START
             ),
-            "setup_ends_at_loader_entry": SCENE_SETUP_CPU_END_EXCLUSIVE == SCENE_LOADERS_CPU_START,
+            "loader_code_is_adjacent_after_setup_region": (
+                SCENE_SETUP_CPU_END_EXCLUSIVE == SCENE_LOADERS_CPU_START
+            ),
+            "adjacency_is_not_runtime_ordering": True,
             "loader_region_end": f"$%04X" % (SCENE_LOADERS_CPU_END_EXCLUSIVE - 1),
         },
         "optimization_implication": (
-            "The 120-frame delay is a distinct high-level transition policy, "
-            "not time hidden inside either blocking CD_READ wrapper.  Any "
-            "benchmark that shortens the wait can therefore be evaluated "
-            "independently from scene-data transfer/layout changes."
+            "The 120-frame delay is a distinct high-level transition policy "
+            "before scene orchestration begins. The CD_READ wrappers contain no "
+            "explicit VSync delay, but execute as nested calls during that "
+            "orchestration, so their time must not be added again as a later "
+            "sequential phase."
         ),
         "release_enabled": False,
     }
