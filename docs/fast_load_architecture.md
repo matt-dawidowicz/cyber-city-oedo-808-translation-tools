@@ -119,12 +119,17 @@ reads with RAM copies and cache selected portraits for RAM-to-VRAM copies.
 The complete bar working set is 110,656 bytes, which occupies 14 packed 8 KiB
 banks and leaves ten Card RAM banks (81,920 bytes) available.
 
-The documented AD_WRITE bank-source form names the ordinary CD RAM banks
-$80-$87, not the Super System Card banks $68-$7F. Therefore the accelerated
-path must not assume direct AD_WRITE access to Card RAM. Candidate approaches
-are to temporarily map a $68-$7F bank into a logical CPU window and use
-AD_WRITE's local-memory form, or to stage through a proven $80-$87 buffer. Both
-require live certification.
+The previous working note misidentified BIOS entry $E03F as AD_WRITE. The
+System Card jump table actually places AD_WRITE at $E039 and AD_CPLAY at
+$E03F. The Mission 0 module's calls to $E03F are therefore playback calls, not
+RAM-to-ADPCM copies.
+
+This matters for the cache design: a Super System Card cache still needs an
+explicit, proven RAM-to-ADPCM path. The game contains many real JSR $E039
+callers elsewhere, so the next step is to reverse-engineer one of those call
+contracts and determine whether temporarily mapping a $68-$7F Card-RAM bank
+into a logical CPU window is sufficient, or whether staging through ordinary
+$80-$87 CD RAM is required. No direct Card-RAM ADPCM transfer is assumed yet.
 
 ### D. Scene graphics
 
