@@ -13,13 +13,49 @@ import hashlib
 import json
 import pathlib
 
+from cyber_oedo.analysis.disassemble_huc6280 import linear_disassemble
 from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
+from cyber_oedo.runtime.game_architecture import MOVEMENT_ARCHITECTURE_REGIONS
 from cyber_oedo.runtime.movement import MOVEMENT_REGIONS
 
 
 def _region(name: str):
     return next(item for item in MOVEMENT_REGIONS if item.name == name)
 
+
+
+REENTRY_TARGETS = {
+    "scene_entry_selection": 0x419E,
+    "collision_rectangle_reset": 0x470C,
+    "object_source_initialization": 0x5519,
+    "camera_center_and_clamp": 0x43F6,
+}
+
+
+def _architecture_region(name: str):
+    return next(item for item in MOVEMENT_ARCHITECTURE_REGIONS if item.name == name)
+
+
+def direct_absolute_calls(
+    blob: bytes, payload_offset: int, cpu_address: int
+) -> tuple[dict[str, object], ...]:
+    """Return instruction-boundary JSR/JMP references in a confirmed code region."""
+
+    rows = []
+    for instruction in linear_disassemble(blob, payload_offset, cpu_address):
+        if instruction.mnemonic not in {"jsr", "jmp"}:
+            continue
+        if len(instruction.raw) != 3:
+            continue
+        target = instruction.raw[1] | (instruction.raw[2] << 8)
+        rows.append(
+            {
+                "cpu": f"$%04X" % instruction.cpu_address,
+                "operation": instruction.mnemonic.upper(),
+                "target": f"$%04X" % target,
+            }
+        )
+    return tuple(rows)
 
 def analyze_same_room_reentry(payload: bytes) -> dict[str, object]:
     digest = hashlib.sha256(payload).hexdigest()
@@ -42,8 +78,31 @@ def analyze_same_room_reentry(payload: bytes) -> dict[str, object]:
     if not all(checks.values()):
         raise ValueError(f"same-room source guard mismatch: {checks}")
 
+    setup = _architecture_region("scene_and_room_setup")
+    setup_blob = payload[setup.payload_offset : setup.payload_offset + setup.length]
+    if hashlib.sha256(setup_blob).hexdigest() != setup.sha256:
+        raise ValueError("scene_and_room_setup source guard mismatch")
+    setup_calls = direct_absolute_calls(
+        setup_blob, setup.payload_offset, setup.cpu_start
+    )
+    targets = {row["target"] for row in setup_calls}
+    target_proof = {
+        name: {
+            "target": f"$%04X" % address,
+            "direct_reference_in_scene_orchestration": f"$%04X" % address in targets,
+            "call_sites": [
+                row["cpu"]
+                for row in setup_calls
+                if row["target"] == f"$%04X" % address
+            ],
+        }
+        for name, address in REENTRY_TARGETS.items()
+    }
+
     return {
         "source_guards": checks,
+        "scene_orchestration_direct_references": target_proof,
+        "scene_orchestration_direct_calls": list(setup_calls),
         "scene_selection_contract": {
             "active_scene": "$3700",
             "active_entry": "$3701",
