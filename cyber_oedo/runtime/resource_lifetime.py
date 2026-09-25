@@ -8,8 +8,13 @@ that distinction instead of treating matching CPU addresses as bank identity.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import pathlib
+
+from cyber_oedo.analysis.disassemble_huc6280 import linear_disassemble
+from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
+from cyber_oedo.runtime.game_architecture import MOVEMENT_ARCHITECTURE_REGIONS
 from dataclasses import dataclass
 
 from cyber_oedo.runtime.dialogue_residency import (
@@ -110,6 +115,91 @@ def _range_json(item: AddressRange) -> dict[str, object]:
     }
 
 
+def _architecture_region(name: str):
+    return next(item for item in MOVEMENT_ARCHITECTURE_REGIONS if item.name == name)
+
+
+def analyze_scene_mpr_operations(payload: bytes) -> dict[str, object]:
+    """Decode MPR4/MPR5 operations in authenticated scene-transition code."""
+
+    digest = hashlib.sha256(payload).hexdigest()
+    if digest != TRACK2_PAYLOAD_SHA256:
+        raise ValueError(
+            f"payload SHA-256 mismatch: expected {TRACK2_PAYLOAD_SHA256}, got {digest}"
+        )
+
+    regions = (
+        _architecture_region("scene_and_room_setup"),
+        _architecture_region("scene_cd_loaders"),
+    )
+    rows: list[dict[str, object]] = []
+    for region in regions:
+        blob = payload[region.payload_offset : region.payload_offset + region.length]
+        if hashlib.sha256(blob).hexdigest() != region.sha256:
+            raise ValueError(f"source guard mismatch for {region.name}")
+        previous = None
+        for instruction in linear_disassemble(
+            blob, region.payload_offset, region.cpu_start
+        ):
+            if instruction.mnemonic in {"tam", "tma"} and instruction.raw[1] & 0x30:
+                mprs = []
+                if instruction.raw[1] & 0x10:
+                    mprs.append("MPR4")
+                if instruction.raw[1] & 0x20:
+                    mprs.append("MPR5")
+                immediate = None
+                if (
+                    previous is not None
+                    and previous.mnemonic == "lda"
+                    and previous.raw[0] == 0xA9
+                    and instruction.mnemonic == "tam"
+                ):
+                    immediate = f"$%02X" % previous.raw[1]
+                rows.append(
+                    {
+                        "region": region.name,
+                        "cpu": f"$%04X" % instruction.cpu_address,
+                        "operation": instruction.mnemonic.upper(),
+                        "mask": f"$%02X" % instruction.raw[1],
+                        "mprs": mprs,
+                        "immediate_accumulator_if_adjacent": immediate,
+                        "instruction": instruction.format(),
+                    }
+                )
+            previous = instruction
+
+    mpr4_writes = [
+        row for row in rows
+        if row["operation"] == "TAM" and "MPR4" in row["mprs"]
+    ]
+    immediate_values = {
+        row["immediate_accumulator_if_adjacent"]
+        for row in mpr4_writes
+        if row["immediate_accumulator_if_adjacent"] is not None
+    }
+    resolved = (
+        len(mpr4_writes) > 0
+        and len(immediate_values) == 1
+        and all(
+            row["immediate_accumulator_if_adjacent"] is not None
+            for row in mpr4_writes
+        )
+    )
+    return {
+        "operations": rows,
+        "mpr4_write_count": len(mpr4_writes),
+        "adjacent_immediate_mpr4_values": sorted(immediate_values),
+        "mpr4_statically_resolved": resolved,
+        "resolved_mpr4": next(iter(immediate_values)) if resolved else None,
+        "interpretation": (
+            "Only instruction-boundary-decoded TAM/TMA operations in the "
+            "source-guarded scene setup/loader regions are reported. An MPR4 "
+            "value is declared statically resolved only when every MPR4 TAM in "
+            "those regions is immediately preceded by one identical LDA #imm. "
+            "Otherwise runtime MPR capture remains required."
+        ),
+    }
+
 def build_resource_lifetime_report() -> dict[str, object]:
     module_overlap = overlap(DIALOGUE_MODULE, EXPLORATION_LOCAL_B)
     speaker_overlap = overlap(DIALOGUE_SPEAKER, EXPLORATION_LOCAL_B)
@@ -194,9 +284,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Map logical resource overlap across dialogue/exploration."
     )
+    parser.add_argument(
+        "--payload",
+        type=pathlib.Path,
+        help="authenticated Track 2 payload for instruction-boundary MPR analysis",
+    )
     parser.add_argument("--output", type=pathlib.Path)
     args = parser.parse_args(argv)
     report = build_resource_lifetime_report()
+    if args.payload is not None:
+        report["scene_mpr_operations"] = analyze_scene_mpr_operations(
+            args.payload.read_bytes()
+        )
+    else:
+        report["scene_mpr_operations"] = {
+            "status": "not_run",
+            "reason": "supply --payload to decode authenticated TAM/TMA operations",
+        }
     rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.output is None:
         print(rendered, end="")
