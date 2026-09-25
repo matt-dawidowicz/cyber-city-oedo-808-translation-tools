@@ -149,6 +149,21 @@ The maintained diagnostic command is:
 
 No speed mutation is enabled by this analyzer.
 
+### A3. Static exploration-transition phase boundaries
+
+The movement overlay now has a source-guarded phase model exposed by
+`cyber-oedo analyze-scene-transition`:
+
+1. `$40DB-$40E8`: CD fade mode `$0C` plus the explicit 120-frame
+   `EX_VSYNC` loop;
+2. `$40E9-$423A`: scene/room descriptor selection and runtime setup;
+3. `$423B-$428D`: the blocking scene `CD_READ` wrappers.
+
+The wait ends exactly where scene/room setup begins, and setup ends exactly at
+the first scene-loader entry. This proves the two-second policy delay is not
+hidden inside the CD wrappers and can be benchmarked independently from
+disc-layout or transfer optimizations.
+
 ### B. Short transition teardown
 
 If live timing confirms the fade is critical-path time, prototype a
