@@ -24,6 +24,20 @@ from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
 SECTOR_BYTES = 2048
 CD_SECTORS_PER_SECOND = 75
 
+MOVEMENT_MODULE_PAYLOAD_BASE = 0x000A4800
+LOCAL_SCENE_LOADER_CPU = 0x423B
+VRAM_SCENE_LOADER_CPU = 0x4262
+LOCAL_SCENE_LOADER_BYTES = bytes.fromhex(
+    "B2 1E 85 FC A0 01 B1 1E 85 FE C8 B1 1E 85 FD C8 "
+    "B1 1E 85 F8 A5 1C 85 FA A5 1D 85 FB A9 01 85 FF "
+    "20 09 E0 AA D0 DA 60"
+)
+VRAM_SCENE_LOADER_BYTES = bytes.fromhex(
+    "B2 1E 85 FC A0 01 B1 1E 85 FE C8 B1 1E 85 FD C8 "
+    "B1 1E 85 F8 C8 B1 1E 85 F9 A5 1C 85 FA A5 1D "
+    "85 FB A9 FE 85 FF 20 09 E0 AA D0 D5 60"
+)
+
 
 @dataclass(frozen=True, slots=True)
 class HotAsset:
@@ -187,6 +201,28 @@ def unpackbits_words(encoded: bytes, expected_bytes: int | None = None) -> bytes
     return bytes(output)
 
 
+def validate_scene_loaders(payload: bytes) -> dict[str, bool]:
+    """Validate the two blocking scene CD_READ wrappers byte-for-byte.
+
+    Both wrappers call System Card CD_READ at $E009, copy the return code to X,
+    and immediately branch back to the start on nonzero status. Neither routine
+    contains a vertical-sync wait, software countdown, or deliberate delay.
+    """
+
+    local_start = MOVEMENT_MODULE_PAYLOAD_BASE + LOCAL_SCENE_LOADER_CPU
+    vram_start = MOVEMENT_MODULE_PAYLOAD_BASE + VRAM_SCENE_LOADER_CPU
+    return {
+        "local_scene_loader": (
+            payload[local_start : local_start + len(LOCAL_SCENE_LOADER_BYTES)]
+            == LOCAL_SCENE_LOADER_BYTES
+        ),
+        "vram_scene_loader": (
+            payload[vram_start : vram_start + len(VRAM_SCENE_LOADER_BYTES)]
+            == VRAM_SCENE_LOADER_BYTES
+        ),
+    }
+
+
 def _asset_bytes(payload: bytes, asset: HotAsset) -> bytes:
     blob = payload[
         asset.payload_offset : asset.payload_offset + asset.byte_length
@@ -206,6 +242,10 @@ def _sectors(byte_count: int) -> int:
 
 
 def analyze_hot_assets(payload: bytes) -> dict[str, object]:
+    loader_guards = validate_scene_loaders(payload)
+    if not all(loader_guards.values()):
+        raise ValueError("scene loader source guard mismatch")
+
     rows = []
     for asset in HOT_ASSETS:
         blob = _asset_bytes(payload, asset)
@@ -251,6 +291,14 @@ def analyze_hot_assets(payload: bytes) -> dict[str, object]:
     )
 
     return {
+        "scene_loader_guards": loader_guards,
+        "scene_loader_semantics": {
+            "local_cpu": "$423B-$4261",
+            "vram_cpu": "$4262-$428D",
+            "system_card_cd_read": "$E009",
+            "retry": "immediate BNE to wrapper start on nonzero CD_READ status",
+            "deliberate_wait_loop": False,
+        },
         "assets": rows,
         "main_scene_bundle": {
             "source_sectors": ["0x228E", "0x22DE", "0x22E8"],
