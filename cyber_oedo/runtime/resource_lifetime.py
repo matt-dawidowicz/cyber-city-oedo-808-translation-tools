@@ -20,6 +20,8 @@ from cyber_oedo.runtime.dialogue_residency import (
 )
 
 SECTOR_BYTES = 0x800
+MPR_WINDOW_BYTES = 0x2000
+DIALOGUE_PHYSICAL_PAGE = 0x85
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +77,29 @@ def overlap(left: AddressRange, right: AddressRange) -> AddressRange | None:
     )
 
 
+def logical_page_geometry(start: int, end_exclusive: int) -> tuple[dict[str, object], ...]:
+    """Split a logical range at HuC6280 8 KiB MPR-window boundaries."""
+
+    rows: list[dict[str, object]] = []
+    cursor = start
+    while cursor < end_exclusive:
+        slot = cursor // MPR_WINDOW_BYTES
+        slot_end = (slot + 1) * MPR_WINDOW_BYTES
+        end = min(end_exclusive, slot_end)
+        rows.append(
+            {
+                "mpr_slot": slot,
+                "logical_start": f"$%04X" % cursor,
+                "logical_end_inclusive": f"$%04X" % (end - 1),
+                "page_offset_start": f"0x{cursor & (MPR_WINDOW_BYTES - 1):04X}",
+                "page_offset_end_inclusive": f"0x{(end - 1) & (MPR_WINDOW_BYTES - 1):04X}",
+                "bytes": end - cursor,
+            }
+        )
+        cursor = end
+    return tuple(rows)
+
+
 def _range_json(item: AddressRange) -> dict[str, object]:
     return {
         "name": item.name,
@@ -111,6 +136,36 @@ def build_resource_lifetime_report() -> dict[str, object]:
                 and speaker_overlap.end_exclusive == DIALOGUE_SPEAKER.end_exclusive
             ),
         },
+        "mpr_geometry": {
+            "window_bytes": MPR_WINDOW_BYTES,
+            "dialogue_workspace_mpr_slot": 4,
+            "dialogue_known_physical_page": "$%02X" % DIALOGUE_PHYSICAL_PAGE,
+            "module_page_offsets": ["0x0000", "0x0F50"],
+            "speaker_page_offsets": ["0x1000", "0x1FFF"],
+            "exploration_local_b_segments": list(
+                logical_page_geometry(
+                    EXPLORATION_LOCAL_B.start,
+                    EXPLORATION_LOCAL_B.end_exclusive,
+                )
+            ),
+            "same_page_hypothesis": (
+                "If exploration MPR4 remains $85, the $9000-$9FFF half of the "
+                "$22DE load overwrites exactly the speaker-local half of page $85 "
+                "while leaving the module at page offsets 0x0000-0x0F50 intact. "
+                "The remaining $A000-$A7FF portion is in MPR5 and cannot touch "
+                "the page-$85 speaker bytes."
+            ),
+            "remapped_page_hypothesis": (
+                "If exploration MPR4 is not $85, the logical $9000-$9FFF write "
+                "targets a different physical 8 KiB page and page $85 survives "
+                "unchanged. Static logical addresses alone cannot choose between "
+                "these two cases."
+            ),
+            "proof_needed": (
+                "MPR4 at the exploration $22DE CD_READ and MPR4 at dialogue "
+                "speaker-local use, or an equivalent physical-CD-RAM checksum."
+            ),
+        },
         "static_implication": (
             "Known exploration scene-local writes do not overlap the dialogue "
             "module's logical $8000-$8F50 body, but the 3-sector $9000 load "
@@ -118,10 +173,12 @@ def build_resource_lifetime_report() -> dict[str, object]:
             "continues through $A7FF."
         ),
         "mpr_caveat": (
-            "This is logical-address overlap only. HuC6280 MPR mappings can "
-            "change between dialogue and exploration, so it neither proves "
-            "speaker clobber nor proves module physical residency. Live MPR or "
-            "physical CD-RAM evidence is still required."
+            "Logical $9000 is in MPR4 and $A000 begins MPR5. Dialogue page $85 "
+            "places the module in offsets 0x0000-0x0F50 and speaker-local data in "
+            "0x1000-0x1FFF. The exploration write therefore has a precise "
+            "conditional consequence: speaker clobber occurs if and only if its "
+            "MPR4 maps the same physical page $85. Static evidence has not yet "
+            "proven that exploration MPR4 value."
         ),
         "optimization_priority": (
             "Keep resident-module and speaker-cache benchmarks independent. "
