@@ -3,8 +3,9 @@
 --
 -- READ ONLY.  This version measures every System Card CD_READ from BIOS entry
 -- to its exact caller return target, instead of timing only the two known scene
--- wrappers.  It also times generic byte-loader calls and records when dialogue
--- parsing becomes active again.
+-- wrappers. It also times generic byte-loader calls and AD_TRANS transfers,
+-- records ADPCM stop/status/fade activity, counts EX_VSYNC calls, and records
+-- when dialogue parsing becomes active again.
 --
 -- Recommended coverage:
 --   * enter/leave the bar several times;
@@ -24,6 +25,11 @@ local readOrdinal = 0
 local byteLoaderOrdinal = 0
 local dialogueGroups = 0
 local parserHits = 0
+local adTransOrdinal = 0
+local adStopCalls = 0
+local adStatCalls = 0
+local cdFadeCalls = 0
+local vsyncCalls = 0
 local lastParserFrame = -100000
 local lastCdFrame = -100000
 local logFile = nil
@@ -31,6 +37,8 @@ local logFile = nil
 local pendingReadsByReturn = {}
 local registeredReturnTargets = {}
 local pendingByteLoader = nil
+local pendingAdTransByReturn = {}
+local registeredAdTransReturns = {}
 
 local function r8(address, memType)
   return emu.read(address, memType or MEM)
@@ -134,6 +142,79 @@ local function ensureReturnCallback(target)
   )
 end
 
+local function ensureAdTransReturnCallback(target)
+  if registeredAdTransReturns[target] then return end
+  registeredAdTransReturns[target] = true
+  emu.addMemoryCallback(
+    function()
+      local queue = pendingAdTransByReturn[target]
+      if not queue or #queue == 0 then return end
+      local item = table.remove(queue, 1)
+      local elapsed = frame - item.startFrame
+      local state = cpu()
+      log(string.format(
+        "[AD_TRANS_RETURN %03d] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
+        "sector=$%06X blocks=$%02X adpcm_dest=$%04X set_addr=$%02X return=$%04X " ..
+        "A=$%02X X=$%02X %s %s",
+        item.ordinal, frame, elapsed, elapsed / 60.0,
+        item.sector, item.blocks, item.destination, item.setAddress,
+        target, state.a or 0, state.x or 0, sceneState(), mprString()
+      ))
+    end,
+    emu.callbackType.exec,
+    target, target, CPU, MEM
+  )
+end
+
+local function onAdTrans()
+  adTransOrdinal = adTransOrdinal + 1
+  local item = {
+    ordinal=adTransOrdinal,
+    startFrame=frame,
+    sector=(r8(0x20FC) << 16) | (r8(0x20FD) << 8) | r8(0x20FE),
+    blocks=r8(0x20F8),
+    destination=r16(0x20FA),
+    setAddress=r8(0x20FF),
+    returnTarget=stackReturnTarget(),
+  }
+  if not pendingAdTransByReturn[item.returnTarget] then
+    pendingAdTransByReturn[item.returnTarget] = {}
+  end
+  table.insert(pendingAdTransByReturn[item.returnTarget], item)
+  ensureAdTransReturnCallback(item.returnTarget)
+  log(string.format(
+    "[AD_TRANS %03d] frame=%d sector=$%06X blocks=$%02X adpcm_dest=$%04X " ..
+    "set_addr=$%02X caller_return=$%04X %s %s",
+    item.ordinal, frame, item.sector, item.blocks, item.destination,
+    item.setAddress, item.returnTarget, sceneState(), mprString()
+  ))
+end
+
+local function onAdStop()
+  adStopCalls = adStopCalls + 1
+  log(string.format("[AD_STOP %03d] frame=%d return=$%04X %s",
+    adStopCalls, frame, stackReturnTarget(), sceneState()))
+end
+
+local function onAdStat()
+  adStatCalls = adStatCalls + 1
+  if adStatCalls <= 128 or adStatCalls % 64 == 0 then
+    log(string.format("[AD_STAT %03d] frame=%d return=$%04X %s",
+      adStatCalls, frame, stackReturnTarget(), sceneState()))
+  end
+end
+
+local function onCdFade()
+  cdFadeCalls = cdFadeCalls + 1
+  local state = cpu()
+  log(string.format("[CD_FADE %03d] frame=%d mode=$%02X return=$%04X %s",
+    cdFadeCalls, frame, state.a or 0, stackReturnTarget(), sceneState()))
+end
+
+local function onVsync()
+  vsyncCalls = vsyncCalls + 1
+end
+
 local function onCdRead()
   readOrdinal = readOrdinal + 1
   local length = r16(0x20F8)
@@ -227,6 +308,11 @@ log("Cyber City Oedo 808 CD transition profiler v2 armed.")
 log("Read-only instrumentation: YES")
 
 emu.addMemoryCallback(onCdRead, emu.callbackType.exec, 0xE009, 0xE009, CPU, MEM)
+emu.addMemoryCallback(onAdTrans, emu.callbackType.exec, 0xE033, 0xE033, CPU, MEM)
+emu.addMemoryCallback(onAdStop, emu.callbackType.exec, 0xE042, 0xE042, CPU, MEM)
+emu.addMemoryCallback(onAdStat, emu.callbackType.exec, 0xE045, 0xE045, CPU, MEM)
+emu.addMemoryCallback(onCdFade, emu.callbackType.exec, 0xE02D, 0xE02D, CPU, MEM)
+emu.addMemoryCallback(onVsync, emu.callbackType.exec, 0xE07B, 0xE07B, CPU, MEM)
 emu.addMemoryCallback(onByteLoader, emu.callbackType.exec, 0x6EA0, 0x6EA0, CPU, MEM)
 emu.addMemoryCallback(onByteLoaderReturn, emu.callbackType.exec, 0x6EED, 0x6EED, CPU, MEM)
 emu.addMemoryCallback(onParser, emu.callbackType.exec, 0x9543, 0x9543, CPU, MEM)
@@ -239,9 +325,10 @@ emu.addEventCallback(function()
       pendingCount = pendingCount + #queue
     end
     log(string.format(
-      "[HEARTBEAT] frame=%d reads=%d pending_reads=%d byte_loaders=%d dialogue_groups=%d %s",
-      frame, readOrdinal, pendingCount, byteLoaderOrdinal, dialogueGroups,
-      sceneState()
+      "[HEARTBEAT] frame=%d reads=%d pending_reads=%d ad_trans=%d " ..
+      "byte_loaders=%d dialogue_groups=%d vsync=%d %s",
+      frame, readOrdinal, pendingCount, adTransOrdinal,
+      byteLoaderOrdinal, dialogueGroups, vsyncCalls, sceneState()
     ))
   end
 end, emu.eventType.endFrame)
@@ -252,8 +339,10 @@ emu.addEventCallback(function()
     pendingCount = pendingCount + #queue
   end
   log(string.format(
-    "[SUMMARY] frames=%d reads=%d pending_reads=%d byte_loaders=%d dialogue_groups=%d parser_hits=%d",
-    frame, readOrdinal, pendingCount, byteLoaderOrdinal, dialogueGroups, parserHits
+    "[SUMMARY] frames=%d reads=%d pending_reads=%d ad_trans=%d ad_stop=%d " ..
+    "ad_stat=%d cd_fade=%d vsync=%d byte_loaders=%d dialogue_groups=%d parser_hits=%d",
+    frame, readOrdinal, pendingCount, adTransOrdinal, adStopCalls,
+    adStatCalls, cdFadeCalls, vsyncCalls, byteLoaderOrdinal, dialogueGroups, parserHits
   ))
   if logFile then
     logFile:flush()
