@@ -43,6 +43,8 @@ M0_PORTRAIT_SOURCES = {0x1458, 0x1561}
 
 @dataclass(frozen=True, slots=True)
 class DialogueGroupStart:
+    """Record the first parser frame of one separated dialogue group."""
+
     group: int
     frame: int
 
@@ -108,6 +110,8 @@ class DialogueLoadWindow:
 
 
 def parse_dialogue_group_starts(text: str) -> tuple[DialogueGroupStart, ...]:
+    """Extract historical dialogue-group start markers from a Mesen log."""
+
     return tuple(
         DialogueGroupStart(
             group=int(match.group("group")),
@@ -218,6 +222,8 @@ def _read_json(item: CdRead) -> dict[str, object]:
 
 
 def build_transition_latency_report(text: str) -> dict[str, object]:
+    """Build cold/cache-hit load-to-parser timing evidence from one log."""
+
     windows = find_m0_dialogue_load_windows(text)
     if not windows:
         raise ValueError("no Mission 0 dialogue-load windows were found")
@@ -298,6 +304,8 @@ def build_transition_latency_report(text: str) -> dict[str, object]:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Create the transition-latency command-line parser."""
+
     parser = argparse.ArgumentParser(
         description=(
             "Measure full Mission 0 CD-load-to-dialogue latency from Mesen logs."
@@ -309,6 +317,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run transition-latency analysis and emit JSON."""
+
     args = build_parser().parse_args(argv)
     report = build_transition_latency_report(
         args.log.read_text(encoding="utf-8", errors="replace")
