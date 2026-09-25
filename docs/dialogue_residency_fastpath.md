@@ -89,6 +89,70 @@ The $9000-$9FFF block shares the same persistent physical bank as the module. If
 
 The four-sector ADPCM block is different: command 1 retransfers it even on a speaker-local cache hit.
 
+## Bank $86 is the stock 8 KiB ADPCM snapshot bank
+
+The old V5 trace repeatedly shows MPR5 switching from the normal $83 mapping
+to **$86** for only a few frames during dialogue. Static reconstruction now
+explains those transitions.
+
+The Mission 0 dialogue module contains three related routines around
+$8392-$8457:
+
+1. save MPR5;
+2. load `$FFF5` (`max_mapping`), add 6, and install that value in MPR5;
+3. operate on logical `$A000-$BFFF`;
+4. restore the caller's MPR5.
+
+In the historical System Card 3.0 run, that calculation maps physical bank
+`$86` at logical `$A000`.
+
+The save path prepares:
+
+```text
+CX = $E000    ADPCM RAM address
+BX = $A000    CPU-memory window
+AX = $2000    8,192 bytes
+DH = $00      local-memory mode
+```
+
+and reaches an AD_READ-compatible path through the local `$408E -> $4716`
+thunk. The restore path uses the same parameters and calls **AD_WRITE $E039**
+directly.
+
+So the game already performs:
+
+```text
+ADPCM $E000-$FFFF
+      ↓ AD_READ
+CD-RAM bank $86 mapped at CPU $A000
+      ...
+CD-RAM bank $86
+      ↓ AD_WRITE
+ADPCM $E000-$FFFF
+```
+
+This is important for two reasons.
+
+First, AD_READ/AD_WRITE transfer time was missing from earlier load profiles;
+the transition profiler now times both entry-to-return.
+
+Second, the accelerated build does not need a new ADPCM copy protocol. The
+System Card's AD_WRITE **local-memory mode** already reads from a logical CPU
+address. A future Super Card cache can therefore test mapping one of its
+`$68-$7F` banks at `$A000` and invoking the same local-mode AD_WRITE
+contract directly. That is cleaner than forcing Card RAM through the
+MPR/bank-number mode, whose documented bank-number form is limited to the
+ordinary `$80-$87` CD-RAM banks.
+
+Direct Card-RAM AD_WRITE still requires a live proof because BIOS-internal MPR
+behavior must be observed. It is not yet release policy.
+
+Bank `$87` remains a **separate candidate spare bank**. The historical V5
+route recorded no stock R/W/X activity there, and an older controlled residency
+probe exists, but its completed operator log is not available. Do not conflate
+the proven stock `$86` snapshot bank with the unproven `$87` spare-bank
+candidate.
+
 ## ADPCM state is not one reusable buffer
 
 Command 4, the voice/sample-start path, performs additional descriptor-driven AD_TRANS operations. Therefore ADPCM RAM cannot safely be treated as a persistent copy of command 1's four-sector source.
