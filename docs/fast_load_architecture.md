@@ -96,6 +96,29 @@ and AD_TRANS entry-to-return, AD_STOP/AD_STAT/CD_FADE activity, EX_VSYNC calls,
 the generic byte loader, the fade command and synchronous fade wait, and the
 first parser execution after loading.
 
+### A2. Attribute one transition without double-counting
+
+The v2 Mesen profiler now opens a `TRANSITION_BUDGET` window at the Mission 0
+`$1425` dialogue byte-loader entry and closes it at the first dialogue parser
+execution. Within that same window it accumulates entry-to-return frames for:
+
+- `CD_READ`;
+- local-mode `CD_EXEC` where the execute target is runtime-proven;
+- `AD_TRANS`;
+- `AD_READ`;
+- `AD_WRITE`; and
+- the synchronous `$41EC` fade wait.
+
+It also reports EX_VSYNC call count and a residual frame budget. The residual is
+deliberately not labelled "CPU time": it contains portrait/UI installation,
+initialization/display work, uninstrumented waits, and ordinary CPU-side setup.
+The analyzer in `cyber_oedo/runtime/transition_budget.py` validates that the
+reported serial components sum consistently before converting them to seconds
+and percentages.
+
+This avoids the earlier accounting error of summing nested byte-loader and
+CD_READ timings as if they were independent costs.
+
 ### B. Short transition teardown
 
 If live timing confirms the fade is critical-path time, prototype a
