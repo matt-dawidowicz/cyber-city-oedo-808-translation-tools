@@ -18,6 +18,54 @@ deliberate delay that can simply be removed.
 The first optimization target is therefore **less seeking and less data
 movement**, not deleting a wait loop.
 
+## Full dialogue-transition latency
+
+The earlier hot-bundle measurement of roughly 1.5 seconds covered the spacing
+between three scene CD_READ starts.  It did **not** represent the complete
+player-visible transition.
+
+The historical Mission 0 trace contains a second, more important repeated
+pattern: five reads used to enter portrait/dialogue presentation. Four captured
+instances measure from the first CD request to the first parser execution at:
+
+- 370 frames = 6.17 s;
+- 372 frames = 6.20 s;
+- 342 frames = 5.70 s;
+- 344 frames = 5.73 s.
+
+Each transition moves only ten source sectors total, a pure 1x streaming floor
+of about 0.133 s. Therefore roughly 5.6-6.1 seconds per occurrence are outside
+the raw streaming floor.
+
+The representative first source sequence is:
+
+```text
+$1425 -> $1426 -> $10DD -> $1441 -> $1458
+```
+
+with destinations:
+
+```text
+$8000, $29D0, $29D0, $9000, VRAM $4000
+```
+
+The source-start deltas are:
+
+```text
++1, -841, +868, +23 sectors
+```
+
+so the load path oscillates hundreds of sectors backward and forward to fetch a
+tiny event/dialogue resource in the middle of otherwise nearby assets.
+
+The first captured request starts at frame 220. Data from its one-sector read
+does not begin landing until about frame 286 (~1.10 s). The adjacent $1426
+request reaches the next loader call about 11 frames later, while the $10DD
+request is followed by a ~151-frame gap before the $1441 read begins. This
+strongly implicates seek/command/setup cost rather than transfer bandwidth.
+
+This five-read transition is now the highest-priority layout target.
+
 ## Historical Mission 0 trace
 
 The existing 12,510-frame Mesen V5 route contains:
@@ -151,14 +199,15 @@ Authenticated payload measurements:
 | `$1561` portrait/UI | 8,224 | 3,742 | 45.5% | 5 -> 2 (3) |
 
 For the hot bundle, compressing only `$22E8` changes the pure transfer floor
-from about 40 sectors to 31:
+from 40 sectors to 25:
 
 ```text
+7 + 3 + 15 = 25 sectors
 40 / 75 = 0.533 s
-31 / 75 = 0.413 s
+25 / 75 = 0.333 s
 ```
 
-That is only ~0.12 seconds of raw-transfer saving by itself. The larger
+That is about 0.20 seconds of raw-transfer saving by itself. The larger
 opportunity is **compression plus contiguous placement**, because the observed
 pause includes much more than the raw 1x transfer floor.
 
@@ -193,14 +242,20 @@ Use:
 
 ```text
 cyber-oedo analyze-cd-loads cyber_oedo_cd_load_profile.log
+cyber-oedo analyze-cd-transitions cyber_oedo_translation_capture_v5.log
 cyber-oedo analyze-cd-hot-assets track02_mode1_2048.bin
 ```
 
 For new captures use:
 
 ```text
-tools/mesen_cd_load_profiler.lua
+tools/mesen_cd_transition_profiler_v2.lua
 ```
+
+The v2 profiler dynamically registers each observed BIOS return target and
+therefore measures every `CD_READ` from entry to the exact caller return. It
+also times the generic byte loader and marks the first dialogue parser
+execution after a long idle interval.
 
 The profiler records:
 
