@@ -3,9 +3,11 @@ from __future__ import annotations
 import unittest
 
 from cyber_oedo.runtime.cd_load_optimization import (
+    HOT_ASSETS,
     PackBitsError,
     find_fixed_vsync_waits,
     packbits_words,
+    summarize_source_layout,
     unpackbits_words,
 )
 
@@ -49,6 +51,26 @@ class WordPackBitsTests(unittest.TestCase):
         self.assertEqual(len(waits), 1)
         self.assertEqual(waits[0]["payload_offset"], "0x00000000")
         self.assertEqual(waits[0]["frames"], 120)
+
+    def test_main_scene_source_layout_uses_post_transfer_gaps(self) -> None:
+        assets = tuple(
+            item
+            for item in HOT_ASSETS
+            if item.name in {
+                "main_scene_local_a",
+                "main_scene_local_b",
+                "main_scene_vram",
+            }
+        )
+        report = summarize_source_layout(assets)
+        self.assertEqual(report["post_transfer_gaps_sectors"], [73, 7])
+        self.assertEqual(report["gap_sectors_total"], 80)
+        self.assertEqual(report["span_start_lba"], "0x228E")
+        self.assertEqual(report["span_end_lba_inclusive"], "0x2305")
+        self.assertEqual(report["span_sectors"], 120)
+        self.assertEqual(report["transfer_sectors"], 40)
+        self.assertAlmostEqual(report["transfer_density_percent"], 100.0 / 3.0)
+
 
 
 if __name__ == "__main__":
