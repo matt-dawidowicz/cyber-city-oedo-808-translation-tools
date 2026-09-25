@@ -156,7 +156,7 @@ local function sceneState()
 end
 
 local addressTypeNames = {
-  [0x00]="LOCAL_BYTES",
+  [0x00]="UNDOCUMENTED_00",
   [0x01]="LOCAL_SECTORS",
   [0x02]="BANK_MPR2",
   [0x03]="BANK_MPR3",
@@ -216,22 +216,34 @@ end
 
 local function onCdExec()
   cdExecOrdinal = cdExecOrdinal + 1
-  local target = r16(0x20FA)
+  local addressType = r8(0x20FF)
   local item = {
     ordinal=cdExecOrdinal,
     startFrame=frame,
     sector=(r8(0x20FC) << 16) | (r8(0x20FD) << 8) | r8(0x20FE),
     blocks=r8(0x20F8),
-    addressType=r8(0x20FF),
-    target=target,
+    addressType=addressType,
+    bx=r16(0x20FA),
   }
-  if not pendingExecByTarget[target] then pendingExecByTarget[target] = {} end
-  table.insert(pendingExecByTarget[target], item)
-  ensureExecTargetCallback(target)
+
+  -- In documented LOCAL mode ($01), BX is the destination/execute address.
+  -- In MPR modes ($02-$06), BL is a bank number; BX must not be interpreted
+  -- as a logical PC target without additional runtime proof.
+  if addressType == 0x01 then
+    item.target = item.bx
+    if not pendingExecByTarget[item.target] then
+      pendingExecByTarget[item.target] = {}
+    end
+    table.insert(pendingExecByTarget[item.target], item)
+    ensureExecTargetCallback(item.target)
+  end
+
   log(string.format(
-    "[CD_EXEC %03d] frame=%d sector=$%06X blocks=$%02X type=$%02X target=$%04X %s %s",
-    item.ordinal, frame, item.sector, item.blocks, item.addressType,
-    target, sceneState(), mprString()
+    "[CD_EXEC %03d] frame=%d sector=$%06X blocks=$%02X type=$%02X " ..
+    "bx=$%04X local_target=%s %s %s",
+    item.ordinal, frame, item.sector, item.blocks, item.addressType, item.bx,
+    item.target and string.format("$%04X", item.target) or "unproven",
+    sceneState(), mprString()
   ))
 end
 
@@ -239,7 +251,7 @@ local function onCdPlay()
   cdPlayCalls = cdPlayCalls + 1
   log(string.format(
     "[CD_PLAY %03d] frame=%d mode=$%02X return=$%04X %s %s",
-    cdPlayCalls, frame, r8(0x20FB), stackReturnTarget(), sceneState(), mprString()
+    cdPlayCalls, frame, r8(0x20FF), stackReturnTarget(), sceneState(), mprString()
   ))
 end
 
@@ -382,7 +394,7 @@ local function onCdRead()
   local returnTarget = stackReturnTarget()
   local relative = lba - TRACK2_START_LBA
   local payloadOffset = relative >= 0 and relative * 0x800 or -1
-  local unit = (addressType == 0x00 or addressType == 0xFE) and "bytes" or "sectors"
+  local unit = addressType == 0xFE and "bytes" or "sectors"
 
   if frame - lastCdFrame > 90 then
     log(string.format("[CD_BURST_START] frame=%d", frame))
