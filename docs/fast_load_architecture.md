@@ -189,6 +189,24 @@ entry-to-return in addition to AD_TRANS. This closes another hole in the
 earlier timing budget: the stock module moves an entire 8 KiB ADPCM window to
 bank $86 and back without using CD_READ.
 
+### E2. Main-scene source topology
+
+The main exploration restore uses three source extents:
+
+- `$228E-$2294`: 7 sectors;
+- `$22DE-$22E0`: 3 sectors;
+- `$22E8-$2305`: 30 sectors touched by the 60,928-byte VRAM read.
+
+So the complete source span is 120 sectors but only 40 sectors are transferred.
+The actual unused gaps between loaded extents are **73 sectors** and **7
+sectors**. The older 80/10 figures are start-to-start deltas, not literal
+unread gaps.
+
+This means one contiguous duplicate/relocation could preserve the same 40
+sectors of payload while eliminating 80 skipped sectors of source span. It does
+not by itself prove a specific seek-time saving; that still requires live timing
+and an owned destination extent.
+
 ### F. Scene graphics
 
 Separately, make the 7-sector, 3-sector, and 60,928-byte exploration scene
