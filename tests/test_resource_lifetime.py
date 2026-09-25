@@ -64,6 +64,12 @@ class ResourceLifetimeTests(unittest.TestCase):
         self.assertEqual(geometry["speaker_page_offsets"], ["0x1000", "0x1FFF"])
         self.assertIn("leaving the module", geometry["same_page_hypothesis"])
 
+    def test_report_identifies_exact_runtime_mpr_proof_needed(self) -> None:
+        report = build_resource_lifetime_report()
+        proof = report["mpr_geometry"]["proof_needed"]
+        self.assertIn("MPR4", proof)
+        self.assertIn("$22DE", proof)
+
 
 if __name__ == "__main__":
     unittest.main()
