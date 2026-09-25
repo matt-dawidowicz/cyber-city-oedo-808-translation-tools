@@ -215,7 +215,7 @@ def find_fixed_vsync_waits(payload: bytes) -> tuple[dict[str, object], ...]:
     """
 
     rows: list[dict[str, object]] = []
-    for offset in range(0, len(payload) - 8):
+    for offset in range(0, len(payload) - 7):
         if payload[offset] != 0xA0:
             continue
         if payload[offset + 2 : offset + 8] != VSYNC_WAIT_SUFFIX:
