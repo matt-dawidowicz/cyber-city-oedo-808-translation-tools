@@ -103,6 +103,18 @@ VOICE_DESCRIPTOR_SHA256 = (
     "3dff96b6bb5aa6bd46dfc2f4265fa401eb0e45c1038f2690f797382d500e903e"
 )
 
+SCENE_VRAM_START_WORD = 0x0900
+SCENE_VRAM_BYTES = 0xEE00
+SCENE_VRAM_WORDS = SCENE_VRAM_BYTES // 2
+SCENE_VRAM_END_WORD_EXCLUSIVE = SCENE_VRAM_START_WORD + SCENE_VRAM_WORDS
+PORTRAIT_VRAM_START_WORD = 0x4000
+PORTRAIT_VRAM_BYTES = 0x2020
+PORTRAIT_VRAM_END_WORD_EXCLUSIVE = (
+    PORTRAIT_VRAM_START_WORD + PORTRAIT_VRAM_BYTES // 2
+)
+DIALOGUE_GLYPH_VRAM_BASE_WORD = 0x6D00
+DIALOGUE_BAT_VRAM_BASE_WORD = 0x7900
+
 
 @dataclass(frozen=True, slots=True)
 class VoiceDescriptor:
@@ -350,6 +362,35 @@ def analyze_dialogue_residency(payload: bytes) -> dict[str, object]:
             "entry_music_path": (
                 "$4089 cancels prior fade then calls CD_PLAY before the "
                 "interactive exploration loop"
+            ),
+        },
+        "vram_overlap": {
+            "scene_start_word": "$0900",
+            "scene_end_word_inclusive": "$7FFF",
+            "scene_bytes": SCENE_VRAM_BYTES,
+            "scene_exactly_ends_at_vram_top": (
+                SCENE_VRAM_END_WORD_EXCLUSIVE == 0x8000
+            ),
+            "portrait_start_word": "$4000",
+            "portrait_end_word_inclusive": "$%04X"
+            % (PORTRAIT_VRAM_END_WORD_EXCLUSIVE - 1),
+            "portrait_inside_scene_image": (
+                SCENE_VRAM_START_WORD <= PORTRAIT_VRAM_START_WORD
+                and PORTRAIT_VRAM_END_WORD_EXCLUSIVE
+                <= SCENE_VRAM_END_WORD_EXCLUSIVE
+            ),
+            "dialogue_glyph_base_inside_scene_image": (
+                SCENE_VRAM_START_WORD <= DIALOGUE_GLYPH_VRAM_BASE_WORD
+                < SCENE_VRAM_END_WORD_EXCLUSIVE
+            ),
+            "dialogue_bat_base_inside_scene_image": (
+                SCENE_VRAM_START_WORD <= DIALOGUE_BAT_VRAM_BASE_WORD
+                < SCENE_VRAM_END_WORD_EXCLUSIVE
+            ),
+            "conclusion": (
+                "dialogue presentation necessarily overwrites portions of the "
+                "exploration VRAM image; the stock full scene reload is not "
+                "purely redundant, but a dirty-range restore may be much smaller"
             ),
         },
         "voice_extent": {
