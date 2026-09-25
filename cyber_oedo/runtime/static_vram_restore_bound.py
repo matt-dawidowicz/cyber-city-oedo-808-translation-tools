@@ -17,7 +17,6 @@ from cyber_oedo.runtime.dialogue_residency import (
     PORTRAIT_VRAM_START_WORD,
     SCENE_VRAM_BYTES,
 )
-from cyber_oedo.runtime.game_architecture import MOVEMENT_ARCHITECTURE_REGIONS
 
 TEXT_ROWS = 3
 TEXT_COLUMNS = 12
@@ -56,15 +55,6 @@ def build_static_vram_restore_bound() -> dict[str, object]:
         PORTRAIT_VRAM_BYTES
         + (glyph_envelope_end - glyph_envelope_start) * WORD_BYTES
     )
-
-    renderer = next(
-        item
-        for item in MOVEMENT_ARCHITECTURE_REGIONS
-        if item.name == "text_redraw_scroll_init"
-    ) if any(
-        item.name == "text_redraw_scroll_init"
-        for item in MOVEMENT_ARCHITECTURE_REGIONS
-    ) else None
 
     return {
         "full_scene_restore_bytes": SCENE_VRAM_BYTES,
