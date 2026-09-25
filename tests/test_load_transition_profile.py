@@ -52,6 +52,32 @@ class LoadTransitionProfileTests(unittest.TestCase):
         self.assertEqual(window.source_start_deltas, (1, 0x1B, 0x17))
         self.assertEqual(window.absolute_seek_distance, 51)
 
+    def test_phase_breakdown_exposes_large_cached_middle_gap(self) -> None:
+        window = find_m0_dialogue_load_windows(CACHED_SHAPE)[0]
+        self.assertEqual(
+            window.phase_gaps_frames,
+            {
+                "module_first_to_remainder": 67,
+                "module_remainder_to_common": 134,
+                "common_to_portrait": 44,
+                "portrait_to_parser_ready": 97,
+            },
+        )
+
+    def test_cold_phase_breakdown_is_additive(self) -> None:
+        window = find_m0_dialogue_load_windows(COLD_SHAPE)[0]
+        self.assertEqual(
+            window.phase_gaps_frames,
+            {
+                "module_first_to_remainder": 67,
+                "module_remainder_to_event": 11,
+                "event_to_common": 151,
+                "common_to_portrait": 44,
+                "portrait_to_parser_ready": 97,
+            },
+        )
+        self.assertEqual(sum(window.phase_gaps_frames.values()), 370)
+
     def test_cache_hit_proves_cold_event_seek_is_not_baseline_cause(self) -> None:
         report = build_transition_latency_report(COLD_SHAPE + CACHED_SHAPE)
         self.assertEqual(report["window_count"], 2)
