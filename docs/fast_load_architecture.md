@@ -191,6 +191,28 @@ existing one-window $A000 AD_WRITE path, the cache should therefore be
 disc extent. The contiguous disc layout is still valuable for preload seek
 locality; the in-RAM execution layout is a separate problem.
 
+### C2. Module versus speaker-local lifetime risk
+
+The two residency experiments should not be treated as equally strong.
+
+The dialogue module occupies logical $8000-$8F50. The known main exploration
+scene-local reloads target $4000-$77FF and $9000-$A7FF, so **none of the known
+scene-local writes overlaps the module body in logical CPU address space**.
+
+The speaker-local cache is different: the 3-sector exploration load beginning
+at logical $9000 covers $9000-$A7FF and therefore completely covers the
+dialogue speaker-local window $9000-$9FFF.
+
+This still does not prove physical clobber. HuC6280 MPR mappings may differ
+between the dialogue and exploration overlays, so equal logical addresses do
+not imply equal CD-RAM banks. But it changes the static risk assessment:
+
+- resident-module reuse has no known logical scene-write conflict;
+- speaker-local reuse has a complete logical overlap and therefore requires
+  especially strong MPR/physical-RAM lifetime proof.
+
+The benchmarks remain independent for exactly this reason.
+
 ### D. Independent benchmark matrix
 
 Four source-guarded mutations now exist independently so timing changes can be
