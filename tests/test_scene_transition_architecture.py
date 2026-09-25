@@ -12,8 +12,10 @@ from cyber_oedo.runtime.scene_transition_architecture import (
 
 
 class SceneTransitionArchitectureTests(unittest.TestCase):
-    def test_phase_boundaries_are_contiguous(self) -> None:
+    def test_wait_ends_at_scene_orchestration_entry(self) -> None:
         self.assertEqual(TRANSITION_WAIT_CPU + len(TRANSITION_WAIT_BYTES), 0x40E9)
+
+    def test_loader_code_is_address_adjacent_not_a_sequential_phase(self) -> None:
         self.assertEqual(SCENE_SETUP_CPU_END_EXCLUSIVE, SCENE_LOADERS_CPU_START)
 
     def test_analyzer_is_registered_with_unified_cli(self) -> None:
