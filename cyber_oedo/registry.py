@@ -185,6 +185,30 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "describe-transition-state-machine",
+        "cyber_oedo.runtime.transition_state_machine",
+        "Describe direction-specific Mission 0 transition latency and gates.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "plan-card-ram-cache",
+        "cyber_oedo.runtime.card_ram_cache_plan",
+        "Plan an AD_WRITE-friendly Mission 0 Super System Card cache layout.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "analyze-resource-lifetime",
+        "cyber_oedo.runtime.resource_lifetime",
+        "Map logical dialogue/exploration overlap and MPR lifetime risks.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "analyze-scene-transition",
+        "cyber_oedo.runtime.scene_transition_architecture",
+        "Validate ordered exploration scene-transition phase boundaries.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-vram-dirty",
         "cyber_oedo.runtime.vram_dirty_profile",
         "Measure selective exploration-VRAM restore cost from Mesen logs.",
@@ -197,33 +221,15 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
-        "describe-transition-state-machine",
-        "cyber_oedo.runtime.transition_state_machine",
-        "Describe direction-specific Mission 0 transition latency and gates.",
-        "Diagnostics",
-    ),
-    CommandSpec(
         "analyze-adpcm-memory",
         "cyber_oedo.runtime.adpcm_memory_architecture",
         "Map Mission 0 ADPCM snapshot and RAM-transfer architecture.",
         "Diagnostics",
     ),
     CommandSpec(
-        "plan-card-ram-cache",
-        "cyber_oedo.runtime.card_ram_cache_plan",
-        "Plan an AD_WRITE-friendly Mission 0 Super System Card cache layout.",
-        "Diagnostics",
-    ),
-    CommandSpec(
         "analyze-cd-hot-assets",
         "cyber_oedo.runtime.cd_load_optimization",
         "Measure hot scene assets and candidate load compression.",
-        "Diagnostics",
-    ),
-    CommandSpec(
-        "analyze-resource-lifetime",
-        "cyber_oedo.runtime.resource_lifetime",
-        "Map logical dialogue/exploration overlap and MPR lifetime risks.",
         "Diagnostics",
     ),
     CommandSpec(
