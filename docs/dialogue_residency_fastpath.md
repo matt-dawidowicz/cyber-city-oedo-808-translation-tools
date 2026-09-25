@@ -41,7 +41,9 @@ The standard dialogue-module loader begins with:
 
 The two entrypoints are JMP instructions when the module is present. However, in the shipping code the next instruction is an unconditional LDA #$00 that begins the normal loader argument setup. No branch consumes the comparison result.
 
-The exact resident-check signature occurs twelve times in Track 2. Eleven copies use the standard direct-page loader form; one older-form copy uses a different setup.
+The exact resident-check signature occurs twelve times in Track 2. Ten standard copies are the known M0-A/M0-B/M1-M8 dialogue overlays. One additional standard-form loader at payload 0x000D10A6 uses the same idiom for a different $8000 resource, and one older-form copy uses a different setup. The extra loader is deliberately not classified as a dialogue module.
+
+All ten known dialogue-overlay sources begin with the expected JMP entrypoints at source offsets +0 and +3. Their loaded lengths range from $0C15 to $0FE1; every one is exactly two CD sectors of source and every one leaves a BSS/state tail below $9000. M0-A and M8 even share the same LBA $A222 module image. This makes the resident-workspace pattern game-wide within the common dialogue engine, while the unrelated extra loader remains separately classified.
 
 This proves that the game checks a plausible module-residency signature before reloading. It does not prove why the comparison was left unused.
 
