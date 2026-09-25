@@ -361,6 +361,36 @@ sectors of payload while eliminating 80 skipped sectors of source span. It does
 not by itself prove a specific seek-time saving; that still requires live timing
 and an owned destination extent.
 
+### E3. Static selective-VRAM restore ceiling
+
+The renderer now gives a useful bound even before a live dirty-range capture.
+
+The portrait destination is fixed at VRAM words `$4000-$500F`, or 8,224 bytes.
+All portrait variants reuse that same address family.
+
+The dialogue text grid has 36 slots. Each slot is allocated at:
+
+    $6D00 + cell_index * $40 words
+
+The guarded VDC writer at `$5772` emits sixteen words per call and the setup
+path invokes it twice, so one rendered cell actually writes 32 words / 64
+bytes. Across all 36 slots, the sparse glyph-pattern writes therefore total
+only 2,304 bytes. Their address envelope is `$6D00-$75DF`.
+
+Thus portrait plus all sparse glyph writes total 10,528 bytes, and even treating
+the complete glyph envelope as one contiguous restore keeps portrait+glyph
+restoration below roughly 22% of the stock 60,928-byte scene transfer.
+
+BAT writes rooted at `$7900` are deliberately excluded from that numerical
+ceiling. The one-word BAT writer and base address are source-guarded, but the
+maintained static model does not yet encode the complete positioned/redraw
+caller destination union. Live dirty profiling or deeper caller decoding is
+still required before generating an exact selective-restore patch.
+
+Run:
+
+    cyber-oedo analyze-static-vram-bound
+
 ### F. Scene graphics
 
 Separately, make the 7-sector, 3-sector, and 60,928-byte exploration scene
