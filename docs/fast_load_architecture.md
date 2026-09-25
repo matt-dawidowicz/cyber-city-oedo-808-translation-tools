@@ -148,6 +148,28 @@ phases. The maintained diagnostic is:
 
 No speed mutation is enabled by this analyzer.
 
+### A4. Direction-specific transition state model
+
+The two visible transition directions have different fixed gates and must not
+be collapsed into one additive latency budget.
+
+For exploration -> dialogue, the stock 120-frame exploration-exit wait occurs
+before the historical first-dialogue-CD-to-parser window of roughly 5.7-6.2
+seconds. Static accounting therefore places the visible interaction latency at
+at least about **7.7-8.2 seconds** before smaller pre-read/setup costs are
+assigned.
+
+For dialogue -> exploration, command 2 requests the approximately 2.5-second
+mode-$0E ADPCM fade and the outer `$41EC` state gate waits for completion.
+That fade belongs to the opposite direction and must not be added to the
+exploration -> dialogue critical path.
+
+The maintained diagnostic is:
+
+    cyber-oedo describe-transition-state-machine
+
+This model is descriptive only; all fast paths remain release-disabled.
+
 ### B. Short transition teardown
 
 If live timing confirms the fade is critical-path time, prototype a
