@@ -14,7 +14,10 @@ does not enable a cache mutation.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
+import json
+import pathlib
 from dataclasses import dataclass
 
 from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
@@ -432,3 +435,52 @@ def analyze_dialogue_residency(payload: bytes) -> dict[str, object]:
         ],
         "release_enabled": False,
     }
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Map Mission 0 dialogue-bank residency, audio transition state, "
+            "voice extent, and VRAM overlap."
+        )
+    )
+    parser.add_argument("payload", type=pathlib.Path)
+    parser.add_argument("--output", type=pathlib.Path)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    report = analyze_dialogue_residency(args.payload.read_bytes())
+    rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    if args.output is None:
+        print(rendered, end="")
+    else:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(rendered, encoding="utf-8")
+
+    checks = report["source_guards"]
+    module = report["module"]
+    loader = report["resident_loader"]
+    voice = report["voice_extent"]
+    vram = report["vram_overlap"]
+    ok = (
+        module["source_sha256_match"]
+        and module["immutable_sha256_match"]
+        and module["self_mod_sites_match"]
+        and all(checks.values())
+        and loader["m0_loader_source_guard"]
+        and loader["all_check_hits"] == loader["expected_all_check_hits"]
+        and loader["standard_loader_copies"]
+        == loader["expected_standard_loader_copies"]
+        and voice["contiguous"]
+        and vram["scene_exactly_ends_at_vram_top"]
+        and vram["portrait_inside_scene_image"]
+        and vram["dialogue_glyph_base_inside_scene_image"]
+        and vram["dialogue_bat_base_inside_scene_image"]
+    )
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
