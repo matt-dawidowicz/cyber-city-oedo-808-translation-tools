@@ -139,8 +139,26 @@ test the additional 192 KiB RAM as a read-through cache.
 After one preload, repeated interactions could replace module and speaker CD
 reads with RAM copies and cache selected portraits for RAM-to-VRAM copies.
 
-The complete bar working set is 110,656 bytes, which occupies 14 packed 8 KiB
-banks and leaves ten Card RAM banks (81,920 bytes) available.
+The complete raw bar working set is 110,656 bytes, so **14 banks is the
+byte-capacity lower bound**, not necessarily the best executable layout.
+
+A stricter cache planner now models the game's proven 8 KiB local-memory
+AD_WRITE source window. Seven active ADPCM source blocks are exactly 8 KiB
+each and are therefore most useful when each occupies one whole Card-RAM bank.
+The 0x0F51-byte module plus all eight 4 KiB speaker-local blocks then require
+five more banks. This gives a **12-bank AD_WRITE-friendly core**.
+
+Adding two 0x2020-byte portraits requires:
+
+- three more banks when RAM-to-VRAM copying may split at bank boundaries:
+  **15 banks total**, nine banks / 73,728 bytes left;
+- four more banks when each portrait receives an independent two-bank
+  allocation: **16 banks total**, eight banks / 65,536 bytes left.
+
+The old 14-bank figure remains useful as a pure capacity floor, but obtaining
+that density would require scattering portrait bytes into the small slack
+regions left by the execution-friendly core layout. That is not the preferred
+first implementation.
 
 The previous working note misidentified BIOS entry $E03F as AD_WRITE. The
 System Card jump table actually places AD_WRITE at $E039 and AD_CPLAY at
@@ -163,6 +181,15 @@ logical $A000 and reuse AD_WRITE's local-memory mode. If live profiling shows
 the BIOS preserves/uses the caller's mapping as expected, this removes the
 extra ordinary-CD-RAM staging copy entirely. If it does not, bank $87 remains
 a candidate 8 KiB staging bank, subject to its separate lifetime gate.
+
+A further static constraint is now explicit: the raw contiguous disc extent
+$1425-$1452 is not itself the ideal in-RAM representation. Several 8 KiB
+ADPCM blocks begin two sectors into an 8 KiB bank when that extent is copied
+verbatim. Those blocks would straddle Card-RAM banks. For direct reuse of the
+existing one-window $A000 AD_WRITE path, the cache should therefore be
+**repacked by logical resource**, not treated as a byte-for-byte mirror of the
+disc extent. The contiguous disc layout is still valuable for preload seek
+locality; the in-RAM execution layout is a separate problem.
 
 ### D. Independent benchmark matrix
 
