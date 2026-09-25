@@ -203,6 +203,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-same-room-reentry",
+        "cyber_oedo.runtime.same_room_reentry",
+        "Map same-room exploration state reinstall and preservation candidates.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-scene-transition",
         "cyber_oedo.runtime.scene_transition_architecture",
         "Validate ordered exploration scene-transition phase boundaries.",
