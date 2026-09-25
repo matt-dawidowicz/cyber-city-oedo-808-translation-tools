@@ -26,6 +26,9 @@ local sceneSetups = 0
 local pendingTransition = nil
 local pendingExploration = nil
 local pendingSetup = nil
+local pendingDialogueLoad = nil
+local pendingDialogueExit = nil
+local dialogueLoads = 0
 local bank87 = {R=0,W=0,X=0}
 local logFile = nil
 local pendingSceneRead = nil
@@ -121,6 +124,17 @@ local function onCdRead()
   transferredBytes = transferredBytes + transferBytes
   local state = cpu()
   local returnTarget = stackReturnTarget()
+  if returnTarget == 0x48CD and lba == 0x1425 then
+    dialogueLoads = dialogueLoads + 1
+    pendingDialogueLoad = {
+      frame=frame,
+      counters=snapshotCounters and snapshotCounters() or {reads=reads-1, bytes=transferredBytes-transferBytes, loaders=loaderEntries},
+    }
+    log(string.format(
+      "[DIALOGUE_LOAD_START %03d] frame=%d sector=$%06X %s %s",
+      dialogueLoads, frame, lba, sceneState(), mprString()
+    ))
+  end
   if returnTarget == 0x425E or returnTarget == 0x428A then
     pendingSceneRead = {
       ordinal=reads,
@@ -209,6 +223,10 @@ local function onExplorationEntry()
 end
 
 local function onSceneSetupStart()
+  if pendingDialogueExit then
+    logPhase("DIALOGUE_END_TO_SCENE_SETUP", pendingDialogueExit)
+    pendingDialogueExit = nil
+  end
   sceneSetups = sceneSetups + 1
   pendingSetup = {
     frame=frame,
@@ -241,6 +259,25 @@ local function onInteractiveLoop()
   end
 end
 
+local function onDialogueParser()
+  local pointer = r16(0x007F)
+  local opcode = r8(pointer)
+  if pendingDialogueLoad then
+    logPhase("DIALOGUE_LOAD_TO_FIRST_PARSER", pendingDialogueLoad)
+    pendingDialogueLoad = nil
+  end
+  if opcode == 0x00 then
+    pendingDialogueExit = {
+      frame=frame,
+      counters=snapshotCounters(),
+    }
+    log(string.format(
+      "[DIALOGUE_STREAM_END] frame=%d ptr=$%04X voice=$%02X %s %s",
+      frame, pointer, r8(0x37F1), sceneState(), mprString()
+    ))
+  end
+end
+
 local function onTransitionExit()
   if r8(0x2649) == 0 then return end
   pendingTransition = {
@@ -269,6 +306,7 @@ emu.addMemoryCallback(function() onSceneSetupPhase("ROOM_DESCRIPTOR_DONE") end, 
 emu.addMemoryCallback(function() onSceneSetupPhase("ROOM_AUX_LOAD_DONE") end, emu.callbackType.exec, 0x40F8, 0x40F8, CPU, MEM)
 emu.addMemoryCallback(onInteractiveLoop, emu.callbackType.exec, 0x4012, 0x4012, CPU, MEM)
 emu.addMemoryCallback(onTransitionExit, emu.callbackType.exec, 0x402B, 0x402B, CPU, MEM)
+emu.addMemoryCallback(onDialogueParser, emu.callbackType.exec, 0x9543, 0x9543, CPU, MEM)
 
 local bank87Start = (0x87 - 0x80) * 0x2000
 local bank87End = bank87Start + 0x1FFF
@@ -288,8 +326,8 @@ end, emu.eventType.endFrame)
 
 emu.addEventCallback(function()
   log(string.format(
-    "[SUMMARY] frames=%d reads=%d bytes=%d loader_entries=%d exploration_entries=%d scene_setups=%d bank87_R/W/X=%d/%d/%d",
-    frame, reads, transferredBytes, loaderEntries, explorationEntries, sceneSetups, bank87.R, bank87.W, bank87.X
+    "[SUMMARY] frames=%d reads=%d bytes=%d loader_entries=%d exploration_entries=%d scene_setups=%d dialogue_loads=%d bank87_R/W/X=%d/%d/%d",
+    frame, reads, transferredBytes, loaderEntries, explorationEntries, sceneSetups, dialogueLoads, bank87.R, bank87.W, bank87.X
   ))
   if logFile then
     logFile:flush()
