@@ -14,6 +14,13 @@
 --   * stop the script only after normal control has resumed.
 --
 -- Persistent log: cyber_oedo_cd_transition_profile_v2.log
+--
+-- Additional transition timing markers:
+--   $80E7  dialogue-module fade command
+--   $8100  dialogue-module audio-state clear path
+--   $41EC  outer synchronous fade-wait loop
+--   $41F1  first instruction after the fade-wait loop
+-- MPRs are logged at all logical hooks to prevent overlay-address confusion.
 
 local CPU = emu.cpuType.pce
 local MEM = emu.memType.pceMemory
@@ -39,6 +46,9 @@ local registeredReturnTargets = {}
 local pendingByteLoader = nil
 local pendingAdTransByReturn = {}
 local registeredAdTransReturns = {}
+local fadeCommandStartFrame = nil
+local fadeWaitStartFrame = nil
+local fadeWaitSamples = 0
 
 local function r8(address, memType)
   return emu.read(address, memType or MEM)
@@ -215,6 +225,55 @@ local function onVsync()
   vsyncCalls = vsyncCalls + 1
 end
 
+local function onModuleFadeCommand()
+  -- Logical $80E7 belongs to the dialogue module only when the expected MPR
+  -- bank is mapped.  Log MPRs so a reused logical address cannot be mistaken
+  -- for the module during review.
+  fadeCommandStartFrame = frame
+  log(string.format(
+    "[DIALOGUE_FADE_COMMAND] frame=%d state37F0=$%02X %s %s",
+    frame, r8(0x37F0), sceneState(), mprString()
+  ))
+end
+
+local function onModuleFadeClear()
+  if fadeCommandStartFrame then
+    log(string.format(
+      "[DIALOGUE_FADE_CLEAR] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
+      "state37F0=$%02X %s %s",
+      frame, frame - fadeCommandStartFrame,
+      (frame - fadeCommandStartFrame) / 60.0,
+      r8(0x37F0), sceneState(), mprString()
+    ))
+  end
+end
+
+local function onFadeWaitLoop()
+  if not fadeWaitStartFrame then
+    fadeWaitStartFrame = frame
+    fadeWaitSamples = 0
+    log(string.format(
+      "[FADE_WAIT_START] frame=%d state37F0=$%02X flag420B=$%02X %s %s",
+      frame, r8(0x37F0), r8(0x420B), sceneState(), mprString()
+    ))
+  end
+  fadeWaitSamples = fadeWaitSamples + 1
+end
+
+local function onFadeWaitExit()
+  if fadeWaitStartFrame then
+    log(string.format(
+      "[FADE_WAIT_END] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
+      "loop_hits=%d state37F0=$%02X flag420B=$%02X %s %s",
+      frame, frame - fadeWaitStartFrame,
+      (frame - fadeWaitStartFrame) / 60.0,
+      fadeWaitSamples, r8(0x37F0), r8(0x420B), sceneState(), mprString()
+    ))
+    fadeWaitStartFrame = nil
+    fadeWaitSamples = 0
+  end
+end
+
 local function onCdRead()
   readOrdinal = readOrdinal + 1
   local length = r16(0x20F8)
@@ -313,6 +372,10 @@ emu.addMemoryCallback(onAdStop, emu.callbackType.exec, 0xE042, 0xE042, CPU, MEM)
 emu.addMemoryCallback(onAdStat, emu.callbackType.exec, 0xE045, 0xE045, CPU, MEM)
 emu.addMemoryCallback(onCdFade, emu.callbackType.exec, 0xE02D, 0xE02D, CPU, MEM)
 emu.addMemoryCallback(onVsync, emu.callbackType.exec, 0xE07B, 0xE07B, CPU, MEM)
+emu.addMemoryCallback(onModuleFadeCommand, emu.callbackType.exec, 0x80E7, 0x80E7, CPU, MEM)
+emu.addMemoryCallback(onModuleFadeClear, emu.callbackType.exec, 0x8100, 0x8100, CPU, MEM)
+emu.addMemoryCallback(onFadeWaitLoop, emu.callbackType.exec, 0x41EC, 0x41EC, CPU, MEM)
+emu.addMemoryCallback(onFadeWaitExit, emu.callbackType.exec, 0x41F1, 0x41F1, CPU, MEM)
 emu.addMemoryCallback(onByteLoader, emu.callbackType.exec, 0x6EA0, 0x6EA0, CPU, MEM)
 emu.addMemoryCallback(onByteLoaderReturn, emu.callbackType.exec, 0x6EED, 0x6EED, CPU, MEM)
 emu.addMemoryCallback(onParser, emu.callbackType.exec, 0x9543, 0x9543, CPU, MEM)
