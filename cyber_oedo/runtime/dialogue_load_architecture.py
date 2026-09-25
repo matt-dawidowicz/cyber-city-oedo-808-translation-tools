@@ -25,7 +25,10 @@ ownership.  Mutation still requires proving that no other consumer owns them.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
+import json
+import pathlib
 from dataclasses import dataclass
 
 from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
@@ -267,3 +270,31 @@ def analyze_dialogue_load_architecture(payload: bytes) -> dict[str, object]:
             "and BIOS cross-bank transfer behavior still require live proof."
         ),
     }
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Map the authenticated Mission 0 dialogue, ADPCM, and portrait "
+            "load layout used by the slow interaction transitions."
+        )
+    )
+    parser.add_argument("payload", type=pathlib.Path)
+    parser.add_argument("--output", type=pathlib.Path)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    report = analyze_dialogue_load_architecture(args.payload.read_bytes())
+    rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    if args.output is None:
+        print(rendered, end="")
+    else:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(rendered, encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
