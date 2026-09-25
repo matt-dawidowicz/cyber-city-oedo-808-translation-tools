@@ -185,6 +185,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-vram-dirty",
+        "cyber_oedo.runtime.vram_dirty_profile",
+        "Measure selective exploration-VRAM restore cost from Mesen logs.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-cd-hot-assets",
         "cyber_oedo.runtime.cd_load_optimization",
         "Measure hot scene assets and candidate load compression.",
