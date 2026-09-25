@@ -161,6 +161,18 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-cd-loads",
+        "cyber_oedo.runtime.cd_load_profile",
+        "Analyze Mesen CD_READ traces for repeated load-time work.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "analyze-cd-hot-assets",
+        "cyber_oedo.runtime.cd_load_optimization",
+        "Measure hot scene assets and candidate load compression.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "clonecd-cue",
         "cyber_oedo.disc.clonecd_cue",
         "Create a non-destructive CUE view of a CloneCD set.",
