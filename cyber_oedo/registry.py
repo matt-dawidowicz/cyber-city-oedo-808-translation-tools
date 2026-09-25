@@ -215,6 +215,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-scene-seeks",
+        "cyber_oedo.runtime.scene_seek_geometry",
+        "Measure static seek geometry of hot exploration scene bundles.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "clonecd-cue",
         "cyber_oedo.disc.clonecd_cue",
         "Create a non-destructive CUE view of a CloneCD set.",
