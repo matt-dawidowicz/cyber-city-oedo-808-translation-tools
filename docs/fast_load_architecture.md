@@ -216,10 +216,34 @@ entry-to-return in addition to AD_TRANS. This closes another hole in the
 earlier timing budget: the stock module moves an entire 8 KiB ADPCM window to
 bank $86 and back without using CD_READ.
 
-### F. Scene graphics
+### F. Scene graphics and seek geometry
 
-Separately, make the 7-sector, 3-sector, and 60,928-byte exploration scene
-components contiguous and benchmark 16-bit PackBits on the large VRAM block.
+The main exploration scene performs three known reads:
+
+- $228E: 7 sectors;
+- $22DE: 3 sectors;
+- $22E8: 60,928 bytes, touching 30 sectors.
+
+Static geometry now shows that the first read ends at $2295, leaving a
+**73-sector hole** before $22DE. The second ends at $22E1, leaving another
+**7-sector hole** before $22E8. The three transfer starts therefore move
+forward by 90 sectors in total, versus 10 sectors if duplicate copies were
+laid out back-to-back. The raw transfer floor itself is only 40 sectors, about
+0.53 seconds at 1x.
+
+The alternate scene is already much better: its 5-sector local block and
+30-sector VRAM image are separated by only five unused sectors.
+
+This makes contiguous relocation a valid secondary optimization for full scene
+installation. It does **not** make the intervening holes writable; ownership of
+those sectors remains unproven. A safe implementation should duplicate the
+assets into ownership-safe space and repoint descriptors rather than overwrite
+the holes in place.
+
+For repeated dialogue return, selective VRAM restoration remains the
+higher-value target because it can remove most or all of the 60,928-byte
+$22E8 read instead of merely reducing its seek cost. PackBits remains an
+independent experiment for full scene loads.
 
 ## What is proven
 
