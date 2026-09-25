@@ -124,17 +124,6 @@ local function onCdRead()
   transferredBytes = transferredBytes + transferBytes
   local state = cpu()
   local returnTarget = stackReturnTarget()
-  if returnTarget == 0x48CD and lba == 0x1425 then
-    dialogueLoads = dialogueLoads + 1
-    pendingDialogueLoad = {
-      frame=frame,
-      counters=snapshotCounters and snapshotCounters() or {reads=reads-1, bytes=transferredBytes-transferBytes, loaders=loaderEntries},
-    }
-    log(string.format(
-      "[DIALOGUE_LOAD_START %03d] frame=%d sector=$%06X %s %s",
-      dialogueLoads, frame, lba, sceneState(), mprString()
-    ))
-  end
   if returnTarget == 0x425E or returnTarget == 0x428A then
     pendingSceneRead = {
       ordinal=reads,
@@ -177,9 +166,30 @@ local function onByteLoader()
   local dest = r16(0x2000)
   local lba = (r8(0x2002) << 16) | (r8(0x2005) << 8) | r8(0x2004)
   local length = r16(0x2006)
+  local callerReturn = stackReturnTarget()
+
+  -- $48CD is the Mission 0 overlay return from the generic byte loader.
+  -- At BIOS CD_READ entry the stack instead points back inside $6EA0, so the
+  -- full dialogue-load timer must begin here, before that wrapper is entered.
+  if callerReturn == 0x48CD and lba == 0x1425 then
+    dialogueLoads = dialogueLoads + 1
+    pendingDialogueLoad = {
+      frame=frame,
+      counters={
+        reads=reads,
+        bytes=transferredBytes,
+        loaders=loaderEntries,
+      },
+    }
+    log(string.format(
+      "[DIALOGUE_LOAD_START %03d] frame=%d sector=$%06X %s %s",
+      dialogueLoads, frame, lba, sceneState(), mprString()
+    ))
+  end
+
   log(string.format(
     "[BYTE_LOADER %03d] frame=%d dest=$%04X sector=$%06X len=$%04X return=$%04X %s %s",
-    loaderEntries, frame, dest, lba, length, stackReturnTarget(),
+    loaderEntries, frame, dest, lba, length, callerReturn,
     sceneState(), mprString()
   ))
 end
@@ -260,7 +270,7 @@ local function onInteractiveLoop()
 end
 
 local function onDialogueParser()
-  local pointer = r16(0x007F)
+  local pointer = r16(0x207F)
   local opcode = r8(pointer)
   if pendingDialogueLoad then
     logPhase("DIALOGUE_LOAD_TO_FIRST_PARSER", pendingDialogueLoad)
