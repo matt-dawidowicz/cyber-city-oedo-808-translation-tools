@@ -191,6 +191,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-adpcm-memory",
+        "cyber_oedo.runtime.adpcm_memory_architecture",
+        "Map Mission 0 ADPCM snapshot and RAM-transfer architecture.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-cd-hot-assets",
         "cyber_oedo.runtime.cd_load_optimization",
         "Measure hot scene assets and candidate load compression.",
