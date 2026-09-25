@@ -9,47 +9,47 @@ import re
 
 _BUDGET_RE = re.compile(
     r"\[TRANSITION_BUDGET\].*?"
-    r"total_frames=(?P<total>\d+).*?"
-    r"cd_read_frames=(?P<cd_read>\d+).*?"
+    r"total_frames=(?P<total_frames>\\d+).*?"
+    r"cd_read_frames=(?P<cd_read_frames>\\d+).*?"
     r"cd_read_calls=(?P<cd_read_calls>\d+).*?"
-    r"cd_exec_frames=(?P<cd_exec>\d+).*?"
+    r"cd_exec_frames=(?P<cd_exec_frames>\\d+).*?"
     r"cd_exec_calls=(?P<cd_exec_calls>\d+).*?"
-    r"ad_trans_frames=(?P<ad_trans>\d+).*?"
+    r"ad_trans_frames=(?P<ad_trans_frames>\\d+).*?"
     r"ad_trans_calls=(?P<ad_trans_calls>\d+).*?"
-    r"ad_read_frames=(?P<ad_read>\d+).*?"
+    r"ad_read_frames=(?P<ad_read_frames>\\d+).*?"
     r"ad_read_calls=(?P<ad_read_calls>\d+).*?"
-    r"ad_write_frames=(?P<ad_write>\d+).*?"
+    r"ad_write_frames=(?P<ad_write_frames>\\d+).*?"
     r"ad_write_calls=(?P<ad_write_calls>\d+).*?"
-    r"fade_wait_frames=(?P<fade_wait>\d+).*?"
-    r"vsync_calls=(?P<vsync>\d+).*?"
-    r"known_serial_frames=(?P<known>\d+).*?"
-    r"residual_frames=(?P<residual>-?\d+)"
+    r"fade_wait_frames=(?P<fade_wait_frames>\\d+).*?"
+    r"vsync_calls=(?P<vsync_calls>\\d+).*?"
+    r"known_serial_frames=(?P<known_serial_frames>\\d+).*?"
+    r"residual_frames=(?P<residual_frames>-?\\d+)"
 )
 
 def parse_transition_budgets(text: str) -> dict[str, object]:
     rows: list[dict[str, object]] = []
     for match in _BUDGET_RE.finditer(text):
         values = {key: int(value) for key, value in match.groupdict().items()}
-        total = values["total"]
+        total = values["total_frames"]
         if total <= 0:
             raise ValueError("transition total must be positive")
         known = (
-            values["cd_read"] + values["cd_exec"] + values["ad_trans"]
-            + values["ad_read"] + values["ad_write"] + values["fade_wait"]
+            values["cd_read_frames"] + values["cd_exec_frames"] + values["ad_trans_frames"]
+            + values["ad_read_frames"] + values["ad_write_frames"] + values["fade_wait_frames"]
         )
-        if known != values["known"]:
+        if known != values["known_serial_frames"]:
             raise ValueError("known_serial_frames does not match components")
-        if total - known != values["residual"]:
+        if total - known != values["residual_frames"]:
             raise ValueError("residual_frames does not match total-components")
         rows.append({
             **values,
             "total_seconds": total / 60.0,
-            "cd_read_seconds": values["cd_read"] / 60.0,
-            "cd_exec_seconds": values["cd_exec"] / 60.0,
-            "ad_trans_seconds": values["ad_trans"] / 60.0,
-            "ad_read_seconds": values["ad_read"] / 60.0,
-            "ad_write_seconds": values["ad_write"] / 60.0,
-            "fade_wait_seconds": values["fade_wait"] / 60.0,
+            "cd_read_seconds": values["cd_read_frames"] / 60.0,
+            "cd_exec_seconds": values["cd_exec_frames"] / 60.0,
+            "ad_trans_seconds": values["ad_trans_frames"] / 60.0,
+            "ad_read_seconds": values["ad_read_frames"] / 60.0,
+            "ad_write_seconds": values["ad_write_frames"] / 60.0,
+            "fade_wait_seconds": values["fade_wait_frames"] / 60.0,
             "residual_seconds": values["residual"] / 60.0,
             "known_serial_percent": known / total * 100.0,
             "residual_percent": values["residual"] / total * 100.0,
