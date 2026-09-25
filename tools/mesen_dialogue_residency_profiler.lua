@@ -40,6 +40,7 @@ local adTransCalls = 0
 local lastAdTransFrame = -1
 local lifecycleBaselineModule = nil
 local lifecycleBaselineSpeaker = nil
+local explorationCheckpointArmed = false
 
 local function r8(address, memType)
   return emu.read(address, memType or MEM)
@@ -214,15 +215,19 @@ local function onCommand5()
   if not isMission0TextOverlay() then return end
   lifecycleBaselineModule = moduleChecksum()
   lifecycleBaselineSpeaker = speakerChecksum()
+  explorationCheckpointArmed = true
   logLifecycle("COMMAND5_TEARDOWN")
 end
 
 local function onExplorationEntry()
+  if not explorationCheckpointArmed then return end
   logLifecycle("EXPLORATION_ENTRY")
 end
 
 local function onInteractiveLoop()
+  if not explorationCheckpointArmed then return end
   logLifecycle("EXPLORATION_INTERACTIVE")
+  explorationCheckpointArmed = false
 end
 
 local function onAdTrans()
