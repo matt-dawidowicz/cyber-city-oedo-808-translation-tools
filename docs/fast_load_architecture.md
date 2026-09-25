@@ -12,6 +12,49 @@ parser. The fade path occurs around the resource-setup boundary, so a
 player-visible wait approaching ten seconds is structurally plausible. A new
 live capture is required before assigning exact seconds to each component.
 
+## Direction-specific transition budget
+
+The two large fixed audio/wait mechanisms belong to **opposite transition
+directions** and should not be collapsed into one undifferentiated pause.
+
+### Exploration -> dialogue
+
+The movement exit path contains the $40DB routine:
+
+    CD_FADE mode $0C
+    LDY #$78
+    EX_VSYNC x 120
+
+The explicit wait is therefore 120 frames / 2.0 seconds before the dialogue
+load sequence. Historical dialogue captures measured about 5.7-6.2 seconds
+from the **first dialogue-related CD request** to first parser execution, so
+that timer begins after the 2-second movement-exit policy.
+
+That gives a source/evidence-backed visible lower bound of approximately
+**7.7-8.2 seconds** from the fixed movement-exit wait through parser readiness,
+before assigning smaller pre-read/setup costs. This accounts for most of the
+reported near-10-second interaction delay without requiring the opposite
+direction's dialogue teardown fade to be added.
+
+### Dialogue -> exploration
+
+Dialogue command 2 at $80E7 instead invokes CD_FADE mode $0E, an
+approximately 2.5-second ADPCM fade path, and the outer transition can wait at
+$41EC for $37F0 to clear before cleanup and exploration scene restoration.
+
+That is a separate state-machine leg. Its fade completion gate must not be
+added to the 120-frame exploration-exit wait when budgeting entry into
+dialogue.
+
+This separation also clarifies optimization attribution:
+
+- the 120 -> 8 frame benchmark attacks latency **before** the historical
+  dialogue CD-to-parser measurement;
+- resident module / speaker / portrait / ADPCM caches attack latency **inside**
+  the 5.7-6.2 second post-first-CD window;
+- immediate dialogue audio teardown attacks the reverse transition back to
+  exploration.
+
 ## Exact fade gate
 
 The dialogue module loaded from LBA $1425 contains command 2 at logical $80E7.
