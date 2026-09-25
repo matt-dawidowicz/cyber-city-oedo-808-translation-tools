@@ -65,6 +65,14 @@ local function mprString(values)
   return table.concat(out, " ")
 end
 
+local function stackReturnTarget()
+  local state = cpu()
+  local sp = state.sp or 0
+  local lo = r8(0x2100 + ((sp + 1) & 0xFF))
+  local hi = r8(0x2100 + ((sp + 2) & 0xFF))
+  return ((((hi << 8) | lo) + 1) & 0xFFFF)
+end
+
 local function openLog()
   if type(io) ~= "table" or type(io.open) ~= "function" then return end
   local base = emu.getScriptDataFolder()
@@ -196,10 +204,10 @@ local function onAdTrans()
   lastAdTransFrame = frame
   log(string.format(
     "[AD_TRANS %d] frame=%d source=%02X:%02X:%02X blocks=$%02X " ..
-    "set_addr=$%02X return_pc=$%04X %s %s",
+    "set_addr=$%02X caller_return=$%04X %s %s",
     adTransCalls, frame,
     r8(0x20FC), r8(0x20FD), r8(0x20FE), r8(0x20F8), r8(0x20FF),
-    cpu().pc or 0, logicalState(), mprString()
+    stackReturnTarget(), logicalState(), mprString()
   ))
 end
 
