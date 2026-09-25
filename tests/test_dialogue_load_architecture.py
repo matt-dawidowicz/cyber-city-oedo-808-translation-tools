@@ -14,6 +14,7 @@ from cyber_oedo.runtime.dialogue_load_architecture import (
     PORTRAIT_TABLE_CPU,
     SECTOR_BYTES,
     SPEAKER_BLOCK_SECTORS,
+    _decode_portrait_entry,
     payload_offset_for_lba,
 )
 
@@ -50,7 +51,7 @@ class DialogueLoadArchitectureTests(unittest.TestCase):
         for index in range(PORTRAIT_SLOT_COUNT):
             lba = 0x1453 + index * 5
             payload[portrait_offset + index * 4 : portrait_offset + index * 4 + 4] = bytes(
-                (lba & 0xFF, (lba >> 8) & 0xFF, 5, (lba >> 16) & 0xFF)
+                ((lba >> 16) & 0xFF, lba & 0xFF, (lba >> 8) & 0xFF, 5)
             )
 
         # This fixture intentionally cannot satisfy the hard-coded SHA guards;
@@ -77,6 +78,11 @@ class DialogueLoadArchitectureTests(unittest.TestCase):
         self.assertEqual(sectors, 46)
         self.assertEqual(sectors * SECTOR_BYTES, 94_208)
         self.assertLess(sectors * SECTOR_BYTES, 192 * 1024)
+
+    def test_portrait_record_order_matches_dispatcher_pointer_math(self) -> None:
+        decoded = _decode_portrait_entry(bytes.fromhex("00 58 14 05"))
+        self.assertEqual(decoded.lba, 0x1458)
+        self.assertEqual(decoded.sectors, 5)
 
     def test_portrait_slots_leave_2016_bytes_after_2020_transfer(self) -> None:
         allocated = 5 * SECTOR_BYTES
