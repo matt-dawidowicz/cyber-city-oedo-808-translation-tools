@@ -38,6 +38,8 @@ local mutableWritesAfterLoad = 0
 local speakerWritesAfterLoad = 0
 local adTransCalls = 0
 local lastAdTransFrame = -1
+local lifecycleBaselineModule = nil
+local lifecycleBaselineSpeaker = nil
 
 local function r8(address, memType)
   return emu.read(address, memType or MEM)
@@ -191,12 +193,36 @@ local function onCommand2()
   log(string.format("[COMMAND2_FADE] frame=%d %s", frame, logicalState()))
 end
 
+local function logLifecycle(tag)
+  local module = moduleChecksum()
+  local speaker = speakerChecksum()
+  local moduleMatch = lifecycleBaselineModule and module == lifecycleBaselineModule
+  local speakerMatch = lifecycleBaselineSpeaker and speaker == lifecycleBaselineSpeaker
+  log(string.format(
+    "[%s] frame=%d module_adler=$%08X speaker_adler=$%08X " ..
+    "module_match=%s speaker_match=%s immutable_writes=%d mutable_writes=%d " ..
+    "speaker_writes=%d %s %s",
+    tag, frame, module, speaker,
+    lifecycleBaselineModule and (moduleMatch and "yes" or "no") or "n/a",
+    lifecycleBaselineSpeaker and (speakerMatch and "yes" or "no") or "n/a",
+    immutableWritesAfterLoad, mutableWritesAfterLoad, speakerWritesAfterLoad,
+    logicalState(), mprString()
+  ))
+end
+
 local function onCommand5()
   if not isMission0TextOverlay() then return end
-  log(string.format(
-    "[COMMAND5_TEARDOWN] frame=%d module_adler=$%08X speaker_adler=$%08X %s",
-    frame, moduleChecksum(), speakerChecksum(), logicalState()
-  ))
+  lifecycleBaselineModule = moduleChecksum()
+  lifecycleBaselineSpeaker = speakerChecksum()
+  logLifecycle("COMMAND5_TEARDOWN")
+end
+
+local function onExplorationEntry()
+  logLifecycle("EXPLORATION_ENTRY")
+end
+
+local function onInteractiveLoop()
+  logLifecycle("EXPLORATION_INTERACTIVE")
 end
 
 local function onAdTrans()
@@ -245,6 +271,8 @@ emu.addMemoryCallback(onCommand1, emu.callbackType.exec, 0x802D, 0x802D, CPU, ME
 emu.addMemoryCallback(onAfterLocalBlockDecision, emu.callbackType.exec, 0x8053, 0x8053, CPU, MEM)
 emu.addMemoryCallback(onCommand2, emu.callbackType.exec, 0x80E7, 0x80E7, CPU, MEM)
 emu.addMemoryCallback(onCommand5, emu.callbackType.exec, 0x813E, 0x813E, CPU, MEM)
+emu.addMemoryCallback(onExplorationEntry, emu.callbackType.exec, 0x4000, 0x4000, CPU, MEM)
+emu.addMemoryCallback(onInteractiveLoop, emu.callbackType.exec, 0x4012, 0x4012, CPU, MEM)
 emu.addMemoryCallback(onAdTrans, emu.callbackType.exec, 0xE033, 0xE033, CPU, MEM)
 
 emu.addMemoryCallback(
