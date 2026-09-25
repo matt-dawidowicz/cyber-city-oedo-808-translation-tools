@@ -110,6 +110,17 @@ MOVEMENT_AUDIO_FADE_BYTES = bytes.fromhex(
     "A9 0C 20 2D E0 A0 78 20 7B E0 88 D0 FA 60"
 )
 
+SHIPPING_PAUSE_READ_PAYLOAD_OFFSET = 0x000C08A3
+SHIPPING_PAUSE_READ_BYTES = bytes.fromhex(
+    "20 18 E0 "
+    "A9 00 85 FE A9 00 85 FD A9 00 85 FC "
+    "A9 02 85 FF AD F5 FF 85 FA A9 20 85 F8 "
+    "20 09 E0 AA D0 E1 4C 00 40"
+)
+SHIPPING_PAUSE_READ_SHA256 = (
+    "4a1f505d0dd297c359e3c3ca811f37c2bbe011c4c1db3cb0e215258de9115042"
+)
+
 VOICE_DESCRIPTOR_CPU = 0x8BA3
 VOICE_DESCRIPTOR_COUNT = 157
 VOICE_DESCRIPTOR_BYTES = VOICE_DESCRIPTOR_COUNT * 6
@@ -389,6 +400,14 @@ def analyze_dialogue_residency(payload: bytes) -> dict[str, object]:
                 + len(MOVEMENT_AUDIO_FADE_BYTES)
             ]
             == MOVEMENT_AUDIO_FADE_BYTES,
+            "shipping_pause_then_read": hashlib.sha256(
+                payload[
+                    SHIPPING_PAUSE_READ_PAYLOAD_OFFSET :
+                    SHIPPING_PAUSE_READ_PAYLOAD_OFFSET
+                    + len(SHIPPING_PAUSE_READ_BYTES)
+                ]
+            ).hexdigest()
+            == SHIPPING_PAUSE_READ_SHA256,
         },
         "audio_state_machine": {
             "command_0": "reset public audio state and invalidate $8FDE",
@@ -420,6 +439,21 @@ def analyze_dialogue_residency(payload: bytes) -> dict[str, object]:
                 "$4089 cancels prior fade then calls CD_PLAY before the "
                 "interactive exploration loop"
             ),
+            "shipping_fast_handoff_precedent": {
+                "payload_offset": "0x%08X"
+                % SHIPPING_PAUSE_READ_PAYLOAD_OFFSET,
+                "sha256": SHIPPING_PAUSE_READ_SHA256,
+                "sequence": (
+                    "JSR CD_PAUSE; configure a 32-record MPR2 CD_READ; "
+                    "retry on error; JMP $4000"
+                ),
+                "conclusion": (
+                    "the shipping game already uses immediate CD_PAUSE before "
+                    "data loading in another path; the two-second interaction "
+                    "fade is transition policy rather than a universal BIOS "
+                    "precondition for CD_READ"
+                ),
+            },
         },
         "vram_overlap": {
             "scene_start_word": "$0900",
