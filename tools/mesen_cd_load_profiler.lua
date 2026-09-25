@@ -100,7 +100,7 @@ local function sceneState()
 end
 
 local addressTypeNames = {
-  [0x00]="LOCAL_BYTES",
+  [0x00]="UNDOCUMENTED_00",
   [0x01]="LOCAL_SECTORS",
   [0x02]="BANK_MPR2",
   [0x03]="BANK_MPR3",
@@ -119,7 +119,7 @@ local function onCdRead()
   local addressType = r8(0x20FF)
   local relative = lba - TRACK2_START_LBA
   local payloadOffset = relative >= 0 and relative * 0x800 or -1
-  local unit = (addressType == 0x00 or addressType == 0xFE) and "bytes" or "sectors"
+  local unit = addressType == 0xFE and "bytes" or "sectors"
   local transferBytes = unit == "bytes" and length or (length * 0x800)
   transferredBytes = transferredBytes + transferBytes
   local state = cpu()
