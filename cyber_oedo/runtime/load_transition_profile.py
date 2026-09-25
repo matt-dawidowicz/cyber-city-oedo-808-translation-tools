@@ -5,17 +5,20 @@ headline hot-scene number measured only the spacing between CD_READ *starts*.
 That is not the same as the black-screen / transition latency perceived by a
 player.
 
-This module extracts the repeatable Mission 0 five-read dialogue-load pattern
-from historical Mesen captures and measures from the first CD request to the
-first parser execution of the newly loaded dialogue.  It also reports the tiny
-1x streaming floor so seek/command/setup overhead is visible explicitly.
+Historical Mission 0 captures show two forms of the same dialogue transition:
+
+* cold event resource: 1425, 1426, 10xx, 1441, portrait;
+* cached event resource: 1425, 1426, 1441, portrait.
+
+The resource cache can therefore remove the 10xx read entirely while the
+transition still takes roughly 5.7 seconds.  This module recognizes both forms
+and measures from the first CD request to the first parser execution.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import math
 import pathlib
 import re
 from dataclasses import dataclass
@@ -31,30 +34,9 @@ _DIALOGUE_GROUP_RE = re.compile(
     r"DIALOGUE GROUP\s+(?P<group>\d+)\s+START\s+frame=(?P<frame>\d+)"
 )
 
-# Mission 0's repeatedly observed dialogue/portrait load shape:
-#
-#   1425 -> 8000   common module, one local sector request
-#   1426 -> 29D0   adjacent continuation/scratch sector
-#   10xx -> 29D0   small event/dialogue resource (e.g. H_BARTEN)
-#   1441 -> 9000   common 2-sector dialogue/UI block
-#   1458/1561 ...  portrait/UI graphics into VRAM $4000
-#
-# The third and fifth sources vary by conversation/portrait, while the shape
-# and destinations remain stable in the historical Mission 0 route.
-M0_DIALOGUE_DESTINATION_PATTERN = (
-    0x8000,
-    0x29D0,
-    0x29D0,
-    0x9000,
-    0x4000,
-)
-M0_DIALOGUE_TYPE_PATTERN = (0x01, 0x01, 0x01, 0x01, 0xFE)
-M0_DIALOGUE_SECTOR_COUNT_PATTERN = (1, 1, 1, 2, 5)
-M0_DIALOGUE_FIXED_SOURCES = {
-    0: 0x1425,
-    1: 0x1426,
-    3: 0x1441,
-}
+M0_MODULE_FIRST = (0x1425, 0x8000, 0x01, 1)
+M0_MODULE_REMAINDER = (0x1426, 0x29D0, 0x01, 1)
+M0_COMMON_BLOCK = (0x1441, 0x9000, 0x01, 2)
 M0_EVENT_RESOURCE_RANGE = range(0x1000, 0x1200)
 M0_PORTRAIT_SOURCES = {0x1458, 0x1561}
 
@@ -67,10 +49,11 @@ class DialogueGroupStart:
 
 @dataclass(frozen=True, slots=True)
 class DialogueLoadWindow:
-    """One five-read Mission 0 dialogue-load sequence."""
+    """One cold or cache-hit Mission 0 dialogue-load sequence."""
 
     reads: tuple[CdRead, ...]
     dialogue_group: DialogueGroupStart
+    event_resource_read: CdRead | None
 
     @property
     def first_frame(self) -> int:
@@ -119,6 +102,10 @@ class DialogueLoadWindow:
     def absolute_seek_distance(self) -> int:
         return sum(abs(delta) for delta in self.source_start_deltas)
 
+    @property
+    def event_cache_hit(self) -> bool:
+        return self.event_resource_read is None
+
 
 def parse_dialogue_group_starts(text: str) -> tuple[DialogueGroupStart, ...]:
     return tuple(
@@ -130,42 +117,73 @@ def parse_dialogue_group_starts(text: str) -> tuple[DialogueGroupStart, ...]:
     )
 
 
-def _matches_m0_dialogue_bundle(reads: tuple[CdRead, ...]) -> bool:
-    if len(reads) != 5:
-        return False
-    if tuple(item.destination for item in reads) != M0_DIALOGUE_DESTINATION_PATTERN:
-        return False
-    if tuple(item.address_type for item in reads) != M0_DIALOGUE_TYPE_PATTERN:
-        return False
-    if tuple(item.transfer_sectors for item in reads) != M0_DIALOGUE_SECTOR_COUNT_PATTERN:
-        return False
-    for index, expected in M0_DIALOGUE_FIXED_SOURCES.items():
-        if reads[index].sector != expected:
-            return False
-    if reads[2].sector not in M0_EVENT_RESOURCE_RANGE:
-        return False
-    return reads[4].sector in M0_PORTRAIT_SOURCES
+def _matches(item: CdRead, signature: tuple[int, int, int, int]) -> bool:
+    sector, destination, address_type, sectors = signature
+    return (
+        item.sector == sector
+        and item.destination == destination
+        and item.address_type == address_type
+        and item.transfer_sectors == sectors
+    )
+
+
+def _is_event_resource(item: CdRead) -> bool:
+    return (
+        item.sector in M0_EVENT_RESOURCE_RANGE
+        and item.destination == 0x29D0
+        and item.address_type == 0x01
+        and item.transfer_sectors == 1
+    )
+
+
+def _is_portrait(item: CdRead) -> bool:
+    return (
+        item.sector in M0_PORTRAIT_SOURCES
+        and item.destination == 0x4000
+        and item.address_type == 0xFE
+        and item.transfer_sectors == 5
+    )
 
 
 def find_m0_dialogue_load_windows(text: str) -> tuple[DialogueLoadWindow, ...]:
-    """Find source-backed five-read loads followed by their dialogue-ready mark.
+    """Find cold and cache-hit dialogue transitions.
 
-    Reads may be split across the historical profiler's burst IDs because that
-    profiler starts a new burst after a 90-frame gap.  The actual five-read
-    dialogue transition spans two such historical bursts.
+    The historical profiler split a single player-visible transition into
+    multiple "bursts" after a 90-frame gap, so burst IDs are intentionally
+    ignored.  A window starts with the fixed 1425/1426 module load, optionally
+    contains one 10xx named event resource read, and must then contain the
+    fixed 1441 two-sector block and a recognized portrait read.
     """
 
     reads = parse_cd_read_log(text)
     groups = parse_dialogue_group_starts(text)
     windows: list[DialogueLoadWindow] = []
 
-    for index in range(0, len(reads) - 4):
-        candidate = tuple(reads[index : index + 5])
-        if not _matches_m0_dialogue_bundle(candidate):
+    index = 0
+    while index < len(reads) - 3:
+        if not _matches(reads[index], M0_MODULE_FIRST):
+            index += 1
             continue
-        # The dialogue parser should become active shortly after the fifth
-        # read.  Keep a generous 240-frame ceiling for historical captures
-        # while rejecting a later unrelated conversation.
+        if not _matches(reads[index + 1], M0_MODULE_REMAINDER):
+            index += 1
+            continue
+
+        cursor = index + 2
+        event_read: CdRead | None = None
+        if cursor < len(reads) and _is_event_resource(reads[cursor]):
+            event_read = reads[cursor]
+            cursor += 1
+
+        if cursor + 1 >= len(reads):
+            break
+        if not _matches(reads[cursor], M0_COMMON_BLOCK):
+            index += 1
+            continue
+        if not _is_portrait(reads[cursor + 1]):
+            index += 1
+            continue
+
+        candidate = tuple(reads[index : cursor + 2])
         ready = next(
             (
                 group
@@ -174,9 +192,15 @@ def find_m0_dialogue_load_windows(text: str) -> tuple[DialogueLoadWindow, ...]:
             ),
             None,
         )
-        if ready is None:
-            continue
-        windows.append(DialogueLoadWindow(candidate, ready))
+        if ready is not None:
+            windows.append(
+                DialogueLoadWindow(
+                    reads=candidate,
+                    dialogue_group=ready,
+                    event_resource_read=event_read,
+                )
+            )
+        index = cursor + 2
 
     return tuple(windows)
 
@@ -203,6 +227,12 @@ def build_transition_latency_report(text: str) -> dict[str, object]:
         rows.append(
             {
                 "dialogue_group": window.dialogue_group.group,
+                "event_cache_hit": window.event_cache_hit,
+                "event_resource_lba": (
+                    None
+                    if window.event_resource_read is None
+                    else f"0x{window.event_resource_read.sector:04X}"
+                ),
                 "first_cd_frame": window.first_frame,
                 "last_cd_start_frame": window.last_read_start_frame,
                 "dialogue_ready_frame": window.ready_frame,
@@ -225,10 +255,18 @@ def build_transition_latency_report(text: str) -> dict[str, object]:
         )
 
     latencies = [item.load_to_ready_frames for item in windows]
-    seek_distances = [item.absolute_seek_distance for item in windows]
-    stream_sectors = windows[0].transfer_sectors
+    cold = [item for item in windows if not item.event_cache_hit]
+    cached = [item for item in windows if item.event_cache_hit]
+
+    def mean_seconds(items: list[DialogueLoadWindow]) -> float | None:
+        if not items:
+            return None
+        return sum(item.load_to_ready_frames for item in items) / len(items) / 60.0
+
     return {
         "window_count": len(windows),
+        "cold_event_resource_windows": len(cold),
+        "cached_event_resource_windows": len(cached),
         "measured_load_to_dialogue_frames": latencies,
         "measured_load_to_dialogue_seconds": [
             frames / 60.0 for frames in latencies
@@ -237,26 +275,23 @@ def build_transition_latency_report(text: str) -> dict[str, object]:
         "maximum_frames": max(latencies),
         "mean_frames": sum(latencies) / len(latencies),
         "mean_seconds": sum(latencies) / len(latencies) / 60.0,
-        "streaming_floor": {
-            "sectors": stream_sectors,
-            "bytes": stream_sectors * SECTOR_BYTES,
-            "seconds_at_1x": stream_sectors / CD_SECTORS_PER_SECOND,
-            "frames_at_60hz": (
-                stream_sectors / CD_SECTORS_PER_SECOND * 60.0
-            ),
-        },
+        "cold_mean_seconds": mean_seconds(cold),
+        "cached_mean_seconds": mean_seconds(cached),
         "mean_excess_seconds_over_stream_floor": (
             sum(item.excess_over_stream_frames for item in windows)
             / len(windows)
             / 60.0
         ),
-        "source_seek_distance_sectors": seek_distances,
+        "source_seek_distance_sectors": [
+            item.absolute_seek_distance for item in windows
+        ],
         "interpretation": (
-            "The repeated dialogue transition moves only ten source sectors, "
-            "yet takes roughly six seconds from first CD_READ to parser-ready. "
-            "The source order oscillates hundreds of sectors backward and "
-            "forward, so seek/command/setup and post-read work dominate raw "
-            "1x streaming time."
+            "The named event-resource cache removes the 10xx CD read in later "
+            "transitions, but cached transitions still take about 5.7 seconds. "
+            "Therefore the cold 10xx seek is a real extra penalty, not the "
+            "root cause of the baseline pause. BIOS command latency, hidden "
+            "ADPCM transfers, display/audio orchestration, and post-read work "
+            "must be timed separately."
         ),
         "windows": rows,
     }
