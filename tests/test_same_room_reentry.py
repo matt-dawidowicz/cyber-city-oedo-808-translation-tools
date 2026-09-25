@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from cyber_oedo.runtime.same_room_reentry import analyze_same_room_reentry
+from cyber_oedo.runtime.same_room_reentry import analyze_same_room_reentry, direct_absolute_calls
 
 
 class SameRoomReentryTests(unittest.TestCase):
@@ -24,6 +24,17 @@ class SameRoomReentryTests(unittest.TestCase):
 
         rectangles = _region("collision_rectangle_registry")
         self.assertIn("8-byte rectangles", rectangles.purpose)
+
+    def test_direct_absolute_calls_respect_instruction_boundaries(self) -> None:
+        blob = bytes.fromhex("A9 20 20 19 55 4C 9E 41 60")
+        rows = direct_absolute_calls(blob, 0x1000, 0x4000)
+        self.assertEqual(
+            rows,
+            (
+                {"cpu": "$4002", "operation": "JSR", "target": "$5519"},
+                {"cpu": "$4005", "operation": "JMP", "target": "$419E"},
+            ),
+        )
 
 
 if __name__ == "__main__":
