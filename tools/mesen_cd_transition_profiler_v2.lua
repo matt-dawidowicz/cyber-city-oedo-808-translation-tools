@@ -64,6 +64,13 @@ local fadeCommandStartFrame = nil
 local fadeWaitStartFrame = nil
 local fadeWaitSamples = 0
 local cardRam = {size=0,R=0,W=0,X=0,samples={}}
+local transitionWindow = nil
+
+local function addTransitionFrames(kind, frames)
+  if not transitionWindow then return end
+  transitionWindow.frames[kind] = transitionWindow.frames[kind] + frames
+  transitionWindow.counts[kind] = transitionWindow.counts[kind] + 1
+end
 
 local function r8(address, memType)
   return emu.read(address, memType or MEM)
@@ -182,6 +189,7 @@ local function ensureReturnCallback(target)
 
       local item = table.remove(queue, 1)
       local elapsed = frame - item.startFrame
+      addTransitionFrames("cd_read", elapsed)
       local c = cpu()
       log(string.format(
         "[CD_READ_RETURN %03d] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
@@ -206,6 +214,7 @@ local function ensureExecTargetCallback(target)
       if not queue or #queue == 0 then return end
       local item = table.remove(queue, 1)
       local elapsed = frame - item.startFrame
+      addTransitionFrames("cd_exec", elapsed)
       log(string.format(
         "[CD_EXEC_TARGET %03d] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
         "sector=$%06X blocks=$%02X target=$%04X %s %s",
@@ -276,6 +285,7 @@ local function ensureAdMemoryReturnCallback(target)
       if not queue or #queue == 0 then return end
       local item = table.remove(queue, 1)
       local elapsed = frame - item.startFrame
+      addTransitionFrames(item.kind == "AD_READ" and "ad_read" or "ad_write", elapsed)
       local state = cpu()
       log(string.format(
         "[%s_RETURN %03d] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
@@ -331,6 +341,7 @@ local function ensureAdTransReturnCallback(target)
       if not queue or #queue == 0 then return end
       local item = table.remove(queue, 1)
       local elapsed = frame - item.startFrame
+      addTransitionFrames("ad_trans", elapsed)
       local state = cpu()
       log(string.format(
         "[AD_TRANS_RETURN %03d] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
@@ -432,11 +443,15 @@ end
 
 local function onFadeWaitExit()
   if fadeWaitStartFrame then
+    local elapsed = frame - fadeWaitStartFrame
+    if transitionWindow then
+      transitionWindow.fade_wait_frames = transitionWindow.fade_wait_frames + elapsed
+    end
     log(string.format(
       "[FADE_WAIT_END] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
       "loop_hits=%d state37F0=$%02X flag420B=$%02X %s %s",
-      frame, frame - fadeWaitStartFrame,
-      (frame - fadeWaitStartFrame) / 60.0,
+      frame, elapsed,
+      elapsed / 60.0,
       fadeWaitSamples, r8(0x37F0), r8(0x420B), sceneState(), mprString()
     ))
     fadeWaitStartFrame = nil
@@ -491,6 +506,17 @@ local function onByteLoader()
   local dest = r16(0x2000)
   local lba = (r8(0x2002) << 16) | (r8(0x2005) << 8) | r8(0x2004)
   local length = r16(0x2006)
+  if lba == 0x1425 then
+    transitionWindow = {
+      startFrame=frame,
+      startVsync=vsyncCalls,
+      frames={cd_read=0, cd_exec=0, ad_trans=0, ad_read=0, ad_write=0},
+      counts={cd_read=0, cd_exec=0, ad_trans=0, ad_read=0, ad_write=0},
+      fade_wait_frames=0,
+    }
+    log(string.format("[TRANSITION_BUDGET_START] frame=%d sector=$%06X", frame, lba))
+  end
+
   pendingByteLoader = {
     ordinal=byteLoaderOrdinal,
     startFrame=frame,
@@ -521,6 +547,32 @@ end
 
 local function onParser()
   parserHits = parserHits + 1
+  if transitionWindow then
+    local total = frame - transitionWindow.startFrame
+    local known = transitionWindow.frames.cd_read
+      + transitionWindow.frames.cd_exec
+      + transitionWindow.frames.ad_trans
+      + transitionWindow.frames.ad_read
+      + transitionWindow.frames.ad_write
+      + transitionWindow.fade_wait_frames
+    local residual = total - known
+    log(string.format(
+      "[TRANSITION_BUDGET] start_frame=%d ready_frame=%d total_frames=%d total_seconds=%.4f " ..
+      "cd_read_frames=%d cd_read_calls=%d cd_exec_frames=%d cd_exec_calls=%d " ..
+      "ad_trans_frames=%d ad_trans_calls=%d ad_read_frames=%d ad_read_calls=%d " ..
+      "ad_write_frames=%d ad_write_calls=%d fade_wait_frames=%d vsync_calls=%d " ..
+      "known_serial_frames=%d residual_frames=%d",
+      transitionWindow.startFrame, frame, total, total / 60.0,
+      transitionWindow.frames.cd_read, transitionWindow.counts.cd_read,
+      transitionWindow.frames.cd_exec, transitionWindow.counts.cd_exec,
+      transitionWindow.frames.ad_trans, transitionWindow.counts.ad_trans,
+      transitionWindow.frames.ad_read, transitionWindow.counts.ad_read,
+      transitionWindow.frames.ad_write, transitionWindow.counts.ad_write,
+      transitionWindow.fade_wait_frames, vsyncCalls - transitionWindow.startVsync,
+      known, residual
+    ))
+    transitionWindow = nil
+  end
   if frame - lastParserFrame > 300 then
     dialogueGroups = dialogueGroups + 1
     log(string.format(

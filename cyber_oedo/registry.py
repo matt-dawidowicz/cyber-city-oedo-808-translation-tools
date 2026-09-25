@@ -191,6 +191,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-transition-budget",
+        "cyber_oedo.runtime.transition_budget",
+        "Attribute dialogue transition latency from Mesen budget logs.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-adpcm-memory",
         "cyber_oedo.runtime.adpcm_memory_architecture",
         "Map Mission 0 ADPCM snapshot and RAM-transfer architecture.",
