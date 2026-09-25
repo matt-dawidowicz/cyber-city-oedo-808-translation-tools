@@ -195,6 +195,13 @@ def speaker_load_pairs(payload: bytes) -> tuple[SpeakerLoadPair, ...]:
     )
 
 
+def _decode_portrait_entry(entry: bytes) -> PortraitSlot:
+    if len(entry) != 4:
+        raise ValueError("portrait entry must be exactly four bytes")
+    lba = (entry[0] << 16) | (entry[2] << 8) | entry[1]
+    return PortraitSlot(index=-1, lba=lba, sectors=entry[3])
+
+
 def portrait_slots(payload: bytes) -> tuple[PortraitSlot, ...]:
     """Decode the source-guarded Mission 0 portrait slot table."""
 
@@ -220,11 +227,15 @@ def portrait_slots(payload: bytes) -> tuple[PortraitSlot, ...]:
     result = []
     for index in range(PORTRAIT_SLOT_COUNT):
         entry = table[index * 4 : index * 4 + 4]
-        # The dispatcher computes $605B + index*4. Records are:
-        # [LBA high, LBA low, LBA middle, sector count].
-        lba = (entry[0] << 16) | (entry[2] << 8) | entry[1]
-        sectors = entry[3]
-        result.append(PortraitSlot(index=index, lba=lba, sectors=sectors))
+        # The dispatcher computes $605B + index*4.
+        decoded = _decode_portrait_entry(entry)
+        result.append(
+            PortraitSlot(
+                index=index,
+                lba=decoded.lba,
+                sectors=decoded.sectors,
+            )
+        )
     return tuple(result)
 
 
