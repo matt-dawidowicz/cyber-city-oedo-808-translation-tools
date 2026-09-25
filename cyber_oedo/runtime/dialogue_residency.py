@@ -96,6 +96,25 @@ MOVEMENT_AUDIO_FADE_BYTES = bytes.fromhex(
     "A9 0C 20 2D E0 A0 78 20 7B E0 88 D0 FA 60"
 )
 
+VOICE_DESCRIPTOR_CPU = 0x8BA3
+VOICE_DESCRIPTOR_COUNT = 157
+VOICE_DESCRIPTOR_BYTES = VOICE_DESCRIPTOR_COUNT * 6
+VOICE_DESCRIPTOR_SHA256 = (
+    "3dff96b6bb5aa6bd46dfc2f4265fa401eb0e45c1038f2690f797382d500e903e"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class VoiceDescriptor:
+    selector: int
+    lba: int
+    sectors: int
+    parameter_word: int
+
+    @property
+    def end_lba_exclusive(self) -> int:
+        return self.lba + self.sectors
+
 
 @dataclass(frozen=True, slots=True)
 class ResidentLoader:
@@ -152,6 +171,39 @@ def find_standard_resident_loaders(payload: bytes) -> tuple[ResidentLoader, ...]
     )
 
 
+def parse_voice_descriptors(module: bytes) -> tuple[VoiceDescriptor, ...]:
+    """Decode the 6-byte command-4 voice descriptor table."""
+
+    relative = VOICE_DESCRIPTOR_CPU - MODULE_CPU_START
+    blob = module[relative : relative + VOICE_DESCRIPTOR_BYTES]
+    if len(blob) != VOICE_DESCRIPTOR_BYTES:
+        raise ValueError("voice descriptor table is truncated")
+    if hashlib.sha256(blob).hexdigest() != VOICE_DESCRIPTOR_SHA256:
+        raise ValueError("voice descriptor table source guard mismatch")
+
+    rows: list[VoiceDescriptor] = []
+    for selector in range(1, VOICE_DESCRIPTOR_COUNT + 1):
+        start = (selector - 1) * 6
+        entry = blob[start : start + 6]
+        lba = (entry[0] << 16) | (entry[2] << 8) | entry[1]
+        rows.append(
+            VoiceDescriptor(
+                selector=selector,
+                lba=lba,
+                sectors=entry[3],
+                parameter_word=entry[4] | (entry[5] << 8),
+            )
+        )
+    return tuple(rows)
+
+
+def voice_extent_is_contiguous(rows: tuple[VoiceDescriptor, ...]) -> bool:
+    return all(
+        left.end_lba_exclusive == right.lba
+        for left, right in zip(rows, rows[1:])
+    )
+
+
 def immutable_module_sha256(module: bytes) -> str:
     if len(module) != DIALOGUE_MODULE_LENGTH:
         raise ValueError("Mission 0 dialogue module length mismatch")
@@ -190,6 +242,7 @@ def analyze_dialogue_residency(payload: bytes) -> dict[str, object]:
     outer_start = MISSION0_B_PAYLOAD_BASE + OUTER_EXIT_CPU
     movement_start = MOVEMENT_MODULE_PAYLOAD_BASE + MOVEMENT_EXIT_CPU
     standard_loaders = find_standard_resident_loaders(payload)
+    voices = parse_voice_descriptors(module)
 
     return {
         "module": {
@@ -297,6 +350,23 @@ def analyze_dialogue_residency(payload: bytes) -> dict[str, object]:
             "entry_music_path": (
                 "$4089 cancels prior fade then calls CD_PLAY before the "
                 "interactive exploration loop"
+            ),
+        },
+        "voice_extent": {
+            "descriptor_count": len(voices),
+            "descriptor_cpu": "$8BA3",
+            "descriptor_sha256": VOICE_DESCRIPTOR_SHA256,
+            "first_lba": "0x%04X" % voices[0].lba,
+            "end_lba_exclusive": "0x%04X" % voices[-1].end_lba_exclusive,
+            "contiguous": voice_extent_is_contiguous(voices),
+            "total_sectors": sum(item.sectors for item in voices),
+            "total_bytes": sum(item.sectors for item in voices) * 0x800,
+            "minimum_1x_seconds": sum(item.sectors for item in voices) / 75.0,
+            "largest_clip_sectors": max(item.sectors for item in voices),
+            "cache_conclusion": (
+                "the full Mission 0 voice corpus is far larger than 192 KiB; "
+                "cache/prefetch must operate on the current conversation or "
+                "hot voice subset rather than the complete mission"
             ),
         },
         "optimization_hypotheses": [
