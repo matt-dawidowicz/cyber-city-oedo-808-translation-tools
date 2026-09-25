@@ -114,8 +114,17 @@ test the additional 192 KiB RAM as a read-through cache.
     bar working set                  110,656 bytes
 
 After one preload, repeated interactions could replace module and speaker CD
-reads with RAM copies, replace optical AD_TRANS with RAM-to-ADPCM transfer,
-and cache selected portraits for RAM-to-VRAM copies.
+reads with RAM copies and cache selected portraits for RAM-to-VRAM copies.
+
+The complete bar working set is 110,656 bytes, which occupies 14 packed 8 KiB
+banks and leaves ten Card RAM banks (81,920 bytes) available.
+
+The documented AD_WRITE bank-source form names the ordinary CD RAM banks
+$80-$87, not the Super System Card banks $68-$7F. Therefore the accelerated
+path must not assume direct AD_WRITE access to Card RAM. Candidate approaches
+are to temporarily map a $68-$7F bank into a logical CPU window and use
+AD_WRITE's local-memory form, or to stage through a proven $80-$87 buffer. Both
+require live certification.
 
 ### D. Scene graphics
 
