@@ -58,6 +58,14 @@ class HotAsset:
             raise ValueError("asset absolute LBA precedes Track 2")
         return relative_sector * SECTOR_BYTES
 
+    @property
+    def transfer_sectors(self) -> int:
+        return math.ceil(self.byte_length / SECTOR_BYTES)
+
+    @property
+    def end_sector_inclusive(self) -> int:
+        return self.sector + self.transfer_sectors - 1
+
 
 HOT_ASSETS = (
     HotAsset(
@@ -271,6 +279,52 @@ def _sectors(byte_count: int) -> int:
     return math.ceil(byte_count / SECTOR_BYTES)
 
 
+def summarize_source_layout(
+    assets: tuple[HotAsset, ...],
+) -> dict[str, object]:
+    """Describe physical source extents without inventing drive seek timing."""
+
+    if not assets:
+        raise ValueError("assets must not be empty")
+    ordered = tuple(sorted(assets, key=lambda item: item.sector))
+    gaps = tuple(
+        right.sector - (left.end_sector_inclusive + 1)
+        for left, right in zip(ordered, ordered[1:])
+    )
+    if any(gap < 0 for gap in gaps):
+        raise ValueError("source extents overlap")
+    span_start = ordered[0].sector
+    span_end = ordered[-1].end_sector_inclusive
+    span_sectors = span_end - span_start + 1
+    transfer_sectors = sum(item.transfer_sectors for item in ordered)
+    gap_sectors = sum(gaps)
+    if transfer_sectors + gap_sectors != span_sectors:
+        raise ValueError("source span accounting mismatch")
+    return {
+        "extents": [
+            {
+                "name": item.name,
+                "start_lba": f"0x{item.sector:04X}",
+                "end_lba_inclusive": f"0x{item.end_sector_inclusive:04X}",
+                "transfer_sectors": item.transfer_sectors,
+            }
+            for item in ordered
+        ],
+        "post_transfer_gaps_sectors": list(gaps),
+        "gap_sectors_total": gap_sectors,
+        "span_start_lba": f"0x{span_start:04X}",
+        "span_end_lba_inclusive": f"0x{span_end:04X}",
+        "span_sectors": span_sectors,
+        "transfer_sectors": transfer_sectors,
+        "transfer_density_percent": transfer_sectors / span_sectors * 100.0,
+        "interpretation": (
+            "Gap sectors are static disc-layout distance between the end of one "
+            "transfer extent and the start of the next. They prove noncontiguous "
+            "placement but do not by themselves assign mechanical seek time."
+        ),
+    }
+
+
 def analyze_hot_assets(payload: bytes) -> dict[str, object]:
     loader_guards = validate_scene_loaders(payload)
     if not all(loader_guards.values()):
@@ -312,6 +366,17 @@ def analyze_hot_assets(payload: bytes) -> dict[str, object]:
         )
 
     main = {row["name"]: row for row in rows}
+    main_assets = tuple(
+        item
+        for name in (
+            "main_scene_local_a",
+            "main_scene_local_b",
+            "main_scene_vram",
+        )
+        for item in HOT_ASSETS
+        if item.name == name
+    )
+    main_source_layout = summarize_source_layout(main_assets)
     main_raw_sectors = (
         main["main_scene_local_a"]["raw_sectors"]
         + main["main_scene_local_b"]["raw_sectors"]
@@ -351,6 +416,7 @@ def analyze_hot_assets(payload: bytes) -> dict[str, object]:
         "main_scene_bundle": {
             "source_sectors": ["0x228E", "0x22DE", "0x22E8"],
             "source_start_gaps_sectors": [0x22DE - 0x228E, 0x22E8 - 0x22DE],
+            "source_layout": main_source_layout,
             "raw_transfer_sectors": main_raw_sectors,
             "raw_minimum_1x_stream_seconds": (
                 main_raw_sectors / CD_SECTORS_PER_SECOND
@@ -366,7 +432,8 @@ def analyze_hot_assets(payload: bytes) -> dict[str, object]:
             "layout_target": (
                 "duplicate/relocate the three source components into one "
                 "contiguous owned CD extent so the loader performs sequential "
-                "reads instead of an 80-sector then 10-sector source jump"
+                "reads instead of crossing 73-sector and 7-sector post-transfer "
+                "source gaps"
             ),
         },
         "limits": {
