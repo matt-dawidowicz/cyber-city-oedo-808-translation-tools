@@ -203,6 +203,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "plan-card-ram-cache",
+        "cyber_oedo.runtime.card_ram_cache_plan",
+        "Plan an AD_WRITE-friendly Mission 0 Super System Card cache layout.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-cd-hot-assets",
         "cyber_oedo.runtime.cd_load_optimization",
         "Measure hot scene assets and candidate load compression.",
