@@ -69,6 +69,8 @@ PORTRAIT_TABLE_SHA256 = (
 
 @dataclass(frozen=True, slots=True)
 class SpeakerLoadPair:
+    """Pair one speaker's local block with its ADPCM source block."""
+
     index: int
     local_lba: int
     adpcm_lba: int
@@ -85,6 +87,8 @@ class SpeakerLoadPair:
 
 @dataclass(frozen=True, slots=True)
 class PortraitSlot:
+    """Describe one fixed five-sector portrait source slot."""
+
     index: int
     lba: int
     sectors: int
@@ -99,6 +103,8 @@ class PortraitSlot:
 
 
 def payload_offset_for_lba(lba: int) -> int:
+    """Convert one absolute disc LBA to a Track 2 payload offset."""
+
     relative = lba - TRACK2_START_LBA
     if relative < 0:
         raise ValueError("LBA precedes Track 2")
@@ -143,6 +149,8 @@ def validate_dialogue_module(payload: bytes) -> dict[str, bool]:
 
 
 def speaker_load_pairs(payload: bytes) -> tuple[SpeakerLoadPair, ...]:
+    """Decode the eight local/ADPCM source pairs after source validation."""
+
     checks = validate_dialogue_module(payload)
     if not all(checks.values()):
         raise ValueError(f"dialogue module source guard mismatch: {checks}")
@@ -179,6 +187,8 @@ def speaker_load_pairs(payload: bytes) -> tuple[SpeakerLoadPair, ...]:
 
 
 def portrait_slots(payload: bytes) -> tuple[PortraitSlot, ...]:
+    """Decode the source-guarded Mission 0 portrait slot table."""
+
     table_offset = MISSION0_B_PAYLOAD_BASE + PORTRAIT_TABLE_CPU
     byte_count = PORTRAIT_SLOT_COUNT * 4
     table = payload[table_offset : table_offset + byte_count]
@@ -195,6 +205,8 @@ def portrait_slots(payload: bytes) -> tuple[PortraitSlot, ...]:
 
 
 def analyze_dialogue_load_architecture(payload: bytes) -> dict[str, object]:
+    """Return the source-guarded dialogue/audio/portrait load architecture."""
+
     payload_hash = hashlib.sha256(payload).hexdigest()
     if payload_hash != TRACK2_PAYLOAD_SHA256:
         raise ValueError(
@@ -273,6 +285,8 @@ def analyze_dialogue_load_architecture(payload: bytes) -> dict[str, object]:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Create the dialogue-load-architecture command-line parser."""
+
     parser = argparse.ArgumentParser(
         description=(
             "Map the authenticated Mission 0 dialogue, ADPCM, and portrait "
@@ -285,6 +299,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run source-guarded dialogue-load architecture analysis."""
+
     args = build_parser().parse_args(argv)
     report = analyze_dialogue_load_architecture(args.payload.read_bytes())
     rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
