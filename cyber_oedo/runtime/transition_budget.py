@@ -9,21 +9,21 @@ import re
 
 _BUDGET_RE = re.compile(
     r"\[TRANSITION_BUDGET\].*?"
-    r"total_frames=(?P<total_frames>\\d+).*?"
-    r"cd_read_frames=(?P<cd_read_frames>\\d+).*?"
+    r"total_frames=(?P<total_frames>\d+).*?"
+    r"cd_read_frames=(?P<cd_read_frames>\d+).*?"
     r"cd_read_calls=(?P<cd_read_calls>\d+).*?"
-    r"cd_exec_frames=(?P<cd_exec_frames>\\d+).*?"
+    r"cd_exec_frames=(?P<cd_exec_frames>\d+).*?"
     r"cd_exec_calls=(?P<cd_exec_calls>\d+).*?"
-    r"ad_trans_frames=(?P<ad_trans_frames>\\d+).*?"
+    r"ad_trans_frames=(?P<ad_trans_frames>\d+).*?"
     r"ad_trans_calls=(?P<ad_trans_calls>\d+).*?"
-    r"ad_read_frames=(?P<ad_read_frames>\\d+).*?"
+    r"ad_read_frames=(?P<ad_read_frames>\d+).*?"
     r"ad_read_calls=(?P<ad_read_calls>\d+).*?"
-    r"ad_write_frames=(?P<ad_write_frames>\\d+).*?"
+    r"ad_write_frames=(?P<ad_write_frames>\d+).*?"
     r"ad_write_calls=(?P<ad_write_calls>\d+).*?"
-    r"fade_wait_frames=(?P<fade_wait_frames>\\d+).*?"
-    r"vsync_calls=(?P<vsync_calls>\\d+).*?"
-    r"known_serial_frames=(?P<known_serial_frames>\\d+).*?"
-    r"residual_frames=(?P<residual_frames>-?\\d+)"
+    r"fade_wait_frames=(?P<fade_wait_frames>\d+).*?"
+    r"vsync_calls=(?P<vsync_calls>\d+).*?"
+    r"known_serial_frames=(?P<known_serial_frames>\d+).*?"
+    r"residual_frames=(?P<residual_frames>-?\d+)"
 )
 
 def parse_transition_budgets(text: str) -> dict[str, object]:
@@ -50,9 +50,9 @@ def parse_transition_budgets(text: str) -> dict[str, object]:
             "ad_read_seconds": values["ad_read_frames"] / 60.0,
             "ad_write_seconds": values["ad_write_frames"] / 60.0,
             "fade_wait_seconds": values["fade_wait_frames"] / 60.0,
-            "residual_seconds": values["residual"] / 60.0,
+            "residual_seconds": values["residual_frames"] / 60.0,
             "known_serial_percent": known / total * 100.0,
-            "residual_percent": values["residual"] / total * 100.0,
+            "residual_percent": values["residual_frames"] / total * 100.0,
         })
     if not rows:
         raise ValueError("no TRANSITION_BUDGET rows found")
