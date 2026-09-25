@@ -317,3 +317,4 @@ Further documentation:
 - [`docs/localization_style_guide.md`](docs/localization_style_guide.md)
 - [`docs/english_font_architecture.md`](docs/english_font_architecture.md)
 - [`docs/packed_english_m0_runtime.md`](docs/packed_english_m0_runtime.md)
+- [`docs/cd_load_optimization.md`](docs/cd_load_optimization.md)
