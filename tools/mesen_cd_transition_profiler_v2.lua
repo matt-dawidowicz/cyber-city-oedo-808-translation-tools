@@ -21,10 +21,13 @@
 --   $41EC  outer synchronous fade-wait loop
 --   $41F1  first instruction after the fade-wait loop
 -- MPRs are logged at all logical hooks to prevent overlay-address confusion.
+-- pceCardRam is monitored separately from the 64 KiB CD-ROM unit RAM so the
+-- System Card 3.0 expansion can be evaluated as a cache target.
 
 local CPU = emu.cpuType.pce
 local MEM = emu.memType.pceMemory
 local CDRAM = emu.memType.pceCdromRam
+local CARDRAM = emu.memType.pceCardRam
 
 local TRACK2_START_LBA = 3590
 local frame = 0
@@ -49,6 +52,7 @@ local registeredAdTransReturns = {}
 local fadeCommandStartFrame = nil
 local fadeWaitStartFrame = nil
 local fadeWaitSamples = 0
+local cardRam = {size=0,R=0,W=0,X=0,samples={}}
 
 local function r8(address, memType)
   return emu.read(address, memType or MEM)
@@ -105,6 +109,36 @@ local function log(line)
     logFile:write(line, "\n")
     logFile:flush()
   end
+end
+
+local function onCardRam(kind, address, value)
+  cardRam[kind] = cardRam[kind] + 1
+  if #cardRam.samples < 32 then
+    local state = cpu()
+    cardRam.samples[#cardRam.samples + 1] = string.format(
+      "%s addr=$%05X value=$%02X PC=$%04X frame=%d",
+      kind, address, value or 0, state.pc or 0, frame
+    )
+  end
+end
+
+local function armCardRamMonitor()
+  cardRam.size = emu.getMemorySize(CARDRAM) or 0
+  log(string.format("[CARD_RAM] size=%d bytes ($%X)", cardRam.size, cardRam.size))
+  if cardRam.size <= 0 then return end
+  local last = cardRam.size - 1
+  emu.addMemoryCallback(
+    function(a,v) onCardRam("R", a, v) end,
+    emu.callbackType.read, 0, last, CPU, CARDRAM
+  )
+  emu.addMemoryCallback(
+    function(a,v) onCardRam("W", a, v) end,
+    emu.callbackType.write, 0, last, CPU, CARDRAM
+  )
+  emu.addMemoryCallback(
+    function(a,v) onCardRam("X", a, v) end,
+    emu.callbackType.exec, 0, last, CPU, CARDRAM
+  )
 end
 
 local function sceneState()
@@ -365,6 +399,7 @@ end
 openLog()
 log("Cyber City Oedo 808 CD transition profiler v2 armed.")
 log("Read-only instrumentation: YES")
+armCardRamMonitor()
 
 emu.addMemoryCallback(onCdRead, emu.callbackType.exec, 0xE009, 0xE009, CPU, MEM)
 emu.addMemoryCallback(onAdTrans, emu.callbackType.exec, 0xE033, 0xE033, CPU, MEM)
@@ -403,10 +438,15 @@ emu.addEventCallback(function()
   end
   log(string.format(
     "[SUMMARY] frames=%d reads=%d pending_reads=%d ad_trans=%d ad_stop=%d " ..
-    "ad_stat=%d cd_fade=%d vsync=%d byte_loaders=%d dialogue_groups=%d parser_hits=%d",
+    "ad_stat=%d cd_fade=%d vsync=%d byte_loaders=%d dialogue_groups=%d parser_hits=%d " ..
+    "card_ram_size=%d card_ram_R/W/X=%d/%d/%d",
     frame, readOrdinal, pendingCount, adTransOrdinal, adStopCalls,
-    adStatCalls, cdFadeCalls, vsyncCalls, byteLoaderOrdinal, dialogueGroups, parserHits
+    adStatCalls, cdFadeCalls, vsyncCalls, byteLoaderOrdinal, dialogueGroups, parserHits,
+    cardRam.size, cardRam.R, cardRam.W, cardRam.X
   ))
+  for i,sample in ipairs(cardRam.samples) do
+    log(string.format("[CARD_RAM_SAMPLE %02d] %s", i, sample))
+  end
   if logFile then
     logFile:flush()
     logFile:close()
