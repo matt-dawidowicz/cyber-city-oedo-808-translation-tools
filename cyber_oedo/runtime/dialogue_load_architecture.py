@@ -58,12 +58,21 @@ SPEAKER_BLOCK_COUNT = 8
 SPEAKER_BLOCK_SECTORS = 2
 ADPCM_BLOCK_SECTORS = 4
 
-PORTRAIT_TABLE_CPU = 0x605C
+PORTRAIT_TABLE_CPU = 0x605B
 PORTRAIT_SLOT_COUNT = 135
 PORTRAIT_SLOT_SECTORS = 5
 PORTRAIT_TRANSFER_BYTES = 0x2020
 PORTRAIT_TABLE_SHA256 = (
-    "5427808b61997268ac0af4b8f9405d4f1627697c725e2666b38061c5b6470cde"
+    "16d176920861449feda62fdfd585cddc2da62411246ee317978b39afafd84e3b"
+)
+PORTRAIT_DISPATCH_CPU = 0x834C
+PORTRAIT_DISPATCH_SHA256 = (
+    "ee0ba690d216eb102bff5ca56899fc22d62cdd35287e4a0f2d3f5e28bd2a9037"
+)
+PORTRAIT_LOADER_CPU = 0x83E0
+PORTRAIT_LOADER_END_CPU = 0x8436
+PORTRAIT_LOADER_SHA256 = (
+    "620f9cf0ed060d5e2c5cad49d8fbb7722c34d5c9a69f807fc3d6df4b1b95da5a"
 )
 
 
@@ -189,6 +198,19 @@ def speaker_load_pairs(payload: bytes) -> tuple[SpeakerLoadPair, ...]:
 def portrait_slots(payload: bytes) -> tuple[PortraitSlot, ...]:
     """Decode the source-guarded Mission 0 portrait slot table."""
 
+    dispatch = payload[
+        MISSION0_B_PAYLOAD_BASE + PORTRAIT_DISPATCH_CPU :
+        MISSION0_B_PAYLOAD_BASE + PORTRAIT_DISPATCH_CPU + 0x6D
+    ]
+    loader = payload[
+        MISSION0_B_PAYLOAD_BASE + PORTRAIT_LOADER_CPU :
+        MISSION0_B_PAYLOAD_BASE + PORTRAIT_LOADER_END_CPU
+    ]
+    if hashlib.sha256(dispatch).hexdigest() != PORTRAIT_DISPATCH_SHA256:
+        raise ValueError("Mission 0 portrait dispatcher source guard mismatch")
+    if hashlib.sha256(loader).hexdigest() != PORTRAIT_LOADER_SHA256:
+        raise ValueError("Mission 0 portrait loader source guard mismatch")
+
     table_offset = MISSION0_B_PAYLOAD_BASE + PORTRAIT_TABLE_CPU
     byte_count = PORTRAIT_SLOT_COUNT * 4
     table = payload[table_offset : table_offset + byte_count]
@@ -198,8 +220,10 @@ def portrait_slots(payload: bytes) -> tuple[PortraitSlot, ...]:
     result = []
     for index in range(PORTRAIT_SLOT_COUNT):
         entry = table[index * 4 : index * 4 + 4]
-        lba = entry[0] | (entry[1] << 8) | (entry[3] << 16)
-        sectors = entry[2]
+        # The dispatcher computes $605B + index*4. Records are:
+        # [LBA high, LBA low, LBA middle, sector count].
+        lba = (entry[0] << 16) | (entry[2] << 8) | entry[1]
+        sectors = entry[3]
         result.append(PortraitSlot(index=index, lba=lba, sectors=sectors))
     return tuple(result)
 
@@ -258,6 +282,11 @@ def analyze_dialogue_load_architecture(payload: bytes) -> dict[str, object]:
             ),
         },
         "portrait_table": {
+            "table_cpu": f"0x{PORTRAIT_TABLE_CPU:04X}",
+            "record_format": "[LBA high, LBA low, LBA middle, sector count]",
+            "dispatcher_cpu": f"0x{PORTRAIT_DISPATCH_CPU:04X}",
+            "loader_cpu": f"0x{PORTRAIT_LOADER_CPU:04X}",
+            "loader_cd_read": "$E009 type $FE, length $2020",
             "slots": len(portraits),
             "first_lba": f"0x{portraits[0].lba:04X}",
             "last_lba": f"0x{portraits[-1].lba:04X}",
