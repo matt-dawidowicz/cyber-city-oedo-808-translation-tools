@@ -179,6 +179,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-dialogue-residency",
+        "cyber_oedo.runtime.dialogue_residency",
+        "Map dialogue-bank residency, audio state, voices, and VRAM overlap.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-cd-hot-assets",
         "cyber_oedo.runtime.cd_load_optimization",
         "Measure hot scene assets and candidate load compression.",
