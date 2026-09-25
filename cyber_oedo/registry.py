@@ -209,6 +209,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-static-vram-bound",
+        "cyber_oedo.runtime.static_vram_restore_bound",
+        "Bound dialogue-owned exploration VRAM damage from static renderer geometry.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-scene-transition",
         "cyber_oedo.runtime.scene_transition_architecture",
         "Validate ordered exploration scene-transition phase boundaries.",
