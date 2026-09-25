@@ -145,10 +145,10 @@ Authenticated payload measurements:
 
 | Asset | Raw | 16-bit PackBits | Ratio | Sector saving |
 |---|---:|---:|---:|---:|
-| `$22E8` large VRAM | 60,928 | 42,491 | 69.7% | 30 -> 21 (9) |
-| `$25C2` large VRAM | 60,928 | 42,098 | 69.1% | 30 -> 21 (9) |
-| `$1458` portrait/UI | 8,224 | 6,725 | 81.8% | 5 -> 4 (1) |
-| `$1561` portrait/UI | 8,224 | 2,955 | 35.9% | 5 -> 2 (3) |
+| `$22E8` large VRAM | 60,928 | 29,458 | 48.3% | 30 -> 15 (15) |
+| `$25C2` large VRAM | 60,928 | 34,294 | 56.3% | 30 -> 17 (13) |
+| `$1458` portrait/UI | 8,224 | 5,870 | 71.4% | 5 -> 3 (2) |
+| `$1561` portrait/UI | 8,224 | 3,742 | 45.5% | 5 -> 2 (3) |
 
 For the hot bundle, compressing only `$22E8` changes the pure transfer floor
 from about 40 sectors to 31:
@@ -162,7 +162,8 @@ That is only ~0.12 seconds of raw-transfer saving by itself. The larger
 opportunity is **compression plus contiguous placement**, because the observed
 pause includes much more than the raw 1x transfer floor.
 
-Desktop zlib compresses `$22E8` to 33,973 bytes and `$25C2` to 33,797 bytes.
+Desktop zlib compresses the correctly addressed `$22E8` asset to 15,455
+bytes and `$25C2` to 17,774 bytes.
 Those figures are useful upper-bound comparisons only; zlib is not a proposed
 runtime dependency.
 
