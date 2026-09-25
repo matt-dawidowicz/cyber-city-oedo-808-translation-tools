@@ -119,6 +119,35 @@ and percentages.
 This avoids the earlier accounting error of summing nested byte-loader and
 CD_READ timings as if they were independent costs.
 
+### A3. Static scene-transition call structure
+
+The authenticated movement overlay separates the explicit wait gate from the
+scene orchestration entry:
+
+    $40DB-$40E8  exploration audio transition
+                  CD_FADE mode $0C + fixed 120-frame EX_VSYNC loop
+
+    $40E9...      scene/room orchestration
+                  descriptor selection, runtime setup, and resource-loader calls
+
+The blocking CD_READ helpers live at `$423B-$4261` (local memory) and
+`$4262-$428D` (VRAM). Their code is address-adjacent to the guarded
+`$40E9-$423A` setup region, but they are **nested callees**, not a later
+sequential phase. Existing profiling observes loader returns while scene setup
+is still pending.
+
+Therefore two conclusions are safe:
+
+- the 120-frame wait ends before scene orchestration begins;
+- the CD_READ wrappers contain no explicit EX_VSYNC delay.
+
+But setup time and loader time must not be double-counted as separate serial
+phases. The maintained diagnostic is:
+
+    cyber-oedo analyze-scene-transition <track2-payload>
+
+No speed mutation is enabled by this analyzer.
+
 ### B. Short transition teardown
 
 If live timing confirms the fade is critical-path time, prototype a

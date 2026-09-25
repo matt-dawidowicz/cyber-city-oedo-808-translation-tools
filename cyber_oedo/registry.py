@@ -185,6 +185,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-scene-transition",
+        "cyber_oedo.runtime.scene_transition_architecture",
+        "Validate ordered exploration scene-transition phase boundaries.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-vram-dirty",
         "cyber_oedo.runtime.vram_dirty_profile",
         "Measure selective exploration-VRAM restore cost from Mesen logs.",
