@@ -18,6 +18,61 @@ deliberate delay that can simply be removed.
 The first optimization target is therefore **less seeking and less data
 movement**, not deleting a wait loop.
 
+## Full dialogue-transition latency
+
+The earlier hot-bundle measurement of roughly 1.5 seconds covered the spacing
+between three scene CD_READ starts.  It did **not** represent the complete
+player-visible transition.
+
+The historical Mission 0 trace contains a second, more important repeated
+pattern: five reads used to enter portrait/dialogue presentation. Four captured
+instances measure from the first CD request to the first parser execution at:
+
+- 370 frames = 6.17 s;
+- 372 frames = 6.20 s;
+- 342 frames = 5.70 s;
+- 344 frames = 5.73 s.
+
+Each transition moves only ten source sectors total, a pure 1x streaming floor
+of about 0.133 s. Therefore roughly 5.6-6.1 seconds per occurrence are outside
+the raw streaming floor.
+
+The representative first source sequence is:
+
+```text
+$1425 -> $1426 -> $10DD -> $1441 -> $1458
+```
+
+with destinations:
+
+```text
+$8000, $29D0, $29D0, $9000, VRAM $4000
+```
+
+The source-start deltas are:
+
+```text
++1, -841, +868, +23 sectors
+```
+
+so the load path oscillates hundreds of sectors backward and forward to fetch a
+tiny event/dialogue resource in the middle of otherwise nearby assets.
+
+The first captured request starts at frame 220. Data from its one-sector read
+does not begin landing until about frame 286 (~1.10 s). The adjacent $1426
+request reaches the next loader call about 11 frames later, while the $10DD
+request is followed by a ~151-frame gap before the $1441 read begins. This
+strongly implicates seek/command/setup cost rather than transfer bandwidth.
+
+The cold five-read transition exposes a serious seek-layout problem, but later
+captures refine the diagnosis: once the named event resource is cached, the
+same transition becomes a four-read sequence and still takes about 5.7 seconds.
+Therefore the $10xx detour is a cold-load penalty, not the baseline cause.
+
+The remaining baseline path includes hidden ADPCM optical transfers through
+System Card AD_TRANS ($E033), which the original CD_READ-only profiler did not
+record, plus an audio teardown/fade synchronization gate.
+
 ## Historical Mission 0 trace
 
 The existing 12,510-frame Mesen V5 route contains:
@@ -151,14 +206,15 @@ Authenticated payload measurements:
 | `$1561` portrait/UI | 8,224 | 3,742 | 45.5% | 5 -> 2 (3) |
 
 For the hot bundle, compressing only `$22E8` changes the pure transfer floor
-from about 40 sectors to 31:
+from 40 sectors to 25:
 
 ```text
+7 + 3 + 15 = 25 sectors
 40 / 75 = 0.533 s
-31 / 75 = 0.413 s
+25 / 75 = 0.333 s
 ```
 
-That is only ~0.12 seconds of raw-transfer saving by itself. The larger
+That is about 0.20 seconds of raw-transfer saving by itself. The larger
 opportunity is **compression plus contiguous placement**, because the observed
 pause includes much more than the raw 1x transfer floor.
 
@@ -166,6 +222,18 @@ Desktop zlib compresses the correctly addressed `$22E8` asset to 15,455
 bytes and `$25C2` to 17,774 bytes.
 Those figures are useful upper-bound comparisons only; zlib is not a proposed
 runtime dependency.
+
+## System Card 3.0 cache opportunity
+
+Mesen exposes the System Card expansion as `pceCardRam`, separately from the
+64 KiB CD-ROM unit RAM exposed as `pceCdromRam`. The v2 transition profiler
+now records the Card RAM size and all R/W/X activity. This directly tests the
+192 KiB cache hypothesis under the operator's actual BIOS.
+
+The complete Mission 0 dialogue/audio core at $1425-$1452 is 46 sectors /
+94,208 bytes, so it can fit in 192 KiB with room for selected portraits. See
+[`docs/fast_load_architecture.md`](fast_load_architecture.md) for the
+accelerated-build design.
 
 ## 8 KiB bank $87
 
@@ -193,14 +261,22 @@ Use:
 
 ```text
 cyber-oedo analyze-cd-loads cyber_oedo_cd_load_profile.log
+cyber-oedo analyze-cd-transitions cyber_oedo_translation_capture_v5.log
 cyber-oedo analyze-cd-hot-assets track02_mode1_2048.bin
 ```
 
 For new captures use:
 
 ```text
-tools/mesen_cd_load_profiler.lua
+tools/mesen_cd_transition_profiler_v2.lua
 ```
+
+The v2 profiler dynamically registers each observed BIOS return target and
+therefore measures every `CD_READ` from entry to the exact caller return. It
+also times AD_TRANS transfers into ADPCM RAM, logs AD_STOP / AD_STAT / CD_FADE,
+counts EX_VSYNC, times the generic byte loader, measures the synchronous fade
+gate, monitors System Card Card RAM, and marks the first dialogue parser
+execution after a long idle interval.
 
 The profiler records:
 
@@ -217,19 +293,24 @@ The profiler records:
 
 ## Optimization order
 
-1. **Measure exact read duration.** Establish entry-to-return frame cost for the
-   hot bundle instead of inferring from call spacing.
-2. **Contiguous-source prototype.** Relocate/duplicate the hot bundle into one
-   owned extent without compression and benchmark the same route.
-3. **Word-PackBits prototype.** Compress the large VRAM block and stream/decode
-   it through a proven staging bank.
-4. **Cache small resources.** If bank `$87` residency is certified, retain
-   high-frequency small assets whose compressed forms fit.
-5. **Generalize by scene descriptor.** Generate optimized bundles for other
-   repeatedly visited rooms only after the first prototype has measured wins.
-6. **Do not optimize voice waits.** Dialogue opcode `21` waits for real ADPCM
-   voice completion and is part of presentation semantics, not scene-load
-   overhead.
+1. **Measure the full transition budget.** Time CD_READ, AD_TRANS, fade state,
+   byte-loader work, and parser-ready in one capture.
+2. **Fast transition teardown prototype.** If the synchronous fade is confirmed
+   critical-path, replace it with a state-correct short/immediate shutdown
+   rather than merely NOPing its wait loop.
+3. **System Card 3.0 cache proof.** Verify pceCardRam size/lifetime and preload
+   the 94,208-byte dialogue/audio core.
+4. **RAM-to-ADPCM path.** Replace repeated optical AD_TRANS calls with a
+   RAM-to-ADPCM transfer only after the cache is live-certified.
+5. **Portrait cache.** Cache the room's small working portrait set where Card
+   RAM headroom permits.
+6. **Contiguous scene prototype.** Relocate/duplicate the large exploration
+   scene bundle into one owned extent and benchmark it.
+7. **Word-PackBits prototype.** Compress large VRAM blocks after seek/command
+   overhead has been reduced.
+8. **Preserve dialogue voice barriers.** Opcode `21` waits for active voice
+   completion during dialogue and is presentation semantics, not transition
+   load overhead.
 
 ## Release gates
 
@@ -245,3 +326,8 @@ A load optimization is not promoted until all of these pass:
 - exact before/after Mesen frame measurements;
 - no new writes/execution in storage classified as cache/workspace;
 - full raw Mode 1 EDC/ECC rebuild for every modified sector.
+
+## Deep-dive companion
+
+The detailed fade, ADPCM, cache, source-table, and portrait-slot findings are
+maintained in [`docs/fast_load_architecture.md`](fast_load_architecture.md).

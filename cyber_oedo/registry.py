@@ -167,6 +167,18 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
+        "analyze-cd-transitions",
+        "cyber_oedo.runtime.load_transition_profile",
+        "Measure full Mission 0 CD-load-to-dialogue latency.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "analyze-dialogue-load-architecture",
+        "cyber_oedo.runtime.dialogue_load_architecture",
+        "Map Mission 0 dialogue/audio/portrait load layout.",
+        "Diagnostics",
+    ),
+    CommandSpec(
         "analyze-cd-hot-assets",
         "cyber_oedo.runtime.cd_load_optimization",
         "Measure hot scene assets and candidate load compression.",
