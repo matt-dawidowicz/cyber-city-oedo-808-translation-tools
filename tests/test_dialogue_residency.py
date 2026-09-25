@@ -11,6 +11,8 @@ from cyber_oedo.runtime.dialogue_residency import (
     MODULE_MUTABLE_CPU_BYTES,
     SELF_MOD_WRITE_SITES,
     SPEAKER_LOCAL_BYTES,
+    VoiceDescriptor,
+    voice_extent_is_contiguous,
     STANDARD_RESIDENT_LOADER_PREFIX,
     _decode_standard_loader,
 )
@@ -54,6 +56,16 @@ class DialogueResidencyTests(unittest.TestCase):
     def test_expected_gamewide_copy_counts_are_explicit(self) -> None:
         self.assertEqual(EXPECTED_STANDARD_LOADERS, 11)
         self.assertEqual(EXPECTED_ALL_RESIDENT_CHECKS, 12)
+
+    def test_voice_extent_contiguity_helper(self) -> None:
+        rows = (
+            VoiceDescriptor(1, 0x16F6, 17, 0),
+            VoiceDescriptor(2, 0x1707, 9, 0),
+            VoiceDescriptor(3, 0x1710, 4, 0),
+        )
+        self.assertTrue(voice_extent_is_contiguous(rows))
+        broken = rows[:2] + (VoiceDescriptor(3, 0x1711, 4, 0),)
+        self.assertFalse(voice_extent_is_contiguous(broken))
 
 
 if __name__ == "__main__":
