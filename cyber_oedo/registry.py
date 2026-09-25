@@ -221,12 +221,6 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Diagnostics",
     ),
     CommandSpec(
-        "analyze-scene-seeks",
-        "cyber_oedo.runtime.scene_seek_geometry",
-        "Measure static seek geometry of hot exploration scene bundles.",
-        "Diagnostics",
-    ),
-    CommandSpec(
         "analyze-resource-lifetime",
         "cyber_oedo.runtime.resource_lifetime",
         "Map logical dialogue/exploration overlap and MPR lifetime risks.",
