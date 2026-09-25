@@ -1,0 +1,263 @@
+-- Cyber City Oedo 808 - CD transition profiler v2
+-- Mesen 2.2.1 / PC Engine CD
+--
+-- READ ONLY.  This version measures every System Card CD_READ from BIOS entry
+-- to its exact caller return target, instead of timing only the two known scene
+-- wrappers.  It also times generic byte-loader calls and records when dialogue
+-- parsing becomes active again.
+--
+-- Recommended coverage:
+--   * enter/leave the bar several times;
+--   * trigger bartender/Mama/other portrait dialogue;
+--   * enter at least one alternate room and return;
+--   * stop the script only after normal control has resumed.
+--
+-- Persistent log: cyber_oedo_cd_transition_profile_v2.log
+
+local CPU = emu.cpuType.pce
+local MEM = emu.memType.pceMemory
+local CDRAM = emu.memType.pceCdromRam
+
+local TRACK2_START_LBA = 3590
+local frame = 0
+local readOrdinal = 0
+local byteLoaderOrdinal = 0
+local dialogueGroups = 0
+local parserHits = 0
+local lastParserFrame = -100000
+local lastCdFrame = -100000
+local logFile = nil
+
+local pendingReadsByReturn = {}
+local registeredReturnTargets = {}
+local pendingByteLoader = nil
+
+local function r8(address, memType)
+  return emu.read(address, memType or MEM)
+end
+
+local function r16(address)
+  return emu.read16(address, MEM, false)
+end
+
+local function cpu()
+  return emu.getCpuState(CPU)
+end
+
+local function mprs()
+  local state = emu.getState()
+  local result = {}
+  for i=0,7 do
+    result[i] = state["memoryManager.mpr[" .. i .. "]"] or 0
+  end
+  return result
+end
+
+local function mprString(values)
+  values = values or mprs()
+  local out = {}
+  for i=0,7 do
+    out[#out+1] = string.format("MPR%d=$%02X", i, values[i])
+  end
+  return table.concat(out, " ")
+end
+
+local function stackReturnTarget()
+  local state = cpu()
+  local sp = state.sp or 0
+  local lo = r8(0x2100 + ((sp + 1) & 0xFF))
+  local hi = r8(0x2100 + ((sp + 2) & 0xFF))
+  return ((((hi << 8) | lo) + 1) & 0xFFFF)
+end
+
+local function openLog()
+  if type(io) ~= "table" or type(io.open) ~= "function" then return end
+  local base = emu.getScriptDataFolder()
+  if not base or base == "" then return end
+  logFile = io.open(base .. "/cyber_oedo_cd_transition_profile_v2.log", "a")
+  if logFile then
+    logFile:write("\n=== NEW CD TRANSITION PROFILE V2 SESSION ===\n")
+    logFile:flush()
+  end
+end
+
+local function log(line)
+  print(line)
+  if logFile then
+    logFile:write(line, "\n")
+    logFile:flush()
+  end
+end
+
+local function sceneState()
+  return string.format(
+    "scene=$%02X room=$%02X resume=$%02X",
+    r8(0x3700), r8(0x3701), r8(0x3702)
+  )
+end
+
+local addressTypeNames = {
+  [0x00]="LOCAL_BYTES",
+  [0x01]="LOCAL_SECTORS",
+  [0x02]="BANK_MPR2",
+  [0x03]="BANK_MPR3",
+  [0x04]="BANK_MPR4",
+  [0x05]="BANK_MPR5",
+  [0x06]="BANK_MPR6",
+  [0xFE]="VRAM_BYTES",
+  [0xFF]="VRAM_SECTORS",
+}
+
+local function ensureReturnCallback(target)
+  if registeredReturnTargets[target] then return end
+  registeredReturnTargets[target] = true
+
+  emu.addMemoryCallback(
+    function()
+      local queue = pendingReadsByReturn[target]
+      if not queue or #queue == 0 then return end
+
+      local item = table.remove(queue, 1)
+      local elapsed = frame - item.startFrame
+      local c = cpu()
+      log(string.format(
+        "[CD_READ_RETURN %03d] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
+        "sector=$%06X type=$%02X dest=$%04X len=$%04X_%s return=$%04X " ..
+        "A=$%02X X=$%02X %s %s",
+        item.ordinal, frame, elapsed, elapsed / 60.0,
+        item.sector, item.addressType, item.destination, item.length, item.unit,
+        target, c.a or 0, c.x or 0, sceneState(), mprString()
+      ))
+    end,
+    emu.callbackType.exec,
+    target, target, CPU, MEM
+  )
+end
+
+local function onCdRead()
+  readOrdinal = readOrdinal + 1
+  local length = r16(0x20F8)
+  local destination = r16(0x20FA)
+  local lba = (r8(0x20FC) << 16) | (r8(0x20FD) << 8) | r8(0x20FE)
+  local addressType = r8(0x20FF)
+  local returnTarget = stackReturnTarget()
+  local relative = lba - TRACK2_START_LBA
+  local payloadOffset = relative >= 0 and relative * 0x800 or -1
+  local unit = (addressType == 0x00 or addressType == 0xFE) and "bytes" or "sectors"
+
+  if frame - lastCdFrame > 90 then
+    log(string.format("[CD_BURST_START] frame=%d", frame))
+  end
+  lastCdFrame = frame
+
+  local item = {
+    ordinal=readOrdinal,
+    startFrame=frame,
+    sector=lba,
+    addressType=addressType,
+    destination=destination,
+    length=length,
+    unit=unit,
+    returnTarget=returnTarget,
+  }
+  if not pendingReadsByReturn[returnTarget] then
+    pendingReadsByReturn[returnTarget] = {}
+  end
+  table.insert(pendingReadsByReturn[returnTarget], item)
+  ensureReturnCallback(returnTarget)
+
+  log(string.format(
+    "[CD_READ %03d] frame=%d sector=$%06X track2_payload_off=%s " ..
+    "type=$%02X(%s) dest=$%04X len=$%04X_%s caller_return=$%04X %s %s",
+    readOrdinal, frame, lba,
+    payloadOffset >= 0 and string.format("$%08X", payloadOffset) or "outside_track2",
+    addressType, addressTypeNames[addressType] or "UNKNOWN",
+    destination, length, unit, returnTarget, sceneState(), mprString()
+  ))
+end
+
+local function onByteLoader()
+  byteLoaderOrdinal = byteLoaderOrdinal + 1
+  local dest = r16(0x2000)
+  local lba = (r8(0x2002) << 16) | (r8(0x2005) << 8) | r8(0x2004)
+  local length = r16(0x2006)
+  pendingByteLoader = {
+    ordinal=byteLoaderOrdinal,
+    startFrame=frame,
+    dest=dest,
+    lba=lba,
+    length=length,
+    callerReturn=stackReturnTarget(),
+  }
+  log(string.format(
+    "[BYTE_LOADER %03d] frame=%d dest=$%04X sector=$%06X len=$%04X caller_return=$%04X %s %s",
+    byteLoaderOrdinal, frame, dest, lba, length,
+    pendingByteLoader.callerReturn, sceneState(), mprString()
+  ))
+end
+
+local function onByteLoaderReturn()
+  if not pendingByteLoader then return end
+  local elapsed = frame - pendingByteLoader.startFrame
+  log(string.format(
+    "[BYTE_LOADER_RETURN %03d] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
+    "dest=$%04X sector=$%06X len=$%04X caller_return=$%04X %s",
+    pendingByteLoader.ordinal, frame, elapsed, elapsed / 60.0,
+    pendingByteLoader.dest, pendingByteLoader.lba, pendingByteLoader.length,
+    pendingByteLoader.callerReturn, sceneState()
+  ))
+  pendingByteLoader = nil
+end
+
+local function onParser()
+  parserHits = parserHits + 1
+  if frame - lastParserFrame > 300 then
+    dialogueGroups = dialogueGroups + 1
+    log(string.format(
+      "[DIALOGUE_READY %02d] frame=%d parser_hits=%d since_last_cd_frames=%d since_last_cd_seconds=%.4f %s",
+      dialogueGroups, frame, parserHits,
+      frame - lastCdFrame, (frame - lastCdFrame) / 60.0, sceneState()
+    ))
+  end
+  lastParserFrame = frame
+end
+
+openLog()
+log("Cyber City Oedo 808 CD transition profiler v2 armed.")
+log("Read-only instrumentation: YES")
+
+emu.addMemoryCallback(onCdRead, emu.callbackType.exec, 0xE009, 0xE009, CPU, MEM)
+emu.addMemoryCallback(onByteLoader, emu.callbackType.exec, 0x6EA0, 0x6EA0, CPU, MEM)
+emu.addMemoryCallback(onByteLoaderReturn, emu.callbackType.exec, 0x6EED, 0x6EED, CPU, MEM)
+emu.addMemoryCallback(onParser, emu.callbackType.exec, 0x9543, 0x9543, CPU, MEM)
+
+emu.addEventCallback(function()
+  frame = frame + 1
+  if frame % 600 == 0 then
+    local pendingCount = 0
+    for _,queue in pairs(pendingReadsByReturn) do
+      pendingCount = pendingCount + #queue
+    end
+    log(string.format(
+      "[HEARTBEAT] frame=%d reads=%d pending_reads=%d byte_loaders=%d dialogue_groups=%d %s",
+      frame, readOrdinal, pendingCount, byteLoaderOrdinal, dialogueGroups,
+      sceneState()
+    ))
+  end
+end, emu.eventType.endFrame)
+
+emu.addEventCallback(function()
+  local pendingCount = 0
+  for _,queue in pairs(pendingReadsByReturn) do
+    pendingCount = pendingCount + #queue
+  end
+  log(string.format(
+    "[SUMMARY] frames=%d reads=%d pending_reads=%d byte_loaders=%d dialogue_groups=%d parser_hits=%d",
+    frame, readOrdinal, pendingCount, byteLoaderOrdinal, dialogueGroups, parserHits
+  ))
+  if logFile then
+    logFile:flush()
+    logFile:close()
+    logFile = nil
+  end
+end, emu.eventType.scriptEnded)
