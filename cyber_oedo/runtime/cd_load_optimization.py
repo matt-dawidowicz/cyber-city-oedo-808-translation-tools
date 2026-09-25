@@ -271,6 +271,44 @@ def _sectors(byte_count: int) -> int:
     return math.ceil(byte_count / SECTOR_BYTES)
 
 
+
+def scene_bundle_topology(assets: tuple[HotAsset, ...]) -> dict[str, object]:
+    """Describe source-span waste between ordered scene bundle components."""
+
+    ordered = tuple(sorted(assets, key=lambda item: item.sector))
+    rows = []
+    total_transfer_sectors = 0
+    for index, item in enumerate(ordered):
+        sectors = _sectors(item.byte_length)
+        total_transfer_sectors += sectors
+        end_exclusive = item.sector + sectors
+        next_start = ordered[index + 1].sector if index + 1 < len(ordered) else None
+        gap = None if next_start is None else next_start - end_exclusive
+        rows.append(
+            {
+                "name": item.name,
+                "start_lba": f"0x{item.sector:04X}",
+                "end_lba_inclusive": f"0x{end_exclusive - 1:04X}",
+                "transfer_sectors": sectors,
+                "gap_to_next_extent_sectors": gap,
+            }
+        )
+
+    span_start = ordered[0].sector
+    span_end_exclusive = ordered[-1].sector + _sectors(ordered[-1].byte_length)
+    span_sectors = span_end_exclusive - span_start
+    skipped = span_sectors - total_transfer_sectors
+    return {
+        "components": rows,
+        "span_start_lba": f"0x{span_start:04X}",
+        "span_end_lba_inclusive": f"0x{span_end_exclusive - 1:04X}",
+        "span_sectors": span_sectors,
+        "transfer_sectors": total_transfer_sectors,
+        "skipped_between_extents_sectors": skipped,
+        "transfer_density_percent": total_transfer_sectors / span_sectors * 100.0,
+        "contiguous_layout_sectors": total_transfer_sectors,
+    }
+
 def analyze_hot_assets(payload: bytes) -> dict[str, object]:
     loader_guards = validate_scene_loaders(payload)
     if not all(loader_guards.values()):
@@ -322,6 +360,17 @@ def analyze_hot_assets(payload: bytes) -> dict[str, object]:
         + main["main_scene_local_b"]["raw_sectors"]
         + main["main_scene_vram"]["packbits_word_sectors"]
     )
+    main_topology = scene_bundle_topology(
+        tuple(
+            item
+            for item in HOT_ASSETS
+            if item.name in {
+                "main_scene_local_a",
+                "main_scene_local_b",
+                "main_scene_vram",
+            }
+        )
+    )
 
     fixed_waits = find_fixed_vsync_waits(payload)
 
@@ -351,6 +400,8 @@ def analyze_hot_assets(payload: bytes) -> dict[str, object]:
         "main_scene_bundle": {
             "source_sectors": ["0x228E", "0x22DE", "0x22E8"],
             "source_start_gaps_sectors": [0x22DE - 0x228E, 0x22E8 - 0x22DE],
+            "inter_extent_gap_sectors": [73, 7],
+            "source_topology": main_topology,
             "raw_transfer_sectors": main_raw_sectors,
             "raw_minimum_1x_stream_seconds": (
                 main_raw_sectors / CD_SECTORS_PER_SECOND
