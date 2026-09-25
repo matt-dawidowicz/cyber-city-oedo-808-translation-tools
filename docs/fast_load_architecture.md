@@ -119,6 +119,36 @@ and percentages.
 This avoids the earlier accounting error of summing nested byte-loader and
 CD_READ timings as if they were independent costs.
 
+### A3. Static scene-transition phase boundaries
+
+The movement overlay now has a source-guarded phase model independent of live
+timing:
+
+    $40DB-$40E8  exploration audio transition
+                  CD_FADE mode $0C + fixed 120-frame EX_VSYNC loop
+
+    $40E9-$423A  scene/room setup
+                  scene descriptor selection, collision/entity/interaction
+                  pointer installation, optional spawn restoration
+
+    $423B-$428D  blocking scene CD_READ wrappers
+                  descriptor -> BIOS parameter translation + immediate retry
+
+These boundaries are contiguous in the authenticated payload. In particular,
+the 120-frame policy ends immediately before scene/room setup begins, and the
+scene/room setup region ends exactly at the loader entry. The two blocking
+CD_READ wrappers contain no explicit EX_VSYNC delay.
+
+This proves that the two-second wait is separable from optical transfer and can
+be benchmarked independently. It also gives later profiling a clean boundary
+between resource transfer and setup/display work.
+
+The maintained diagnostic command is:
+
+    cyber-oedo analyze-scene-transition <track2-payload>
+
+No speed mutation is enabled by this analyzer.
+
 ### B. Short transition teardown
 
 If live timing confirms the fade is critical-path time, prototype a
