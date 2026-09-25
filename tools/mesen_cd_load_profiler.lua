@@ -21,6 +21,7 @@ local reads = 0
 local loaderEntries = 0
 local bank87 = {R=0,W=0,X=0}
 local logFile = nil
+local pendingSceneRead = nil
 
 local function r8(address, memType)
   return emu.read(address, memType or MEM)
@@ -110,14 +111,42 @@ local function onCdRead()
   local payloadOffset = relative >= 0 and relative * 0x800 or -1
   local unit = (addressType == 0x00 or addressType == 0xFE) and "bytes" or "sectors"
   local state = cpu()
+  local returnTarget = stackReturnTarget()
+  if returnTarget == 0x425E or returnTarget == 0x428A then
+    pendingSceneRead = {
+      ordinal=reads,
+      startFrame=frame,
+      returnTarget=returnTarget,
+      sector=lba,
+      addressType=addressType,
+      destination=destination,
+      length=length,
+    }
+  end
   log(string.format(
     "[CD_READ %03d] frame=%d sector=$%06X track2_payload_off=%s type=$%02X(%s) dest=$%04X len=$%04X_%s caller_return=$%04X PC=$%04X %s %s",
     reads, frame, lba,
     payloadOffset >= 0 and string.format("$%08X", payloadOffset) or "outside_track2",
     addressType, addressTypeNames[addressType] or "UNKNOWN",
-    destination, length, unit, stackReturnTarget(), state.pc or 0,
+    destination, length, unit, returnTarget, state.pc or 0,
     sceneState(), mprString()
   ))
+end
+
+
+local function onSceneReadReturn()
+  if not pendingSceneRead then return end
+  local state = cpu()
+  local elapsed = frame - pendingSceneRead.startFrame
+  log(string.format(
+    "[SCENE_READ_RETURN %03d] frame=%d elapsed_frames=%d elapsed_seconds=%.4f sector=$%06X type=$%02X dest=$%04X len=$%04X return=$%04X A=$%02X X=$%02X %s",
+    pendingSceneRead.ordinal, frame, elapsed, elapsed / 60.0,
+    pendingSceneRead.sector, pendingSceneRead.addressType,
+    pendingSceneRead.destination, pendingSceneRead.length,
+    pendingSceneRead.returnTarget, state.a or 0, state.x or 0,
+    sceneState()
+  ))
+  pendingSceneRead = nil
 end
 
 local function onByteLoader()
@@ -140,6 +169,8 @@ openLog()
 log("Cyber City Oedo 808 CD load profiler armed. Read-only instrumentation: YES")
 
 emu.addMemoryCallback(onCdRead, emu.callbackType.exec, 0xE009, 0xE009, CPU, MEM)
+emu.addMemoryCallback(onSceneReadReturn, emu.callbackType.exec, 0x425E, 0x425E, CPU, MEM)
+emu.addMemoryCallback(onSceneReadReturn, emu.callbackType.exec, 0x428A, 0x428A, CPU, MEM)
 emu.addMemoryCallback(onByteLoader, emu.callbackType.exec, 0x6EA0, 0x6EA0, CPU, MEM)
 
 local bank87Start = (0x87 - 0x80) * 0x2000
