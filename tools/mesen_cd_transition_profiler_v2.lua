@@ -3,7 +3,9 @@
 --
 -- READ ONLY.  This version measures every System Card CD_READ from BIOS entry
 -- to its exact caller return target, instead of timing only the two known scene
--- wrappers. It also times generic byte-loader calls and AD_TRANS transfers,
+-- wrappers. It also records CD_EXEC overlay loads to their first target
+-- instruction, CD_PLAY/CD_PAUSE mode switches, generic byte-loader calls, and
+-- AD_TRANS transfers,
 -- records ADPCM stop/status/fade activity, counts EX_VSYNC calls, and records
 -- when dialogue parsing becomes active again.
 --
@@ -32,6 +34,9 @@ local CARDRAM = emu.memType.pceCardRam
 local TRACK2_START_LBA = 3590
 local frame = 0
 local readOrdinal = 0
+local cdExecOrdinal = 0
+local cdPlayCalls = 0
+local cdPauseCalls = 0
 local byteLoaderOrdinal = 0
 local dialogueGroups = 0
 local parserHits = 0
@@ -46,6 +51,8 @@ local logFile = nil
 
 local pendingReadsByReturn = {}
 local registeredReturnTargets = {}
+local pendingExecByTarget = {}
+local registeredExecTargets = {}
 local pendingByteLoader = nil
 local pendingAdTransByReturn = {}
 local registeredAdTransReturns = {}
@@ -184,6 +191,64 @@ local function ensureReturnCallback(target)
     emu.callbackType.exec,
     target, target, CPU, MEM
   )
+end
+
+local function ensureExecTargetCallback(target)
+  if registeredExecTargets[target] then return end
+  registeredExecTargets[target] = true
+  emu.addMemoryCallback(
+    function()
+      local queue = pendingExecByTarget[target]
+      if not queue or #queue == 0 then return end
+      local item = table.remove(queue, 1)
+      local elapsed = frame - item.startFrame
+      log(string.format(
+        "[CD_EXEC_TARGET %03d] frame=%d elapsed_frames=%d elapsed_seconds=%.4f " ..
+        "sector=$%06X blocks=$%02X target=$%04X %s %s",
+        item.ordinal, frame, elapsed, elapsed / 60.0,
+        item.sector, item.blocks, target, sceneState(), mprString()
+      ))
+    end,
+    emu.callbackType.exec,
+    target, target, CPU, MEM
+  )
+end
+
+local function onCdExec()
+  cdExecOrdinal = cdExecOrdinal + 1
+  local target = r16(0x20FA)
+  local item = {
+    ordinal=cdExecOrdinal,
+    startFrame=frame,
+    sector=(r8(0x20FC) << 16) | (r8(0x20FD) << 8) | r8(0x20FE),
+    blocks=r8(0x20F8),
+    addressType=r8(0x20FF),
+    target=target,
+  }
+  if not pendingExecByTarget[target] then pendingExecByTarget[target] = {} end
+  table.insert(pendingExecByTarget[target], item)
+  ensureExecTargetCallback(target)
+  log(string.format(
+    "[CD_EXEC %03d] frame=%d sector=$%06X blocks=$%02X type=$%02X target=$%04X %s %s",
+    item.ordinal, frame, item.sector, item.blocks, item.addressType,
+    target, sceneState(), mprString()
+  ))
+end
+
+local function onCdPlay()
+  cdPlayCalls = cdPlayCalls + 1
+  log(string.format(
+    "[CD_PLAY %03d] frame=%d mode=$%02X return=$%04X %s %s",
+    cdPlayCalls, frame, r8(0x20FB), stackReturnTarget(), sceneState(), mprString()
+  ))
+end
+
+local function onCdPause()
+  cdPauseCalls = cdPauseCalls + 1
+  log(string.format(
+    "[CD_PAUSE %03d] frame=%d return=$%04X %s %s",
+    cdPauseCalls, frame, stackReturnTarget(), sceneState(), mprString()
+  ))
 end
 
 local function ensureAdTransReturnCallback(target)
@@ -402,6 +467,9 @@ log("Read-only instrumentation: YES")
 armCardRamMonitor()
 
 emu.addMemoryCallback(onCdRead, emu.callbackType.exec, 0xE009, 0xE009, CPU, MEM)
+emu.addMemoryCallback(onCdExec, emu.callbackType.exec, 0xE00F, 0xE00F, CPU, MEM)
+emu.addMemoryCallback(onCdPlay, emu.callbackType.exec, 0xE012, 0xE012, CPU, MEM)
+emu.addMemoryCallback(onCdPause, emu.callbackType.exec, 0xE018, 0xE018, CPU, MEM)
 emu.addMemoryCallback(onAdTrans, emu.callbackType.exec, 0xE033, 0xE033, CPU, MEM)
 emu.addMemoryCallback(onAdStop, emu.callbackType.exec, 0xE042, 0xE042, CPU, MEM)
 emu.addMemoryCallback(onAdStat, emu.callbackType.exec, 0xE045, 0xE045, CPU, MEM)
@@ -423,9 +491,9 @@ emu.addEventCallback(function()
       pendingCount = pendingCount + #queue
     end
     log(string.format(
-      "[HEARTBEAT] frame=%d reads=%d pending_reads=%d ad_trans=%d " ..
+      "[HEARTBEAT] frame=%d reads=%d cd_exec=%d pending_reads=%d ad_trans=%d " ..
       "byte_loaders=%d dialogue_groups=%d vsync=%d %s",
-      frame, readOrdinal, pendingCount, adTransOrdinal,
+      frame, readOrdinal, cdExecOrdinal, pendingCount, adTransOrdinal,
       byteLoaderOrdinal, dialogueGroups, vsyncCalls, sceneState()
     ))
   end
@@ -437,10 +505,11 @@ emu.addEventCallback(function()
     pendingCount = pendingCount + #queue
   end
   log(string.format(
-    "[SUMMARY] frames=%d reads=%d pending_reads=%d ad_trans=%d ad_stop=%d " ..
+    "[SUMMARY] frames=%d reads=%d cd_exec=%d cd_play=%d cd_pause=%d pending_reads=%d ad_trans=%d ad_stop=%d " ..
     "ad_stat=%d cd_fade=%d vsync=%d byte_loaders=%d dialogue_groups=%d parser_hits=%d " ..
     "card_ram_size=%d card_ram_R/W/X=%d/%d/%d",
-    frame, readOrdinal, pendingCount, adTransOrdinal, adStopCalls,
+    frame, readOrdinal, cdExecOrdinal, cdPlayCalls, cdPauseCalls,
+    pendingCount, adTransOrdinal, adStopCalls,
     adStatCalls, cdFadeCalls, vsyncCalls, byteLoaderOrdinal, dialogueGroups, parserHits,
     cardRam.size, cardRam.R, cardRam.W, cardRam.X
   ))
