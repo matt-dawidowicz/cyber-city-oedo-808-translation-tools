@@ -12,6 +12,7 @@ class TransitionStateMachineTests(unittest.TestCase):
     def test_enter_dialogue_keeps_unproven_wait_out_of_lower_bound(self) -> None:
         report = build_transition_state_machine()["exploration_to_dialogue"]
         self.assertEqual(EXPLORATION_EXIT_FIXED_WAIT_SECONDS, 2.0)
+        self.assertTrue(report["wait_on_exploration_exit_path_proven"])
         self.assertFalse(report["wait_before_historical_window_runtime_proven"])
         self.assertIsNone(report["combined_lower_bound_seconds"])
         self.assertEqual(report["candidate_combined_if_ordered_seconds"], [7.7, 8.2])
