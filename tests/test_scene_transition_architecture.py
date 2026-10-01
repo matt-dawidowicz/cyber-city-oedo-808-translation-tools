@@ -12,7 +12,7 @@ from cyber_oedo.runtime.scene_transition_architecture import (
 
 
 class SceneTransitionArchitectureTests(unittest.TestCase):
-    def test_wait_ends_at_scene_orchestration_entry(self) -> None:
+    def test_wait_is_address_adjacent_to_scene_orchestration_entry(self) -> None:
         self.assertEqual(TRANSITION_WAIT_CPU + len(TRANSITION_WAIT_BYTES), 0x40E9)
 
     def test_loader_code_is_address_adjacent_not_a_sequential_phase(self) -> None:
