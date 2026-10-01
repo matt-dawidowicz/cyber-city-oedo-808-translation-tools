@@ -138,8 +138,12 @@ is still pending.
 
 Therefore two conclusions are safe:
 
-- the 120-frame wait ends before scene orchestration begins;
+- the 120-frame routine is address-adjacent to the scene-orchestration region;
 - the CD_READ wrappers contain no explicit EX_VSYNC delay.
+
+Address adjacency is not runtime ordering. The guarded wait routine ends in
+RTS, and the current static evidence does not yet authenticate a caller that
+executes both the wait and scene orchestration on the same measured transition.
 
 But setup time and loader time must not be double-counted as separate serial
 phases. The maintained diagnostic is:
@@ -153,11 +157,13 @@ No speed mutation is enabled by this analyzer.
 The two visible transition directions have different fixed gates and must not
 be collapsed into one additive latency budget.
 
-For exploration -> dialogue, the stock 120-frame exploration-exit wait occurs
-before the historical first-dialogue-CD-to-parser window of roughly 5.7-6.2
-seconds. Static accounting therefore places the visible interaction latency at
-at least about **7.7-8.2 seconds** before smaller pre-read/setup costs are
-assigned.
+For exploration -> dialogue, a stock 120-frame wait routine exists next to the
+scene-orchestration code in memory, while historical captures measure roughly
+5.7-6.2 seconds from the first dialogue CD request to parser execution. The
+current static evidence does **not** prove that the wait executes immediately
+before that measured window. If caller/live evidence establishes that order,
+7.7-8.2 seconds becomes the corresponding combined figure; until then it is a
+conditional candidate, not a lower bound.
 
 For dialogue -> exploration, command 2 requests the approximately 2.5-second
 mode-$0E ADPCM fade and the outer `$41EC` state gate waits for completion.
@@ -352,8 +358,9 @@ attributed instead of bundled together:
    the stock loader epilogue on a cache hit;
 2. **speaker-local retention only** - preserve $8FDE across command-0/command-5
    teardown so the stock two-sector speaker cache can remain valid;
-3. **short exploration wait only** - reduce the explicit 120-frame loop to a
-   selected 1-120 frame value (8 frames is the current conservative benchmark);
+3. **short exploration wait only** - benchmark reducing the explicit 120-frame
+   loop to a selected 1-120 frame value (8 frames is the current conservative
+   candidate), while keeping the runtime-order proof gate explicit;
 4. **combined fast-load stack** - resident module + retained speaker cache +
    8-frame exploration wait + the separate immediate-audio-teardown benchmark.
 
