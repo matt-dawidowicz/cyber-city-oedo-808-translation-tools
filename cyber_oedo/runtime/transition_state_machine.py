@@ -61,16 +61,18 @@ def build_transition_state_machine() -> dict[str, object]:
                 HISTORICAL_DIALOGUE_LOAD_TO_READY_SECONDS
             ),
             "static_wait_routine_seconds": EXPLORATION_EXIT_FIXED_WAIT_SECONDS,
+            "wait_on_exploration_exit_path_proven": True,
             "wait_before_historical_window_runtime_proven": False,
             "combined_lower_bound_seconds": None,
             "candidate_combined_if_ordered_seconds": [enter_min, enter_max],
             "interpretation": (
                 "The historical 5.7-6.2 second timer starts at the first "
-                "dialogue-related CD request. A separate 120-frame wait routine "
-                "exists at $40DB, but current static evidence only proves address "
-                "adjacency to the $40E9 scene-orchestration region, not caller "
-                "ordering on this measured transition. Therefore 7.7-8.2 seconds "
-                "is a conditional candidate sum, not a proven lower bound."
+                "dialogue-related CD request. Static control flow now proves that "
+                "the exploration exit path executes the 120-frame $40DB wait via "
+                "$402B -> $40B1 -> $40DB. What remains unproven is whether the "
+                "subsequent exploration return feeds the measured $1425 dialogue "
+                "loader. Therefore 7.7-8.2 seconds remains a conditional candidate "
+                "sum until that runtime handoff is observed."
             ),
         },
         "dialogue_to_exploration": {
