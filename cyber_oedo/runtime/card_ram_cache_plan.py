@@ -30,6 +30,27 @@ CARD_RAM_BANK_COUNT = CARD_RAM_LAST_BANK - CARD_RAM_FIRST_BANK + 1
 CARD_RAM_TOTAL_BYTES = CARD_RAM_BANK_COUNT * CARD_RAM_BANK_BYTES
 ACTIVE_ADPCM_BLOCKS = 7
 
+BAR_STOCK_INPUT_TO_PARSER_FRAMES = 457
+BAR_PORTRAIT_CACHE_INPUT_TO_PARSER_FRAMES = 362
+BAR_PORTRAIT_ADPCM_CACHE_INPUT_TO_PARSER_FRAMES = 336
+BAR_PORTRAIT_CACHE_SAVED_FRAMES = (
+    BAR_STOCK_INPUT_TO_PARSER_FRAMES - BAR_PORTRAIT_CACHE_INPUT_TO_PARSER_FRAMES
+)
+BAR_ADPCM_INCREMENTAL_SAVED_FRAMES = (
+    BAR_PORTRAIT_CACHE_INPUT_TO_PARSER_FRAMES
+    - BAR_PORTRAIT_ADPCM_CACHE_INPUT_TO_PARSER_FRAMES
+)
+BAR_COMBINED_CACHE_SAVED_FRAMES = (
+    BAR_STOCK_INPUT_TO_PARSER_FRAMES
+    - BAR_PORTRAIT_ADPCM_CACHE_INPUT_TO_PARSER_FRAMES
+)
+BAR_VRAM_IDENTITY_SHA256 = (
+    "c336c787fd110c930eeb2584c9b166b93d03e9fdbd5a5e93abc30822283411b6"
+)
+BAR_ADPCM_IDENTITY_SHA256 = (
+    "ca7f25e8912c6ea8e7a950c608910c9082a76bdb7c6057b4e655d288169df31b"
+)
+
 
 @dataclass(frozen=True, slots=True)
 class CacheSlice:
@@ -226,6 +247,70 @@ def build_cache_plan() -> dict[str, object]:
                 ),
             },
         },
+        "live_bartender_cache_benchmark": {
+            "environment": "MesenCE 2.2.1 / Super System Card 3.0",
+            "stock": {
+                "input_to_parser_frames": BAR_STOCK_INPUT_TO_PARSER_FRAMES,
+                "input_to_parser_seconds": BAR_STOCK_INPUT_TO_PARSER_FRAMES / 60.0,
+            },
+            "portrait_cache": {
+                "source_lba": "$1458",
+                "card_ram_banks": ["$68", "$69"],
+                "input_to_parser_frames": BAR_PORTRAIT_CACHE_INPUT_TO_PARSER_FRAMES,
+                "input_to_parser_seconds": (
+                    BAR_PORTRAIT_CACHE_INPUT_TO_PARSER_FRAMES / 60.0
+                ),
+                "saved_frames": BAR_PORTRAIT_CACHE_SAVED_FRAMES,
+                "saved_seconds": BAR_PORTRAIT_CACHE_SAVED_FRAMES / 60.0,
+                "copy_path": (
+                    "temporary MPR5 Card-RAM mapping plus HuC6280 TIA to VDC "
+                    "with MPR0 temporarily mapped to $FF"
+                ),
+                "full_vram_identity_sha256": BAR_VRAM_IDENTITY_SHA256,
+                "full_vram_matches_stock": True,
+            },
+            "portrait_plus_adpcm_cache": {
+                "adpcm_sources": [
+                    {
+                        "source_lba": "$1292",
+                        "card_ram_bank": "$6A",
+                        "adpcm_destination": "$0000",
+                    },
+                    {
+                        "source_lba": "$1443",
+                        "card_ram_bank": "$6B",
+                        "adpcm_destination": "$E000",
+                    },
+                ],
+                "input_to_parser_frames": (
+                    BAR_PORTRAIT_ADPCM_CACHE_INPUT_TO_PARSER_FRAMES
+                ),
+                "input_to_parser_seconds": (
+                    BAR_PORTRAIT_ADPCM_CACHE_INPUT_TO_PARSER_FRAMES / 60.0
+                ),
+                "total_saved_frames": BAR_COMBINED_CACHE_SAVED_FRAMES,
+                "total_saved_seconds": BAR_COMBINED_CACHE_SAVED_FRAMES / 60.0,
+                "adpcm_incremental_saved_frames": BAR_ADPCM_INCREMENTAL_SAVED_FRAMES,
+                "adpcm_incremental_saved_seconds": (
+                    BAR_ADPCM_INCREMENTAL_SAVED_FRAMES / 60.0
+                ),
+                "copy_path": (
+                    "map one 8 KiB Card-RAM bank at $A000 and reuse System Card "
+                    "AD_WRITE $E039 in local-memory mode"
+                ),
+                "full_vram_identity_sha256": BAR_VRAM_IDENTITY_SHA256,
+                "full_adpcm_identity_sha256": BAR_ADPCM_IDENTITY_SHA256,
+                "full_vram_matches_stock": True,
+                "full_adpcm_matches_stock": True,
+            },
+            "interpretation": (
+                "The portrait is the largest proven recurring entry-side cache "
+                "win: 95 frames / 1.583 seconds. Replacing both observed 8 KiB "
+                "AD_TRANS sources with Card-RAM-backed AD_WRITE saves another "
+                "26 frames / 0.433 seconds, for 121 frames / 2.017 seconds total. "
+                "These are emulator-assisted runtime benchmarks, not release patches."
+            ),
+        },
         "static_conclusion": (
             "The core cache fits cleanly in 12 Card-RAM banks. A practical bar "
             "working set is 15 banks if portrait copies can be segmented, or 16 "
@@ -235,9 +320,9 @@ def build_cache_plan() -> dict[str, object]:
         ),
         "runtime_gates": [
             "prove Card RAM ownership/lifetime for $68-$7F",
-            "prove the chosen MPR mapping while AD_WRITE reads the $A000 window",
-            "prove or implement bank-split RAM-to-VRAM portrait copies",
-            "do not assume direct optical CD_READ into Card RAM until BIOS behavior is proven",
+            "promote the Mesen-proven Card-RAM MPR mapping / AD_WRITE path to a permanent game-code implementation",
+            "promote the Mesen-proven bank-split TIA portrait copy to a permanent game-code implementation",
+            "define a real preload/fill lifecycle; do not assume direct optical CD_READ into Card RAM until BIOS behavior is proven",
         ],
         "release_enabled": False,
     }
