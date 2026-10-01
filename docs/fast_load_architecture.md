@@ -80,6 +80,37 @@ speaker-retention harness still needs a bank-correct way to install the
 speaker-invalidation patch into the already-resident module in the retained
 save state; the first combined Lua attempt modified the wrong backing memory
 and therefore is not used as timing evidence.
+### Live portrait + ADPCM Card-RAM cache benchmark
+
+A MesenCE 2.2.1 bartender replay now validates the two largest remaining
+recurring entry-side cache candidates against the stock parser-ready state.
+
+| configuration | I press -> parser | saving vs stock |
+|---|---:|---:|
+| stock | 457 f / 7.617 s | — |
+| portrait cached in Card RAM | 362 f / 6.033 s | **95 f / 1.583 s** |
+| portrait + both observed ADPCM blocks cached | 336 f / 5.600 s | **121 f / 2.017 s** |
+
+The portrait cache uses banks `$68/$69` and a HuC6280 `TIA` RAM-to-VDC copy
+with temporary MPR mappings. At parser-ready, the complete 64 KiB VRAM image
+is byte-for-byte identical to stock (SHA-256
+`c336c787fd110c930eeb2584c9b166b93d03e9fdbd5a5e93abc30822283411b6`).
+
+The ADPCM layer caches the two observed 8 KiB sources separately:
+
+- `$1292` -> Card RAM `$6A` -> ADPCM `$0000`;
+- `$1443` -> Card RAM `$6B` -> ADPCM `$E000`.
+
+Each block is mapped at logical `$A000` and written with the existing System
+Card `AD_WRITE $E039` local-memory path. Adding ADPCM caching on top of the
+portrait cache saves another **26 frames / 0.433 s**. The complete 64 KiB
+ADPCM RAM image at parser-ready is also byte-for-byte identical to stock
+(SHA-256 `ca7f25e8912c6ea8e7a950c608910c9082a76bdb7c6057b4e655d288169df31b`).
+
+This proves the copy mechanisms and state equivalence in the Mesen benchmark
+environment. It does **not** yet provide a permanent preload lifecycle or
+release-safe game-code patch; Card-RAM ownership, preload timing, and broader
+portrait/voice coverage remain release gates.
 ### Warm bartender interaction
 
 After returning to the bar, the identical interaction was triggered again.
@@ -328,13 +359,11 @@ No speed mutation is enabled by this analyzer.
 The two visible transition directions have different fixed gates and must not
 be collapsed into one additive latency budget.
 
-For exploration -> dialogue, static control flow proves the stock 120-frame
-wait executes on the exploration exit path: $402B -> $40B1 -> $40DB. Historical
-captures independently measure roughly 5.7-6.2 seconds from the first dialogue
-CD request to parser execution. The remaining gap is the handoff after the
-exploration module returns at $403C: if runtime evidence shows that this same
-interaction next reaches the $1425 loader, 7.7-8.2 seconds becomes the
-corresponding combined figure. Until then it remains conditional.
+For exploration -> dialogue, the authenticated $402B -> $40B1 -> $40DB
+120-frame wait belongs to a different movement-overlay copy. The live bartender
+bar overlay instead uses a measured 30-frame wait. These timings must remain
+overlay-specific and the 120-frame wait must not be added to the bartender's
+5.7-6.2-second loader measurement.
 
 For dialogue -> exploration, command 2 requests the approximately 2.5-second
 mode-$0E ADPCM fade and the outer `$41EC` state gate waits for completion.
@@ -354,9 +383,8 @@ single `ORDER_PROOF_RESULT` line reports whether the exact observed order was:
     $402B -> $40DB -> $403C RTS -> $1425 loader -> $9543 parser
 
 It also reports visible frames from transition exit to parser, wait-to-loader
-frames, and loader-to-parser frames. This is the runtime gate that can promote
-the current conditional 7.7-8.2 second figure into measured critical-path
-evidence.
+frames, and loader-to-parser frames. Results from that movement-overlay path
+must be interpreted separately from the live bartender/bar benchmark.
 
 This model is descriptive only; all fast paths remain release-disabled.
 
