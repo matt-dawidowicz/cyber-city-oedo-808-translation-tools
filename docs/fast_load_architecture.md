@@ -2,6 +2,90 @@
 
 Status: reverse engineering / prototype design. No speed mutation is release-enabled.
 
+## Live bartender benchmark — MesenCE 2.2.1
+
+A fresh automated replay was run against the authenticated original disc under
+MesenCE 2.2.1 + Super System Card 3.0, loading the retained
+`cyber_city_oedo_bartender_probe.mss` state and injecting controller input
+through Mesen's `inputPolled` callback.
+
+### Exploration -> bartender dialogue
+
+The cold interaction measured:
+
+| event | local frame | elapsed |
+|---|---:|---:|
+| Button I injected | 60 | 0 |
+| CD_FADE mode $0C | 61 | +0.017 s |
+| bar 30-VSync loop begins | 92 | +0.533 s |
+| bar 30-VSync loop ends | 122 | +1.033 s |
+| $1425 dialogue loader begins | 147 | +1.450 s |
+| first dialogue parser execution | 517 | +7.617 s |
+
+The measured loader-to-parser window is **370 frames / 6.167 s**.
+
+Blocking operations inside that window:
+
+| operation | frames | seconds |
+|---|---:|---:|
+| CD_READ $1425, 1 sector -> $8000 | 67 | 1.117 |
+| CD_READ $1426, 1 sector -> $29D0 | 10 | 0.167 |
+| cold-only CD_READ $10DD, 1 sector | 27 | 0.450 |
+| AD_TRANS $1292, 4 blocks | 26 | 0.433 |
+| CD_READ $1441, 2 sectors -> $9000 | 24 | 0.400 |
+| AD_TRANS $1443, 4 blocks -> ADPCM $E000 | 13 | 0.217 |
+| CD_READ $1458, $2020 bytes -> VRAM $4000 | 96 | 1.600 |
+
+Those calls account for **263 frames / 4.383 s**. The same run recorded
+**71 explicit EX_VSYNC calls** during the loader window; 64 consecutive calls
+come from the routine returning to $7B80 and consume about **1.067 s** by
+themselves. Direct transfer time plus explicit VSync gating therefore explains
+334/370 frames; only about **36 frames / 0.600 s** remain for other CPU/setup
+work.
+
+The bar runtime overlay is not the same copy as the movement overlay containing
+the $40DB 120-frame loop. The live bar code performs CD_FADE mode $0C at $421C,
+then later executes a **30-frame** EX_VSYNC loop at $4213-$421A. Therefore the
+120-frame wait must not be generalized to every exploration -> dialogue
+transition.
+
+### Warm bartender interaction
+
+After returning to the bar, the identical interaction was triggered again.
+The warm loader ran from frame 1617 to 1959: **342 frames / 5.700 s**.
+
+The cold-only $10DD H_BARTEN resource read disappeared. The recurring module,
+speaker-local, ADPCM, and portrait operations remained. The 28-frame difference
+between the cold 6.167 s and warm 5.700 s measurements is essentially the
+removed $10DD read. Existing event-resource caching therefore works, but it
+does not attack the dominant recurring costs.
+
+### Dialogue -> bar restore
+
+On leaving the dialogue:
+
+| event / operation | measured time |
+|---|---:|
+| CD_FADE mode $0E to fade-state clear | 127 frames / 2.117 s |
+| synchronous $41EC fade-wait subset | 82 frames / 1.367 s |
+| CD_READ $228E, 7 sectors | 35 frames / 0.583 s |
+| CD_READ $22DE, 3 sectors | 25 frames / 0.417 s |
+| CD_READ $22E8, $EE00 bytes -> VRAM | **551 frames / 9.183 s** |
+
+From the mode-$0E fade request to completion of the core scene restore is
+**793 frames / 13.217 s**.
+
+The $22E8 operation is the dominant single cost. Mesen's SCSI trace shows it
+issues only a 30-sector optical read with a modeled 365 ms seek, but the BIOS
+call remains blocked for 9.183 s. Instrumenting VDC I/O during this one call
+recorded **66,442 VDC-register writes**: 2,206 register-select writes, 32,118
+data-low writes, and 32,118 data-high writes. It contains zero EX_VSYNC calls.
+
+Thus the nine-second cost is primarily a CPU/System-Card-driven transfer into
+VDC/VRAM, not optical seek latency. This substantially strengthens the case for
+selective dialogue-damage restoration or a RAM/VRAM fast path instead of
+reloading the full $EE00-byte exploration image.
+
 ## Why the pauses approach ten seconds
 
 The old profiler watched CD_READ only. It therefore missed ADPCM optical
