@@ -121,14 +121,15 @@ CD_READ timings as if they were independent costs.
 
 ### A3. Static scene-transition call structure
 
-The authenticated movement overlay separates the explicit wait gate from the
-scene orchestration entry:
+The authenticated movement overlay proves two different control-flow paths.
 
-    $40DB-$40E8  exploration audio transition
-                  CD_FADE mode $0C + fixed 120-frame EX_VSYNC loop
+On exploration entry, $4003 calls $40E9 for scene/room setup. On exploration
+exit, $402B calls $40B1, and $40B1 immediately calls $40DB, which performs
+CD_FADE mode $0C plus the fixed 120-frame EX_VSYNC loop. The exit path later
+returns from the exploration module at $403C.
 
-    $40E9...      scene/room orchestration
-                  descriptor selection, runtime setup, and resource-loader calls
+Therefore $40E9 is not a phase between the exit wait and dialogue loading;
+its adjacency after $40DB-$40E8 in memory was misleading.
 
 The blocking CD_READ helpers live at `$423B-$4261` (local memory) and
 `$4262-$428D` (VRAM). Their code is address-adjacent to the guarded
@@ -136,14 +137,15 @@ The blocking CD_READ helpers live at `$423B-$4261` (local memory) and
 sequential phase. Existing profiling observes loader returns while scene setup
 is still pending.
 
-Therefore two conclusions are safe:
+Therefore three conclusions are safe:
 
-- the 120-frame routine is address-adjacent to the scene-orchestration region;
+- the exploration exit path directly executes the 120-frame wait;
+- $40E9 is an entry/setup routine rather than the next exit-to-dialogue phase;
 - the CD_READ wrappers contain no explicit EX_VSYNC delay.
 
-Address adjacency is not runtime ordering. The guarded wait routine ends in
-RTS, and the current static evidence does not yet authenticate a caller that
-executes both the wait and scene orchestration on the same measured transition.
+The remaining uncertainty is the handoff after the exploration module returns:
+static code alone does not prove that the same interaction immediately reaches
+the Mission 0 $1425 dialogue loader.
 
 But setup time and loader time must not be double-counted as separate serial
 phases. The maintained diagnostic is:
@@ -157,13 +159,13 @@ No speed mutation is enabled by this analyzer.
 The two visible transition directions have different fixed gates and must not
 be collapsed into one additive latency budget.
 
-For exploration -> dialogue, a stock 120-frame wait routine exists next to the
-scene-orchestration code in memory, while historical captures measure roughly
-5.7-6.2 seconds from the first dialogue CD request to parser execution. The
-current static evidence does **not** prove that the wait executes immediately
-before that measured window. If caller/live evidence establishes that order,
-7.7-8.2 seconds becomes the corresponding combined figure; until then it is a
-conditional candidate, not a lower bound.
+For exploration -> dialogue, static control flow proves the stock 120-frame
+wait executes on the exploration exit path: $402B -> $40B1 -> $40DB. Historical
+captures independently measure roughly 5.7-6.2 seconds from the first dialogue
+CD request to parser execution. The remaining gap is the handoff after the
+exploration module returns at $403C: if runtime evidence shows that this same
+interaction next reaches the $1425 loader, 7.7-8.2 seconds becomes the
+corresponding combined figure. Until then it remains conditional.
 
 For dialogue -> exploration, command 2 requests the approximately 2.5-second
 mode-$0E ADPCM fade and the outer `$41EC` state gate waits for completion.
@@ -175,12 +177,12 @@ The maintained diagnostic is:
     cyber-oedo describe-transition-state-machine
 
 The v2 Mesen transition profiler now carries a dedicated ordering proof. It
-arms on the exploration transition path at `$402B`, then records first hits at
-`$40DB` (the 120-frame wait), `$40E9` (scene orchestration), the `$1425`
+arms on the exploration transition path at `$402B`, then records the
+`$40DB` wait, the exploration module return at `$403C`, the `$1425`
 dialogue byte-loader invocation, and `$9543` (first parser execution). A
 single `ORDER_PROOF_RESULT` line reports whether the exact observed order was:
 
-    $402B -> $40DB -> $40E9 -> $1425 loader -> $9543 parser
+    $402B -> $40DB -> $403C RTS -> $1425 loader -> $9543 parser
 
 It also reports visible frames from transition exit to parser, wait-to-loader
 frames, and loader-to-parser frames. This is the runtime gate that can promote
