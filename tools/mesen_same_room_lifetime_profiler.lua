@@ -18,6 +18,7 @@ local logFile = nil
 local readOrdinal = 0
 local pending22DE = {}
 local registeredReturns = {}
+local interactiveArmed = false
 
 local MODULE_PHYS_START = 0xA000
 local MODULE_PHYS_END = 0xAF50
@@ -142,6 +143,7 @@ local function ensureReturnCallback(target)
         m[4] == 0x85 and "yes" or "no",
         sceneState(), mprString(m)
       ))
+      interactiveArmed = true
     end,
     emu.callbackType.exec,
     target, target, CPU, MEM
@@ -197,6 +199,10 @@ local landmarkCounts = {}
 for _, item in ipairs(landmarks) do
   emu.addMemoryCallback(
     function()
+      if item.name == "EXPLORATION_INTERACTIVE" then
+        if not interactiveArmed then return end
+        interactiveArmed = false
+      end
       landmarkCounts[item.name] = (landmarkCounts[item.name] or 0) + 1
       logLandmark(item.name .. "_" .. landmarkCounts[item.name])
     end,
