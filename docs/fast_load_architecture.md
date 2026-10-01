@@ -130,6 +130,16 @@ code rather than a release patch: the next implementation step is to encode the
 second loader call in the game overlay and then validate other rooms/dialogue
 types, because their dirty spans may differ from the bartender/bar case.
 
+That implementation step is now complete as a source-guarded benchmark mutation.
+The patched disc itself redirects the stock bar restore through a small trampoline,
+shortens the original descriptor to `$8E20`, and issues the second `$2301/$1A00`
+transfer through the stock `$4459` loader. A clean MesenCE replay with **no Lua
+memory mutation** reproduced the same 333 + 79 frame timings, returned to the bar
+normally, and produced a complete post-restore VRAM SHA-256 of
+`c360d332d1afd276078960d4acc78f6ce681ad74df2e7b80bb1de6ea0fbae566`,
+identical to stock. The remaining release gates are broader room/dialogue coverage
+and ownership certification for the currently zero-filled trampoline area.
+
 ## Why the pauses approach ten seconds
 
 The old profiler watched CD_READ only. It therefore missed ADPCM optical
