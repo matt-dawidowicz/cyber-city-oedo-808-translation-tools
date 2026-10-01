@@ -18,6 +18,14 @@ from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
 from cyber_oedo.runtime.game_architecture import MOVEMENT_ARCHITECTURE_REGIONS
 from cyber_oedo.runtime.movement import MOVEMENT_MODULE_PAYLOAD_BASE
 
+EXPLORATION_EXIT_CALL_CPU = 0x402B
+EXPLORATION_RETURN_CPU = 0x403C
+EXIT_TEARDOWN_CPU = 0x40B1
+EXIT_TEARDOWN_BYTES = bytes.fromhex(
+    "20 DB 40 20 99 E0 9C 0C 22 9C 0D 22 9C 10 22 9C 11 22 "
+    "20 7B E0 03 07 9C 02 00 9C 03 00 03 08 9C 02 00 9C 03 "
+    "00 62 20 69 E0 60"
+)
 TRANSITION_WAIT_CPU = 0x40DB
 TRANSITION_WAIT_BYTES = bytes.fromhex(
     "A9 0C 20 2D E0 A0 78 20 7B E0 88 D0 FA 60"
@@ -43,10 +51,13 @@ def analyze_scene_transition_architecture(payload: bytes) -> dict[str, object]:
     loaders = _region("scene_cd_loaders")
     setup_blob = payload[setup.payload_offset : setup.payload_offset + setup.length]
     loader_blob = payload[loaders.payload_offset : loaders.payload_offset + loaders.length]
+    exit_offset = MOVEMENT_MODULE_PAYLOAD_BASE + EXIT_TEARDOWN_CPU
+    exit_blob = payload[exit_offset : exit_offset + len(EXIT_TEARDOWN_BYTES)]
     wait_offset = MOVEMENT_MODULE_PAYLOAD_BASE + TRANSITION_WAIT_CPU
     wait_blob = payload[wait_offset : wait_offset + len(TRANSITION_WAIT_BYTES)]
 
     checks = {
+        "exit_teardown": exit_blob == EXIT_TEARDOWN_BYTES,
         "transition_wait": wait_blob == TRANSITION_WAIT_BYTES,
         "scene_and_room_setup": hashlib.sha256(setup_blob).hexdigest() == setup.sha256,
         "scene_cd_loaders": hashlib.sha256(loader_blob).hexdigest() == loaders.sha256,
@@ -56,6 +67,17 @@ def analyze_scene_transition_architecture(payload: bytes) -> dict[str, object]:
 
     return {
         "source_guards": checks,
+        "proven_exit_call_chain": {
+            "loop_exit_call_site": "$402B JSR $40B1",
+            "exit_teardown_entry": "$40B1 JSR $40DB",
+            "wait_routine": "$40DB-$40E8",
+            "exploration_return": "$403C RTS",
+            "statement": (
+                "The authenticated exploration loop directly calls $40B1 at $402B; "
+                "$40B1 directly calls the 120-frame wait at $40DB before returning. "
+                "Thus the wait is proven on this exploration-exit path."
+            ),
+        },
         "address_ordered_regions": [
             {
                 "phase": "exploration_audio_transition",
@@ -97,20 +119,21 @@ def analyze_scene_transition_architecture(payload: bytes) -> dict[str, object]:
             ),
             "adjacency_is_not_runtime_ordering": True,
             "wait_to_orchestration_runtime_order_proven": False,
+            "scene_orchestration_is_entry_path_not_exit_chain": True,
             "loader_region_end": f"$%04X" % (SCENE_LOADERS_CPU_END_EXCLUSIVE - 1),
         },
         "optimization_implication": (
-            "The 120-frame routine is a distinct static code region immediately "
-            "before the scene-orchestration region in memory. Static adjacency "
-            "does not prove that a caller executes the wait and then falls into "
-            "or calls $40E9 on the measured transition. The CD_READ wrappers "
-            "contain no explicit VSync delay and are nested resource helpers; "
-            "their time must not be added again as a later sequential phase."
+            "The 120-frame routine is proven on the exploration-exit path via "
+            "$402B -> $40B1 -> $40DB. $40E9 belongs to the scene-entry/setup path "
+            "and must not be inserted into the exit-to-dialogue sequence merely "
+            "because its code follows $40DB in memory. The remaining timing gate "
+            "is whether the exploration return at $403C is followed by the $1425 "
+            "dialogue loader on the measured interaction."
         ),
         "runtime_order_gate": (
-            "Authenticate the caller/control flow that invokes the $40DB wait "
-            "and $40E9 scene orchestration on the same transition before adding "
-            "the 120 frames to the historical first-CD-to-parser budget."
+            "Observe $402B -> $40DB -> $403C -> $1425 byte loader -> $9543 parser "
+            "in one interaction before adding the 120 frames to the historical "
+            "first-CD-to-parser budget."
         ),
         "release_enabled": False,
     }
