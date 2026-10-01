@@ -3,6 +3,9 @@ from __future__ import annotations
 import unittest
 
 from cyber_oedo.runtime.card_ram_cache_plan import (
+    BAR_ADPCM_INCREMENTAL_SAVED_FRAMES,
+    BAR_COMBINED_CACHE_SAVED_FRAMES,
+    BAR_PORTRAIT_CACHE_SAVED_FRAMES,
     CARD_RAM_BANK_BYTES,
     build_ad_write_safe_core_layout,
     build_cache_plan,
@@ -43,6 +46,18 @@ class CardRamCachePlanTests(unittest.TestCase):
             report["two_portrait_extensions"]["independent_two_bank_portraits"]["total_banks"],
             16,
         )
+
+    def test_live_bartender_cache_benchmark_matches_measured_frames(self) -> None:
+        report = build_cache_plan()["live_bartender_cache_benchmark"]
+        self.assertEqual(BAR_PORTRAIT_CACHE_SAVED_FRAMES, 95)
+        self.assertEqual(BAR_ADPCM_INCREMENTAL_SAVED_FRAMES, 26)
+        self.assertEqual(BAR_COMBINED_CACHE_SAVED_FRAMES, 121)
+        self.assertEqual(report["stock"]["input_to_parser_frames"], 457)
+        self.assertEqual(report["portrait_cache"]["input_to_parser_frames"], 362)
+        combined = report["portrait_plus_adpcm_cache"]
+        self.assertEqual(combined["input_to_parser_frames"], 336)
+        self.assertTrue(combined["full_vram_matches_stock"])
+        self.assertTrue(combined["full_adpcm_matches_stock"])
 
     def test_plan_remains_release_disabled(self) -> None:
         self.assertFalse(build_cache_plan()["release_enabled"])
