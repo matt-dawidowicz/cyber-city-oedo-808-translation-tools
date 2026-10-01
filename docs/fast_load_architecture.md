@@ -174,6 +174,19 @@ The maintained diagnostic is:
 
     cyber-oedo describe-transition-state-machine
 
+The v2 Mesen transition profiler now carries a dedicated ordering proof. It
+arms on the exploration transition path at `$402B`, then records first hits at
+`$40DB` (the 120-frame wait), `$40E9` (scene orchestration), the `$1425`
+dialogue byte-loader invocation, and `$9543` (first parser execution). A
+single `ORDER_PROOF_RESULT` line reports whether the exact observed order was:
+
+    $402B -> $40DB -> $40E9 -> $1425 loader -> $9543 parser
+
+It also reports visible frames from transition exit to parser, wait-to-loader
+frames, and loader-to-parser frames. This is the runtime gate that can promote
+the current conditional 7.7-8.2 second figure into measured critical-path
+evidence.
+
 This model is descriptive only; all fast paths remain release-disabled.
 
 ### B. Short transition teardown
