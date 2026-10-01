@@ -11,7 +11,9 @@ Benchmarks in this module:
 * speaker-local retention: stop command 0/5 from invalidating the selector byte
   that already guards the $9000-$9FFF two-sector speaker-local cache;
 * short exploration wait: reduce the explicit 120-frame post-fade wait to a
-  caller-selected frame count.
+  caller-selected frame count;
+* selective bar VRAM restore: replace the stock one-shot $EE00-byte restore
+  with two source-guarded BIOS CD-to-VRAM calls that skip untouched sectors.
 
 None of these are release-enabled. The resident-module benchmark deliberately
 does not reset the two known self-modified operand bytes at $8617/$8618; live
@@ -63,6 +65,29 @@ EXPLORATION_WAIT_LDY_OFFSET = (
     MOVEMENT_MODULE_PAYLOAD_BASE + EXPLORATION_WAIT_LDY_CPU
 )
 EXPLORATION_WAIT_EXPECTED = bytes.fromhex("A0 78")
+
+BAR_RESTORE_CALL_OFFSET = 0x00A4442E
+BAR_RESTORE_CALL_EXPECTED = bytes.fromhex("20 59 44 60")
+BAR_RESTORE_CALL_REPLACEMENT = bytes.fromhex("4C 1C A3 EA")
+
+BAR_PRIMARY_DESCRIPTOR_OFFSET = 0x00A6D30D
+BAR_PRIMARY_DESCRIPTOR_EXPECTED = bytes.fromhex("00 E8 22 00 EE")
+BAR_PRIMARY_DESCRIPTOR_REPLACEMENT = bytes.fromhex("00 E8 22 20 8E")
+
+BAR_SELECTIVE_CAVE_OFFSET = 0x00A6D31C
+BAR_SELECTIVE_CAVE_EXPECTED = bytes(33)
+BAR_SELECTIVE_CAVE_REPLACEMENT = bytes.fromhex(
+    "20 59 44 "          # JSR $4459: first shortened stock transfer
+    "AD 10 37 "          # LDA $3710: scene descriptor index
+    "D0 13 "             # BNE -> RTS for non-bar scene variants
+    "A9 38 85 02 "       # descriptor pointer low = $38
+    "A9 A3 85 03 "       # descriptor pointer high = $A3
+    "A9 00 85 00 "       # destination VRAM word low = $00
+    "A9 6D 85 01 "       # destination VRAM word high = $6D
+    "20 59 44 "          # JSR $4459: second transfer
+    "60 "                # RTS
+    "00 01 23 00 1A"     # LBA $2301, byte length $1A00
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +181,53 @@ def build_short_exploration_wait_benchmark(frames: int = 8) -> LoadBenchmarkSet:
     )
 
 
+def build_selective_bar_vram_restore_benchmark() -> LoadBenchmarkSet:
+    """Benchmark the measured two-span bar VRAM restore.
+
+    The stock routine calls $4459 once and returns. This benchmark redirects
+    that return through zero-filled scene-table padding at $A31C. The cave
+    performs the shortened original transfer, checks $3710 so non-bar scene
+    variants do not receive the extra call, then performs LBA $2301 -> VRAM
+    word $6D00 for $1A00 bytes through the same stock loader.
+
+    This remains benchmark-only until zero-padding ownership and broader
+    room/dialogue coverage are release-certified.
+    """
+
+    return LoadBenchmarkSet(
+        name="selective-bar-vram-restore",
+        patches=(
+            PayloadPatch(
+                offset=BAR_RESTORE_CALL_OFFSET,
+                expected=BAR_RESTORE_CALL_EXPECTED,
+                replacement=BAR_RESTORE_CALL_REPLACEMENT,
+                label=(
+                    "Mission 0 benchmark: redirect bar scene VRAM restore "
+                    "through selective two-span trampoline"
+                ),
+            ),
+            PayloadPatch(
+                offset=BAR_PRIMARY_DESCRIPTOR_OFFSET,
+                expected=BAR_PRIMARY_DESCRIPTOR_EXPECTED,
+                replacement=BAR_PRIMARY_DESCRIPTOR_REPLACEMENT,
+                label=(
+                    "Mission 0 benchmark: shorten bar $22E8 VRAM transfer "
+                    "from $EE00 to $8E20 bytes"
+                ),
+            ),
+            PayloadPatch(
+                offset=BAR_SELECTIVE_CAVE_OFFSET,
+                expected=BAR_SELECTIVE_CAVE_EXPECTED,
+                replacement=BAR_SELECTIVE_CAVE_REPLACEMENT,
+                label=(
+                    "Mission 0 benchmark: install bar selective VRAM "
+                    "trampoline and $2301/$1A00 second descriptor"
+                ),
+            ),
+        ),
+    )
+
+
 def validate_load_benchmark_sources(payload: bytes) -> dict[str, object]:
     """Validate all benchmark source bytes against the authenticated payload."""
 
@@ -166,6 +238,7 @@ def validate_load_benchmark_sources(payload: bytes) -> dict[str, object]:
         build_resident_module_benchmark(),
         build_speaker_cache_retention_benchmark(),
         build_short_exploration_wait_benchmark(),
+        build_selective_bar_vram_restore_benchmark(),
     )
     rows = []
     for benchmark in sets:
