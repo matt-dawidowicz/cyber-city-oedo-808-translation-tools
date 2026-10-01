@@ -60,16 +60,17 @@ def build_transition_state_machine() -> dict[str, object]:
             "historical_first_dialogue_cd_to_parser_seconds": list(
                 HISTORICAL_DIALOGUE_LOAD_TO_READY_SECONDS
             ),
-            "static_fixed_wait_before_that_window_seconds": (
-                EXPLORATION_EXIT_FIXED_WAIT_SECONDS
-            ),
-            "combined_lower_bound_seconds": [enter_min, enter_max],
+            "static_wait_routine_seconds": EXPLORATION_EXIT_FIXED_WAIT_SECONDS,
+            "wait_before_historical_window_runtime_proven": False,
+            "combined_lower_bound_seconds": None,
+            "candidate_combined_if_ordered_seconds": [enter_min, enter_max],
             "interpretation": (
                 "The historical 5.7-6.2 second timer starts at the first "
-                "dialogue-related CD request, so the preceding 120-frame "
-                "exploration exit wait is outside it. The visible interaction "
-                "latency is therefore already at least about 7.7-8.2 seconds "
-                "before smaller pre-read/setup costs are assigned."
+                "dialogue-related CD request. A separate 120-frame wait routine "
+                "exists at $40DB, but current static evidence only proves address "
+                "adjacency to the $40E9 scene-orchestration region, not caller "
+                "ordering on this measured transition. Therefore 7.7-8.2 seconds "
+                "is a conditional candidate sum, not a proven lower bound."
             ),
         },
         "dialogue_to_exploration": {
@@ -126,9 +127,9 @@ def build_transition_state_machine() -> dict[str, object]:
         },
         "optimization_implications": [
             (
-                "exploration->dialogue can save a deterministic 1.87 seconds "
-                "by benchmarking 120 frames versus the current 8-frame short-wait "
-                "prototype, independent of optical caching"
+                "the 120-frame-to-8-frame benchmark represents a candidate "
+                "1.87-second saving if caller/live evidence confirms that the "
+                "$40DB wait executes on the measured exploration->dialogue path"
             ),
             (
                 "dialogue->exploration audio teardown must preserve completion "
@@ -136,9 +137,9 @@ def build_transition_state_machine() -> dict[str, object]:
                 "than simply deleting the $41EC gate"
             ),
             (
-                "module/portrait/audio caching attacks the 5.7-6.2 second "
-                "post-first-CD portion, while the 120-frame benchmark attacks "
-                "latency before that measurement window"
+                "module/portrait/audio caching attacks the proven 5.7-6.2 second "
+                "post-first-CD portion; the 120-frame benchmark remains a separate "
+                "candidate until its ordering relative to that window is proven"
             ),
         ],
         "release_enabled": False,
