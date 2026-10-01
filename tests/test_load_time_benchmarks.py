@@ -9,9 +9,13 @@ from cyber_oedo.runtime.load_time_benchmarks import (
     EXPLORATION_WAIT_EXPECTED,
     RESIDENT_LOADER_EXPECTED,
     RESIDENT_LOADER_REPLACEMENT,
+    BAR_PRIMARY_DESCRIPTOR_EXPECTED,
+    BAR_PRIMARY_DESCRIPTOR_REPLACEMENT,
+    BAR_SELECTIVE_CAVE_REPLACEMENT,
     build_resident_module_benchmark,
     build_short_exploration_wait_benchmark,
     build_speaker_cache_retention_benchmark,
+    build_selective_bar_vram_restore_benchmark,
 )
 
 
@@ -50,11 +54,20 @@ class LoadTimeBenchmarkTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "1..120"):
                 build_short_exploration_wait_benchmark(frames)
 
+    def test_selective_bar_vram_restore_encodes_two_real_loader_calls(self) -> None:
+        benchmark = build_selective_bar_vram_restore_benchmark()
+        self.assertEqual(len(benchmark.patches), 3)
+        self.assertEqual(BAR_PRIMARY_DESCRIPTOR_EXPECTED, bytes.fromhex("00 E8 22 00 EE"))
+        self.assertEqual(BAR_PRIMARY_DESCRIPTOR_REPLACEMENT, bytes.fromhex("00 E8 22 20 8E"))
+        self.assertEqual(len(BAR_SELECTIVE_CAVE_REPLACEMENT), 33)
+        self.assertTrue(BAR_SELECTIVE_CAVE_REPLACEMENT.endswith(bytes.fromhex("00 01 23 00 1A")))
+
     def test_all_benchmarks_remain_disabled(self) -> None:
         for benchmark in (
             build_resident_module_benchmark(),
             build_speaker_cache_retention_benchmark(),
             build_short_exploration_wait_benchmark(),
+            build_selective_bar_vram_restore_benchmark(),
         ):
             self.assertFalse(benchmark.release_enabled)
 
