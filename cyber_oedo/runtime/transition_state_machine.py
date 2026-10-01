@@ -11,68 +11,46 @@ import argparse
 import json
 import pathlib
 
-EXPLORATION_EXIT_FIXED_WAIT_FRAMES = 120
-EXPLORATION_EXIT_FIXED_WAIT_SECONDS = EXPLORATION_EXIT_FIXED_WAIT_FRAMES / 60.0
+MOVEMENT_OVERLAY_WAIT_FRAMES = 120
+MOVEMENT_OVERLAY_WAIT_SECONDS = MOVEMENT_OVERLAY_WAIT_FRAMES / 60.0
+BAR_WAIT_FRAMES = 30
+BAR_WAIT_SECONDS = BAR_WAIT_FRAMES / 60.0
 HISTORICAL_DIALOGUE_LOAD_TO_READY_SECONDS = (5.7, 6.2)
+BAR_COLD_BUTTON_TO_READY_SECONDS = 457 / 60.0
+BAR_COLD_LOAD_TO_READY_SECONDS = 370 / 60.0
+BAR_WARM_LOAD_TO_READY_SECONDS = 342 / 60.0
 DIALOGUE_TEARDOWN_FADE_SECONDS_APPROX = 2.5
 
 
 def build_transition_state_machine() -> dict[str, object]:
-    enter_min = (
-        HISTORICAL_DIALOGUE_LOAD_TO_READY_SECONDS[0]
-        + EXPLORATION_EXIT_FIXED_WAIT_SECONDS
-    )
-    enter_max = (
-        HISTORICAL_DIALOGUE_LOAD_TO_READY_SECONDS[1]
-        + EXPLORATION_EXIT_FIXED_WAIT_SECONDS
-    )
     return {
         "exploration_to_dialogue": {
             "direction": "interaction/exploration -> dialogue parser",
-            "phases": [
-                {
-                    "phase": "interaction exit",
-                    "evidence": "$2649 exit flag / $402B movement transition path",
-                    "timing": "not separately measured",
-                },
-                {
-                    "phase": "exploration audio fade policy",
-                    "evidence": (
-                        "$40DB routine: CD_FADE mode $0C followed by "
-                        "LDY #$78 / EX_VSYNC loop"
-                    ),
-                    "fixed_wait_frames": EXPLORATION_EXIT_FIXED_WAIT_FRAMES,
-                    "fixed_wait_seconds": EXPLORATION_EXIT_FIXED_WAIT_SECONDS,
-                },
-                {
-                    "phase": "dialogue optical/resource setup",
-                    "evidence": (
-                        "$1425 module load, optional 10xx event resource, "
-                        "speaker local/ADPCM source, portrait/UI"
-                    ),
-                    "timing": "included in historical load-to-ready window",
-                },
-                {
-                    "phase": "dialogue ready",
-                    "evidence": "first parser execution",
-                },
-            ],
+            "bar_live_measurement": {
+                "fixed_wait_frames": BAR_WAIT_FRAMES,
+                "fixed_wait_seconds": BAR_WAIT_SECONDS,
+                "cold_button_to_parser_seconds": BAR_COLD_BUTTON_TO_READY_SECONDS,
+                "cold_loader_to_parser_seconds": BAR_COLD_LOAD_TO_READY_SECONDS,
+                "warm_loader_to_parser_seconds": BAR_WARM_LOAD_TO_READY_SECONDS,
+                "evidence": (
+                    "live bartender replay: CD_FADE $0C followed by a 30-frame "
+                    "EX_VSYNC loop in the bar runtime overlay"
+                ),
+            },
+            "other_movement_overlay": {
+                "fixed_wait_frames": MOVEMENT_OVERLAY_WAIT_FRAMES,
+                "fixed_wait_seconds": MOVEMENT_OVERLAY_WAIT_SECONDS,
+                "evidence": "$402B -> $40B1 -> $40DB static call chain",
+                "applies_to_bar_measurement": False,
+            },
             "historical_first_dialogue_cd_to_parser_seconds": list(
                 HISTORICAL_DIALOGUE_LOAD_TO_READY_SECONDS
             ),
-            "static_wait_routine_seconds": EXPLORATION_EXIT_FIXED_WAIT_SECONDS,
-            "wait_on_exploration_exit_path_proven": True,
-            "wait_before_historical_window_runtime_proven": False,
-            "combined_lower_bound_seconds": None,
-            "candidate_combined_if_ordered_seconds": [enter_min, enter_max],
             "interpretation": (
-                "The historical 5.7-6.2 second timer starts at the first "
-                "dialogue-related CD request. Static control flow now proves that "
-                "the exploration exit path executes the 120-frame $40DB wait via "
-                "$402B -> $40B1 -> $40DB. What remains unproven is whether the "
-                "subsequent exploration return feeds the measured $1425 dialogue "
-                "loader. Therefore 7.7-8.2 seconds remains a conditional candidate "
-                "sum until that runtime handoff is observed."
+                "The 120-frame $40DB wait is real in another movement-overlay "
+                "copy but must not be added to the bartender's 5.7-6.2 second "
+                "loader window. The bartender/bar path is independently measured "
+                "with a 30-frame wait and 7.617 seconds from Button I to parser."
             ),
         },
         "dialogue_to_exploration": {
@@ -80,68 +58,31 @@ def build_transition_state_machine() -> dict[str, object]:
             "phases": [
                 {
                     "phase": "dialogue audio fade request",
-                    "evidence": (
-                        "dialogue command 2 at $80E7 invokes CD_FADE mode $0E "
-                        "when $37F0 is active"
-                    ),
+                    "evidence": "command 2 / CD_FADE mode $0E",
                     "approximate_fade_seconds": DIALOGUE_TEARDOWN_FADE_SECONDS_APPROX,
                 },
                 {
                     "phase": "synchronous audio-state gate",
-                    "evidence": (
-                        "outer transition waits at $41EC while $420B is set "
-                        "until periodic dialogue audio state clears $37F0"
-                    ),
-                    "timing": (
-                        "overlaps/implements completion of the fade state; do "
-                        "not add another 2.5 seconds without live timing"
-                    ),
+                    "evidence": "$41EC waits for dialogue audio state to clear",
                 },
                 {
-                    "phase": "dialogue cleanup",
-                    "evidence": (
-                        "command 5 clears audio state and invalidates speaker "
-                        "metadata in the shipping path"
-                    ),
-                },
-                {
-                    "phase": "exploration scene installation",
-                    "evidence": (
-                        "scene/room setup plus known $228E, $22DE, $22E8 hot "
-                        "bundle on the main scene"
-                    ),
-                },
-                {
-                    "phase": "display/object/music initialization",
-                    "evidence": (
-                        "room pointers, objects/collision, VRAM/BAT/display "
-                        "state, and exploration CD-DA restart before control"
-                    ),
-                    "timing": "not yet fully partitioned",
+                    "phase": "exploration scene restoration",
+                    "evidence": "$228E, $22DE, and VRAM restore path",
                 },
             ],
-            "interpretation": (
-                "The ~2.5-second-class dialogue fade belongs to the return to "
-                "exploration, not to the earlier 120-frame exploration-exit "
-                "wait. Treating both as one direction double-counts two "
-                "different state-machine legs."
-            ),
         },
         "optimization_implications": [
             (
-                "the 120-frame-to-8-frame benchmark represents a candidate "
-                "1.87-second saving if caller/live evidence confirms that the "
-                "$40DB wait executes on the measured exploration->dialogue path"
+                "treat overlay-specific waits separately; do not apply the "
+                "120-frame movement-overlay benchmark globally"
             ),
             (
-                "dialogue->exploration audio teardown must preserve completion "
-                "semantics; use the existing immediate-cleanup benchmark rather "
-                "than simply deleting the $41EC gate"
+                "resident-module and speaker-local caching attack recurring "
+                "bar loader work independently of the 30-frame bar wait"
             ),
             (
-                "module/portrait/audio caching attacks the proven 5.7-6.2 second "
-                "post-first-CD portion; the 120-frame benchmark remains a separate "
-                "candidate until its ordering relative to that window is proven"
+                "dialogue return optimization must preserve fade completion and "
+                "restore-equivalent VRAM state"
             ),
         ],
         "release_enabled": False,
