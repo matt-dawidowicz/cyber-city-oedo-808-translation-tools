@@ -15,10 +15,11 @@ Benchmarks in this module:
 * selective bar VRAM restore: replace the stock one-shot $EE00-byte restore
   with two source-guarded BIOS CD-to-VRAM calls that skip untouched sectors.
 
-None of these are release-enabled. The resident-module benchmark deliberately
-does not reset the two known self-modified operand bytes at $8617/$8618; live
-profiling must prove that the normal command path reinitializes them safely
-before this benchmark can be promoted or strengthened.
+None of these are release-enabled. Live bartender profiling has now shown that
+the resident-module benchmark survives a second interaction even when the two
+known self-modified operand bytes at $8617/$8618 begin with their post-dialogue
+values; the normal command path rewrites them before parser use. Broader route
+coverage is still required before release promotion.
 """
 
 from __future__ import annotations
