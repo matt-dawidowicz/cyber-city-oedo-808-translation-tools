@@ -4,6 +4,8 @@ import unittest
 
 from cyber_oedo.registry import command_by_name
 from cyber_oedo.runtime.scene_transition_architecture import (
+    EXIT_TEARDOWN_BYTES,
+    EXIT_TEARDOWN_CPU,
     SCENE_LOADERS_CPU_START,
     SCENE_SETUP_CPU_END_EXCLUSIVE,
     TRANSITION_WAIT_BYTES,
@@ -12,6 +14,10 @@ from cyber_oedo.runtime.scene_transition_architecture import (
 
 
 class SceneTransitionArchitectureTests(unittest.TestCase):
+    def test_exit_teardown_directly_calls_wait(self) -> None:
+        self.assertEqual(EXIT_TEARDOWN_CPU, 0x40B1)
+        self.assertEqual(EXIT_TEARDOWN_BYTES[:3], bytes.fromhex("20 DB 40"))
+
     def test_wait_is_address_adjacent_to_scene_orchestration_entry(self) -> None:
         self.assertEqual(TRANSITION_WAIT_CPU + len(TRANSITION_WAIT_BYTES), 0x40E9)
 
