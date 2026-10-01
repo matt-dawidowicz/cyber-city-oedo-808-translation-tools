@@ -43,9 +43,16 @@ def direct_absolute_calls(
 
     rows = []
     for instruction in linear_disassemble(blob, payload_offset, cpu_address):
-        if instruction.mnemonic not in {"jsr", "jmp"}:
-            continue
         if len(instruction.raw) != 3:
+            continue
+        opcode = instruction.raw[0]
+        if instruction.mnemonic == "jsr":
+            if opcode != 0x20:
+                continue
+        elif instruction.mnemonic == "jmp":
+            if opcode != 0x4C:
+                continue
+        else:
             continue
         target = instruction.raw[1] | (instruction.raw[2] << 8)
         rows.append(
