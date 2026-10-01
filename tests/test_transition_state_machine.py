@@ -9,10 +9,12 @@ from cyber_oedo.runtime.transition_state_machine import (
 
 
 class TransitionStateMachineTests(unittest.TestCase):
-    def test_enter_dialogue_lower_bound_includes_pre_cd_wait(self) -> None:
+    def test_enter_dialogue_keeps_unproven_wait_out_of_lower_bound(self) -> None:
         report = build_transition_state_machine()["exploration_to_dialogue"]
         self.assertEqual(EXPLORATION_EXIT_FIXED_WAIT_SECONDS, 2.0)
-        self.assertEqual(report["combined_lower_bound_seconds"], [7.7, 8.2])
+        self.assertFalse(report["wait_before_historical_window_runtime_proven"])
+        self.assertIsNone(report["combined_lower_bound_seconds"])
+        self.assertEqual(report["candidate_combined_if_ordered_seconds"], [7.7, 8.2])
 
     def test_two_fades_are_assigned_to_different_directions(self) -> None:
         report = build_transition_state_machine()
