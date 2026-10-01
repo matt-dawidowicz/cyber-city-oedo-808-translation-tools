@@ -20,7 +20,7 @@
 -- Additional transition timing markers:
 --   $402B  exploration exit/transition path (arms ordering proof)
 --   $40DB  120-frame wait routine
---   $40E9  scene/room orchestration entry
+--   $403C  exploration module return
 --   $80E7  dialogue-module fade command
 --   $8100  dialogue-module audio-state clear path
 --   $41EC  outer synchronous fade-wait loop
@@ -512,7 +512,8 @@ local function beginOrderProof()
     ordinal=orderProofOrdinal,
     exitFrame=frame,
     waitFrame=nil,
-    sceneFrame=nil,
+    returnFrame=nil,
+    returnTarget=nil,
     loaderFrame=nil,
     parserFrame=nil,
   }
@@ -532,15 +533,17 @@ local function markOrderWait()
   ))
 end
 
-local function markOrderScene()
+local function markOrderReturn()
   if not orderProof then return end
-  if orderProof.sceneFrame then return end
-  orderProof.sceneFrame = frame
+  if orderProof.returnFrame then return end
+  orderProof.returnFrame = frame
+  orderProof.returnTarget = stackReturnTarget()
   log(string.format(
-    "[ORDER_PROOF_SCENE %03d] frame=%d pc=$40E9 delta_from_exit=%d delta_from_wait=%s %s %s",
+    "[ORDER_PROOF_RETURN %03d] frame=%d pc=$403C delta_from_exit=%d " ..
+    "delta_from_wait=%s caller_return=$%04X %s %s",
     orderProof.ordinal, frame, frame - orderProof.exitFrame,
     orderProof.waitFrame and tostring(frame - orderProof.waitFrame) or "NA",
-    sceneState(), mprString()
+    orderProof.returnTarget, sceneState(), mprString()
   ))
 end
 
@@ -548,23 +551,24 @@ local function finishOrderProof()
   if not orderProof or not orderProof.loaderFrame then return end
   orderProof.parserFrame = frame
   local ordered = orderProof.waitFrame
-    and orderProof.sceneFrame
-    and orderProof.waitFrame <= orderProof.sceneFrame
-    and orderProof.sceneFrame <= orderProof.loaderFrame
+    and orderProof.returnFrame
+    and orderProof.waitFrame <= orderProof.returnFrame
+    and orderProof.returnFrame <= orderProof.loaderFrame
     and orderProof.loaderFrame <= orderProof.parserFrame
   local waitBeforeLoader = orderProof.waitFrame
     and orderProof.waitFrame <= orderProof.loaderFrame
   log(string.format(
-    "[ORDER_PROOF_RESULT %03d] ordered_exit_wait_scene_1425_parser=%s " ..
-    "wait_before_1425=%s exit_frame=%d wait_frame=%s scene_frame=%s " ..
-    "loader1425_frame=%d parser_frame=%d visible_frames=%d visible_seconds=%.4f " ..
+    "[ORDER_PROOF_RESULT %03d] ordered_exit_wait_return_1425_parser=%s " ..
+    "wait_before_1425=%s exit_frame=%d wait_frame=%s return_frame=%s " ..
+    "return_target=%s loader1425_frame=%d parser_frame=%d visible_frames=%d visible_seconds=%.4f " ..
     "wait_to_1425_frames=%s loader_to_parser_frames=%d",
     orderProof.ordinal,
     ordered and "yes" or "no",
     waitBeforeLoader and "yes" or "no",
     orderProof.exitFrame,
     orderProof.waitFrame and tostring(orderProof.waitFrame) or "NA",
-    orderProof.sceneFrame and tostring(orderProof.sceneFrame) or "NA",
+    orderProof.returnFrame and tostring(orderProof.returnFrame) or "NA",
+    orderProof.returnTarget and string.format("$%04X", orderProof.returnTarget) or "NA",
     orderProof.loaderFrame,
     orderProof.parserFrame,
     orderProof.parserFrame - orderProof.exitFrame,
@@ -585,10 +589,10 @@ local function onByteLoader()
       orderProof.loaderFrame = frame
       log(string.format(
         "[ORDER_PROOF_1425 %03d] frame=%d pc=$6EA0 delta_from_exit=%d " ..
-        "delta_from_wait=%s delta_from_scene=%s caller_return=$%04X %s %s",
+        "delta_from_wait=%s delta_from_return=%s caller_return=$%04X %s %s",
         orderProof.ordinal, frame, frame - orderProof.exitFrame,
         orderProof.waitFrame and tostring(frame - orderProof.waitFrame) or "NA",
-        orderProof.sceneFrame and tostring(frame - orderProof.sceneFrame) or "NA",
+        orderProof.returnFrame and tostring(frame - orderProof.returnFrame) or "NA",
         stackReturnTarget(), sceneState(), mprString()
       ))
     end
@@ -690,7 +694,7 @@ emu.addMemoryCallback(onModuleFadeCommand, emu.callbackType.exec, 0x80E7, 0x80E7
 emu.addMemoryCallback(onModuleFadeClear, emu.callbackType.exec, 0x8100, 0x8100, CPU, MEM)
 emu.addMemoryCallback(beginOrderProof, emu.callbackType.exec, 0x402B, 0x402B, CPU, MEM)
 emu.addMemoryCallback(markOrderWait, emu.callbackType.exec, 0x40DB, 0x40DB, CPU, MEM)
-emu.addMemoryCallback(markOrderScene, emu.callbackType.exec, 0x40E9, 0x40E9, CPU, MEM)
+emu.addMemoryCallback(markOrderReturn, emu.callbackType.exec, 0x403C, 0x403C, CPU, MEM)
 emu.addMemoryCallback(onFadeWaitLoop, emu.callbackType.exec, 0x41EC, 0x41EC, CPU, MEM)
 emu.addMemoryCallback(onFadeWaitExit, emu.callbackType.exec, 0x41F1, 0x41F1, CPU, MEM)
 emu.addMemoryCallback(onByteLoader, emu.callbackType.exec, 0x6EA0, 0x6EA0, CPU, MEM)
