@@ -36,6 +36,17 @@ class SameRoomReentryTests(unittest.TestCase):
             ),
         )
 
+    def test_direct_absolute_calls_exclude_indirect_jumps(self) -> None:
+        blob = bytes.fromhex("6C 9E 41 7C 19 55 20 19 55 4C 9E 41")
+        rows = direct_absolute_calls(blob, 0x1000, 0x4000)
+        self.assertEqual(
+            rows,
+            (
+                {"cpu": "$4006", "operation": "JSR", "target": "$5519"},
+                {"cpu": "$4009", "operation": "JMP", "target": "$419E"},
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
