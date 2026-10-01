@@ -49,6 +49,37 @@ then later executes a **30-frame** EX_VSYNC loop at $4213-$421A. Therefore the
 120-frame wait must not be generalized to every exploration -> dialogue
 transition.
 
+### Resident module and speaker-local cache benchmarks
+
+Two independent warm-entry cache experiments have now been replayed against the
+bartender route.
+
+**Resident dialogue module.** The existing `$8000/$8003` JMP-entrypoint check
+was made functional so a resident module branches around the `$1425/$1426`
+reload. Both module reads disappear. The first parser hit moves from frame 517
+to frame 479, a **38-frame / 0.633-second** improvement. On the second
+interaction the self-modified operand bytes `$8617/$8618` begin as `$08/$96`;
+the reload is still skipped, the parser is reached correctly, and normal module
+initialization rewrites them to `$F0/$04`. The warm path improves by roughly
+**34 frames / 0.567 seconds** versus stock.
+
+The saving is smaller than the removed 77-frame module-read duration because
+the following optical request inherits part of the seek cost that the module
+read previously absorbed. This confirms that deleting one read does not imply
+an equal end-to-end saving.
+
+**Speaker-local retention.** NOPing the shipping command-0/command-5 invalidation
+of selector `$8FDE` allows the existing two-sector `$1441` speaker-local cache
+to survive the selective bar return. The first interaction still reads `$1441`;
+the second does not. Warm loader-to-parser time improves from **342 frames /
+5.700 seconds** to **330 frames / 5.500 seconds**, a **12-frame / 0.200-second**
+saving.
+
+These results are independently valid. A combined resident-module +
+speaker-retention harness still needs a bank-correct way to install the
+speaker-invalidation patch into the already-resident module in the retained
+save state; the first combined Lua attempt modified the wrong backing memory
+and therefore is not used as timing evidence.
 ### Warm bartender interaction
 
 After returning to the bar, the identical interaction was triggered again.
