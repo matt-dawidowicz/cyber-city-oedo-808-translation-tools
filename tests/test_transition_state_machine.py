@@ -3,26 +3,27 @@ from __future__ import annotations
 import unittest
 
 from cyber_oedo.runtime.transition_state_machine import (
-    EXPLORATION_EXIT_FIXED_WAIT_SECONDS,
+    BAR_WAIT_SECONDS,
+    MOVEMENT_OVERLAY_WAIT_SECONDS,
     build_transition_state_machine,
 )
 
 
 class TransitionStateMachineTests(unittest.TestCase):
-    def test_enter_dialogue_keeps_unproven_wait_out_of_lower_bound(self) -> None:
+    def test_bar_uses_measured_thirty_frame_wait(self) -> None:
         report = build_transition_state_machine()["exploration_to_dialogue"]
-        self.assertEqual(EXPLORATION_EXIT_FIXED_WAIT_SECONDS, 2.0)
-        self.assertTrue(report["wait_on_exploration_exit_path_proven"])
-        self.assertFalse(report["wait_before_historical_window_runtime_proven"])
-        self.assertIsNone(report["combined_lower_bound_seconds"])
-        self.assertEqual(report["candidate_combined_if_ordered_seconds"], [7.7, 8.2])
+        self.assertEqual(BAR_WAIT_SECONDS, 0.5)
+        self.assertEqual(report["bar_live_measurement"]["fixed_wait_frames"], 30)
+        self.assertAlmostEqual(
+            report["bar_live_measurement"]["cold_button_to_parser_seconds"],
+            457 / 60.0,
+        )
 
-    def test_two_fades_are_assigned_to_different_directions(self) -> None:
-        report = build_transition_state_machine()
-        enter = report["exploration_to_dialogue"]["phases"]
-        leave = report["dialogue_to_exploration"]["phases"]
-        self.assertEqual(enter[1]["fixed_wait_seconds"], 2.0)
-        self.assertEqual(leave[0]["approximate_fade_seconds"], 2.5)
+    def test_120_frame_overlay_is_not_added_to_bar_measurement(self) -> None:
+        report = build_transition_state_machine()["exploration_to_dialogue"]
+        self.assertEqual(MOVEMENT_OVERLAY_WAIT_SECONDS, 2.0)
+        self.assertFalse(report["other_movement_overlay"]["applies_to_bar_measurement"])
+        self.assertNotIn("candidate_combined_if_ordered_seconds", report)
 
     def test_analysis_remains_release_disabled(self) -> None:
         self.assertFalse(build_transition_state_machine()["release_enabled"])
