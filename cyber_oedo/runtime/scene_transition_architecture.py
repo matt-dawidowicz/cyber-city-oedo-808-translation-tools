@@ -1,9 +1,10 @@
 """Source-guarded exploration scene-transition architecture.
 
 This module turns the already authenticated movement-overlay regions into a
-transition model.  It separates the explicit audio/wait gate from scene/room
-orchestration while treating the blocking CD_READ wrappers as nested callees,
-not as a later sequential phase.
+transition-layout model. It identifies the explicit audio/wait routine and
+scene/room orchestration by address while deliberately avoiding a runtime-order
+claim until the relevant caller/control flow is authenticated. Blocking CD_READ
+wrappers are treated as nested callees, not as a later sequential phase.
 """
 
 from __future__ import annotations
@@ -55,7 +56,7 @@ def analyze_scene_transition_architecture(payload: bytes) -> dict[str, object]:
 
     return {
         "source_guards": checks,
-        "high_level_sequence": [
+        "address_ordered_regions": [
             {
                 "phase": "exploration_audio_transition",
                 "cpu": "$40DB-$40E8",
@@ -95,14 +96,21 @@ def analyze_scene_transition_architecture(payload: bytes) -> dict[str, object]:
                 SCENE_SETUP_CPU_END_EXCLUSIVE == SCENE_LOADERS_CPU_START
             ),
             "adjacency_is_not_runtime_ordering": True,
+            "wait_to_orchestration_runtime_order_proven": False,
             "loader_region_end": f"$%04X" % (SCENE_LOADERS_CPU_END_EXCLUSIVE - 1),
         },
         "optimization_implication": (
-            "The 120-frame delay is a distinct high-level transition policy "
-            "before scene orchestration begins. The CD_READ wrappers contain no "
-            "explicit VSync delay, but execute as nested calls during that "
-            "orchestration, so their time must not be added again as a later "
-            "sequential phase."
+            "The 120-frame routine is a distinct static code region immediately "
+            "before the scene-orchestration region in memory. Static adjacency "
+            "does not prove that a caller executes the wait and then falls into "
+            "or calls $40E9 on the measured transition. The CD_READ wrappers "
+            "contain no explicit VSync delay and are nested resource helpers; "
+            "their time must not be added again as a later sequential phase."
+        ),
+        "runtime_order_gate": (
+            "Authenticate the caller/control flow that invokes the $40DB wait "
+            "and $40E9 scene orchestration on the same transition before adding "
+            "the 120 frames to the historical first-CD-to-parser budget."
         ),
         "release_enabled": False,
     }
