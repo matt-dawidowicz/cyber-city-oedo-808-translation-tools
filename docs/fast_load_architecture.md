@@ -86,6 +86,50 @@ VDC/VRAM, not optical seek latency. This substantially strengthens the case for
 selective dialogue-damage restoration or a RAM/VRAM fast path instead of
 reloading the full $EE00-byte exploration image.
 
+### Live VRAM dirty diff and two-span restore
+
+A deterministic no-dialogue control from the same bartender save state changed
+**zero** VRAM bytes over the same 835-frame interval. The dialogue replay changed
+33,163 of 65,536 VRAM bytes before the stock restore, so the changes are
+conversation/transition-induced rather than ambient room animation.
+
+The stock `$22E8` call uses destination word `$0900`, i.e. VRAM byte `$1200`,
+and writes `$EE00` bytes through the end of VRAM. Of the 33,163 dirty bytes,
+938 are below `$1200` and are intentionally not repaired by this stock call.
+The stock call repairs the remaining **32,225 dirty bytes** while blindly
+rewriting **60,928 bytes**.
+
+Sector-level diffing shows eight of the 30 source sectors are completely
+untouched. The live dirty set inside the stock restore region is covered by two
+compact source/destination spans:
+
+| source | VRAM bytes | transfer length |
+|---|---|---:|
+| `$22E8...` | `$1200-$A01F` | `$8E20` / 36,384 bytes |
+| `$2301...` | `$DA00-$F3FF` | `$1A00` / 6,656 bytes |
+
+A runtime prototype reused the game's own `$4459` generic VRAM loader and the
+real System Card CD_READ path for those two spans. It did not use instant Lua
+VRAM writes for the measured transfer.
+
+| restore | frames | seconds |
+|---|---:|---:|
+| stock `$EE00` transfer | 551 | 9.183 |
+| selective span 1 | 333 | 5.550 |
+| selective span 2 | 79 | 1.317 |
+| selective total | **412** | **6.867** |
+| saving | **139** | **2.317** |
+
+The two-span candidate transfers 43,040 bytes, skipping 17,888 bytes / 29.36%
+of the stock transfer. More importantly, the resulting complete 64 KiB VRAM
+image is **byte-for-byte identical** to the stock image immediately after the
+`$22E8` restore, and the bar renders correctly after return.
+
+This proves a conservative selective restore is viable. It is still benchmark
+code rather than a release patch: the next implementation step is to encode the
+second loader call in the game overlay and then validate other rooms/dialogue
+types, because their dirty spans may differ from the bartender/bar case.
+
 ## Why the pauses approach ten seconds
 
 The old profiler watched CD_READ only. It therefore missed ADPCM optical
@@ -512,11 +556,15 @@ Thus portrait plus all sparse glyph writes total 10,528 bytes, and even treating
 the complete glyph envelope as one contiguous restore keeps portrait+glyph
 restoration below roughly 22% of the stock 60,928-byte scene transfer.
 
-BAT writes rooted at `$7900` are deliberately excluded from that numerical
-ceiling. The one-word BAT writer and base address are source-guarded, but the
-maintained static model does not yet encode the complete positioned/redraw
-caller destination union. Live dirty profiling or deeper caller decoding is
-still required before generating an exact selective-restore patch.
+The live bartender capture shows why this static figure must not be interpreted
+as total transition damage. The actual conversation/transition path dirties
+33,163 VRAM bytes, including large regions outside the statically bounded
+portrait and glyph writers. BAT/display/setup activity therefore contributes
+substantial additional damage.
+
+For the bar case, live profiling has now produced and benchmarked an exact
+conservative two-span restore. The static renderer bound remains useful for
+attribution, but the **live diff is authoritative for patch planning**.
 
 Run:
 
