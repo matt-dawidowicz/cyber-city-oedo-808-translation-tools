@@ -1,15 +1,18 @@
-"""Native one-byte English dialogue compiler for the rewritten text engine.
+"""Native English dialogue compiler for the rewritten text engine.
 
-The stock `27 28` marker remains the outer record identifier. A translated
-record then carries a two-byte English-mode signature and a one-byte glyph
-stream. Values 0x80-0xFE are English glyph IDs; low bytes retain the proven
-dialogue control language. Japanese records remain valid stock bytecode.
+The stock 27 28 marker remains the outer record identifier. English text is
+emitted as self-contained native segments. The stock parser remains responsible
+for every proven low-byte control between segments, so voice waits, input waits,
+attributes, indirect labels, line advance, and termination keep their original
+semantics.
 
-The compiler is intentionally strict about semantic controls. Japanese line
-advance opcode 0x40 is presentation and may be recomputed from English word
-wrapping. A meaningful control that occurs between two source text runs
-requires an explicit translator/runtime timing anchor rather than heuristic
-repositioning.
+A native segment is:
+
+    7D 45 <one-byte English glyph IDs 80-FE> 7C
+
+The runtime consumes the signature and segment end. Returning to the stock
+parser at every segment boundary avoids a persistent English-mode flag and lets
+controls remain byte-identical to the Japanese script.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from cyber_oedo.script.opcodes import DIALOGUE_MARKER, DialogueOpcode
 from cyber_oedo.text.packed_english import DEFAULT_DISPLAY_CHARACTERS
 
 ENGLISH_MODE_SIGNATURE = bytes((0x7D, 0x45))
+ENGLISH_SEGMENT_END = 0x7C
 ENGLISH_GLYPH_BASE = 0x80
 ENGLISH_GLYPH_LAST = 0xFE
 ENGLISH_GLYPH_CAPACITY = ENGLISH_GLYPH_LAST - ENGLISH_GLYPH_BASE + 1
@@ -35,7 +39,7 @@ class EnglishDialogueCompileError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class EnglishGlyphTable:
-    """Stable one-byte glyph IDs for the native English renderer."""
+    """Stable one-byte glyph IDs used by native English stream segments."""
 
     characters: str
 
@@ -90,7 +94,7 @@ class EnglishGlyphTable:
 
 
 def wrap_english(text: str, width: int = ENGLISH_LINE_WIDTH) -> tuple[str, ...]:
-    """Word-wrap natural English for the 176-pixel dialogue field."""
+    """Word-wrap natural English for the 176-pixel fixed-width fallback."""
     if width <= 0:
         raise EnglishDialogueCompileError("line width must be positive")
     if not text or text.strip() != text or "  " in text:
@@ -116,6 +120,17 @@ def wrap_english(text: str, width: int = ENGLISH_LINE_WIDTH) -> tuple[str, ...]:
     return tuple(lines)
 
 
+def encode_english_segment(text: str, glyphs: EnglishGlyphTable) -> bytes:
+    """Encode one control-free English segment."""
+    if not text:
+        raise EnglishDialogueCompileError("English segment must not be empty")
+    return (
+        ENGLISH_MODE_SIGNATURE
+        + glyphs.encode(text)
+        + bytes((ENGLISH_SEGMENT_END,))
+    )
+
+
 def _semantic_mid_controls(source_record: bytes) -> tuple[ControlCommand, ...]:
     record = parse_dialogue_record(source_record, 0)
     if record is None or record.byte_count != len(source_record):
@@ -139,28 +154,12 @@ def source_requires_manual_anchors(source_record: bytes) -> bool:
     return bool(_semantic_mid_controls(source_record))
 
 
-def compile_automatic_record(
+def _boundary_controls(
     source_record: bytes,
-    english: str,
-    glyphs: EnglishGlyphTable,
-    *,
-    width: int = ENGLISH_LINE_WIDTH,
-) -> bytes:
-    """Compile one record whose semantic controls are only at its boundaries.
-
-    Source line advances are discarded and regenerated from English wrapping.
-    All other leading and trailing controls are preserved byte-for-byte.
-    """
+) -> tuple[bytes, bytes, tuple[ControlCommand, ...]]:
     record = parse_dialogue_record(source_record, 0)
     if record is None or record.byte_count != len(source_record):
         raise EnglishDialogueCompileError("source record is not valid dialogue bytecode")
-    mids = _semantic_mid_controls(source_record)
-    if mids:
-        opcodes = ", ".join(f"${item.opcode:02X}" for item in mids)
-        raise EnglishDialogueCompileError(
-            f"record requires explicit semantic control anchors: {opcodes}"
-        )
-
     nodes = record.body.nodes
     first_text = next(
         (i for i, node in enumerate(nodes) if isinstance(node, TextRun)),
@@ -170,9 +169,9 @@ def compile_automatic_record(
         (i for i, node in enumerate(nodes) if isinstance(node, TextRun)),
         default=-1,
     )
-
     leading = bytearray()
     trailing = bytearray()
+    mids: list[ControlCommand] = []
     for index, node in enumerate(nodes):
         if not isinstance(node, ControlCommand):
             continue
@@ -182,14 +181,79 @@ def compile_automatic_record(
             leading.extend(node.raw)
         elif index > last_text:
             trailing.extend(node.raw)
+        else:
+            text_before = any(isinstance(item, TextRun) for item in nodes[:index])
+            text_after = any(isinstance(item, TextRun) for item in nodes[index + 1 :])
+            if text_before and text_after:
+                mids.append(node)
+    return bytes(leading), bytes(trailing), tuple(mids)
 
-    lines = wrap_english(english, width)
-    body = bytearray(ENGLISH_MODE_SIGNATURE)
-    body.extend(leading)
+
+def _compile_wrapped_text(
+    text: str,
+    glyphs: EnglishGlyphTable,
+    *,
+    width: int,
+) -> bytes:
+    lines = wrap_english(text, width)
+    body = bytearray()
     for index, line in enumerate(lines):
-        body.extend(glyphs.encode(line))
+        body.extend(encode_english_segment(line, glyphs))
         if index < len(lines) - 1:
             body.append(int(DialogueOpcode.PAGE_BREAK))
+    return bytes(body)
+
+
+def compile_automatic_record(
+    source_record: bytes,
+    english: str,
+    glyphs: EnglishGlyphTable,
+    *,
+    width: int = ENGLISH_LINE_WIDTH,
+) -> bytes:
+    """Compile a record with no semantic control between visible source runs."""
+    leading, trailing, mids = _boundary_controls(source_record)
+    if mids:
+        opcodes = ", ".join(f"${item.opcode:02X}" for item in mids)
+        raise EnglishDialogueCompileError(
+            f"record requires explicit semantic control anchors: {opcodes}"
+        )
+    body = bytearray(leading)
+    body.extend(_compile_wrapped_text(english, glyphs, width=width))
+    body.extend(trailing)
+    body.append(0)
+    return DIALOGUE_MARKER + bytes(body)
+
+
+def compile_anchored_record(
+    source_record: bytes,
+    english_fragments: tuple[str, ...],
+    glyphs: EnglishGlyphTable,
+    *,
+    width: int = ENGLISH_LINE_WIDTH,
+) -> bytes:
+    """Compile one of the semantic-control records with explicit text anchors.
+
+    The number of fragments must be exactly one greater than the number of
+    meaningful mid-text source controls. The source controls are copied
+    byte-for-byte in their original order between translator-supplied English
+    fragments. This prevents timing placement from being inferred by byte
+    percentage or Japanese character position.
+    """
+    leading, trailing, mids = _boundary_controls(source_record)
+    if len(english_fragments) != len(mids) + 1:
+        raise EnglishDialogueCompileError(
+            "anchored record needs exactly one more English fragment than "
+            f"semantic mid controls ({len(mids)})"
+        )
+    if any(not fragment for fragment in english_fragments):
+        raise EnglishDialogueCompileError("anchored English fragments must not be empty")
+
+    body = bytearray(leading)
+    for index, fragment in enumerate(english_fragments):
+        body.extend(_compile_wrapped_text(fragment, glyphs, width=width))
+        if index < len(mids):
+            body.extend(mids[index].raw)
     body.extend(trailing)
     body.append(0)
     return DIALOGUE_MARKER + bytes(body)
