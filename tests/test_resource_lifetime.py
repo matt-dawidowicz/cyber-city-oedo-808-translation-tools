@@ -55,19 +55,23 @@ class ResourceLifetimeTests(unittest.TestCase):
             ),
         )
 
-    def test_page_85_hypothesis_preserves_module_half(self) -> None:
+    def test_page_85_hypothesis_accounts_for_mpr4_and_mpr5_aliases(self) -> None:
         report = build_resource_lifetime_report()
         geometry = report["mpr_geometry"]
         self.assertEqual(geometry["dialogue_workspace_mpr_slot"], 4)
         self.assertEqual(geometry["dialogue_known_physical_page"], "$85")
         self.assertEqual(geometry["module_page_offsets"], ["0x0000", "0x0F50"])
         self.assertEqual(geometry["speaker_page_offsets"], ["0x1000", "0x1FFF"])
-        self.assertIn("leaving the module", geometry["same_page_hypothesis"])
+        self.assertIn("MPR4", geometry["same_page_hypothesis"])
+        self.assertIn("MPR5", geometry["same_page_hypothesis"])
+        self.assertIn("clobbers the first 2 KiB", geometry["same_page_hypothesis"])
 
     def test_report_identifies_exact_runtime_mpr_proof_needed(self) -> None:
         report = build_resource_lifetime_report()
         proof = report["mpr_geometry"]["proof_needed"]
         self.assertIn("MPR4", proof)
+        self.assertIn("MPR5", proof)
+        self.assertIn("checksum", proof)
         self.assertIn("$22DE", proof)
 
 
