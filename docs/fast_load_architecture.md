@@ -408,8 +408,10 @@ test the additional 192 KiB RAM as a read-through cache.
 After one preload, repeated interactions could replace module and speaker CD
 reads with RAM copies and cache selected portraits for RAM-to-VRAM copies.
 
-The complete raw bar working set is 110,656 bytes, so **14 banks is the
-byte-capacity lower bound**, not necessarily the best executable layout.
+The original $1425-$1452 core plus two portraits was previously described as a
+14-bank capacity floor. Live bartender profiling showed that the route also
+uses the out-of-core 8 KiB ADPCM source at $1292. Including that required
+source raises the complete bartender byte-capacity floor to **15 banks**.
 
 A stricter cache planner now models the game's proven 8 KiB local-memory
 AD_WRITE source window. Seven active ADPCM source blocks are exactly 8 KiB
@@ -417,17 +419,17 @@ each and are therefore most useful when each occupies one whole Card-RAM bank.
 The 0x0F51-byte module plus all eight 4 KiB speaker-local blocks then require
 five more banks. This gives a **12-bank AD_WRITE-friendly core**.
 
-Adding two 0x2020-byte portraits requires:
+The live bartender route additionally requires one dedicated bank for $1292.
+With that bank included, adding two 0x2020-byte portraits requires:
 
 - three more banks when RAM-to-VRAM copying may split at bank boundaries:
-  **15 banks total**, nine banks / 73,728 bytes left;
+  **16 banks total**, eight banks / 65,536 bytes left;
 - four more banks when each portrait receives an independent two-bank
-  allocation: **16 banks total**, eight banks / 65,536 bytes left.
+  allocation: **17 banks total**, seven banks / 57,344 bytes left.
 
-The old 14-bank figure remains useful as a pure capacity floor, but obtaining
-that density would require scattering portrait bytes into the small slack
-regions left by the execution-friendly core layout. That is not the preferred
-first implementation.
+The 15-bank figure is now the pure byte-capacity floor for the complete
+bartender working set; the execution-friendly layouts intentionally use more
+banks to keep each 8 KiB ADPCM source directly consumable by AD_WRITE.
 
 The previous working note misidentified BIOS entry $E03F as AD_WRITE. The
 System Card jump table actually places AD_WRITE at $E039 and AD_CPLAY at
@@ -663,3 +665,69 @@ No acceleration reaches the normal English build until exact before/after
 timing, MPR/cache lifetime, RAM/VRAM/ADPCM equivalence, audio state, scene
 re-entry, save/load, mission transitions, EDC/ECC, clean boot, and sustained
 playtest all pass.
+
+## Integrated bartender fast-load stack
+
+The independently proven experiments are now expressed as one fail-closed
+route-specific cache lifecycle in `cyber_oedo/runtime/fast_load_stack.py`.
+
+For the **actual live bartender route**, the minimal useful allocation is much
+smaller than the broad all-speaker plan:
+
+| banks | contents |
+|---|---|
+| `$68-$69` | bartender portrait (8,224 bytes) |
+| `$6A` | ADPCM source `$1292` |
+| `$6B` | ADPCM source `$1443` |
+| `$6C` | dialogue module + bartender local block + 175 bytes metadata slack |
+| `$6D-$72` | 43,040-byte two-span same-room scene snapshot |
+
+This occupies **11 of the 24 Super System Card RAM banks**, leaving 13 banks
+unallocated. The metadata fits in the natural 0xAF-byte slack after the
+0x0F51-byte module plus 0x1000-byte bartender-local block in bank `$6C`.
+
+The lifecycle is fail-closed:
+
+1. validate cache magic/version, scene id, and per-resource tags;
+2. fill missing resources through ordinary local-memory CD reads;
+3. use the live-proven Card-RAM -> VDC TIA portrait path and Card-RAM ->
+   ADPCM `AD_WRITE $E039` path on hits;
+4. validate the resident dialogue module with both JMP entrypoints plus an
+   immutable module signature before skipping its optical reload;
+5. snapshot only the two live-diff-authoritative exploration VRAM spans before
+   dialogue;
+6. restore those spans from Card RAM on dialogue return;
+7. if any tag or snapshot is invalid, fall back to the stock/source-guarded
+   optical path rather than trusting stale RAM.
+
+The Card-RAM -> VDC restore code generator is maintained in
+`cyber_oedo/runtime/card_ram_scene_restore.py`. It emits six bank-bounded TIA
+routines for the exact bar spans. That write direction is already supported by
+the portrait-cache runtime proof. The inverse VRAM -> Card-RAM snapshot is still
+a live gate: the candidate uses VDC MARR/VRR plus TAI, but the VDC read-latch
+and possible dummy-read behavior must be measured before that half is called
+proven.
+
+### Remaining setup VSync gate
+
+The Mission 0 B overlay contains a counter-gated `JSR $E07B` at `$7B7C`.
+Live profiling previously observed 64 calls through this setup path during the
+bartender loader window. Static code shows this is **not** the bar's separate
+30-frame transition delay: it decrements counter `$44`, VSyncs only when the
+counter reaches zero, then reloads `$44` from `$02`.
+
+A source-guarded benchmark now NOPs only that one call. It remains
+release-disabled until a clean runtime replay proves parser state, animation,
+audio, and VRAM equivalence. No one-second saving is assumed merely from the
+historical call count.
+
+### Audio teardown
+
+The bartender return model now uses the measured mode-$0E fade-clear duration:
+**127 frames / 2.117 seconds**. The older approximately 2.5-second figure is
+retained only as historical API behavior.
+
+The existing fast-fade benchmark replaces command 2 with `AD_STOP` followed
+by the game's stock command-5 immediate cleanup. This remains an A/B timing
+experiment, not release policy; later voice playback and CD-DA continuity must
+pass before promotion.
