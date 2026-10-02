@@ -259,6 +259,132 @@ def compile_anchored_record(
     return DIALOGUE_MARKER + bytes(body)
 
 
+def _source_pacing_positions(source_record: bytes) -> tuple[int, tuple[int, ...]]:
+    """Return visible source length and positions of mid-text 2F pauses."""
+    record = parse_dialogue_record(source_record, 0)
+    if record is None or record.byte_count != len(source_record):
+        raise EnglishDialogueCompileError("source record is not valid dialogue bytecode")
+    visible = 0
+    positions: list[int] = []
+    seen_text = False
+    nodes = record.body.nodes
+    for index, node in enumerate(nodes):
+        if isinstance(node, TextRun):
+            visible += node.character_count
+            seen_text = True
+            continue
+        if not isinstance(node, ControlCommand):
+            continue
+        if node.opcode == int(DialogueOpcode.PAGE_BREAK):
+            continue
+        text_after = any(isinstance(item, TextRun) for item in nodes[index + 1 :])
+        if seen_text and text_after:
+            if node.opcode != int(DialogueOpcode.TIMED_WAIT):
+                raise EnglishDialogueCompileError(
+                    "record contains a semantic mid-text control and cannot use "
+                    "automatic pacing"
+                )
+            positions.append(visible)
+    return visible, tuple(positions)
+
+
+def _english_split_candidates(text: str) -> tuple[int, ...]:
+    """Return safe English word boundaries for pacing anchors."""
+    return tuple(index for index in range(1, len(text)) if text[index] == " ")
+
+
+def _boundary_score(text: str, boundary: int, target: float) -> tuple[float, float]:
+    """Rank a word boundary by punctuation quality, then source-cadence distance."""
+    before = text[:boundary].rstrip()
+    punctuation_rank = 3.0
+    if before.endswith(("...", "…")):
+        punctuation_rank = 0.0
+    elif before.endswith((".", "?", "!")):
+        punctuation_rank = 0.5
+    elif before.endswith((";", ":", "—", "–")):
+        punctuation_rank = 1.0
+    elif before.endswith(","):
+        punctuation_rank = 1.5
+    distance = abs(boundary - target) / max(1, len(text))
+    return punctuation_rank, distance
+
+
+def pacing_split_points(
+    source_record: bytes,
+    english: str,
+) -> tuple[int, ...]:
+    """Map source 2F cadence to natural monotonic English word boundaries.
+
+    This proportional mapping is allowed only for the non-semantic 2F pacing
+    control. Voice barriers, indirect text, input waits, and attribute changes
+    still require explicit anchors.
+    """
+    source_length, source_positions = _source_pacing_positions(source_record)
+    if not source_positions:
+        return ()
+    candidates = list(_english_split_candidates(english))
+    if len(candidates) < len(source_positions):
+        raise EnglishDialogueCompileError(
+            "not enough English word boundaries to preserve source pacing pauses"
+        )
+
+    chosen: list[int] = []
+    minimum_index = 0
+    for pause_index, source_position in enumerate(source_positions):
+        remaining = len(source_positions) - pause_index - 1
+        target = len(english) * source_position / max(1, source_length)
+        eligible = candidates[minimum_index : len(candidates) - remaining]
+        if not eligible:
+            raise EnglishDialogueCompileError("could not place pacing pauses monotonically")
+        best = min(
+            eligible,
+            key=lambda point: _boundary_score(english, point, target),
+        )
+        chosen.append(best)
+        minimum_index = candidates.index(best, minimum_index) + 1
+    return tuple(chosen)
+
+
+def compile_paced_record(
+    source_record: bytes,
+    english: str,
+    glyphs: EnglishGlyphTable,
+    *,
+    width: int = ENGLISH_LINE_WIDTH,
+) -> bytes:
+    """Compile a record whose only mid-text semantic bytes are 2F waits."""
+    leading, trailing, mids = _boundary_controls(source_record)
+    if any(command.opcode != int(DialogueOpcode.TIMED_WAIT) for command in mids):
+        raise EnglishDialogueCompileError(
+            "record contains semantic controls that require explicit anchors"
+        )
+    split_points = pacing_split_points(source_record, english)
+    if len(split_points) != len(mids):
+        raise EnglishDialogueCompileError("pacing split count does not match 2F count")
+
+    fragments: list[str] = []
+    start = 0
+    for point in split_points:
+        fragment = english[start:point].strip()
+        if not fragment:
+            raise EnglishDialogueCompileError("pacing split produced an empty fragment")
+        fragments.append(fragment)
+        start = point
+    tail = english[start:].strip()
+    if not tail:
+        raise EnglishDialogueCompileError("pacing split produced an empty final fragment")
+    fragments.append(tail)
+
+    body = bytearray(leading)
+    for index, fragment in enumerate(fragments):
+        body.extend(_compile_wrapped_text(fragment, glyphs, width=width))
+        if index < len(mids):
+            body.extend(mids[index].raw)
+    body.extend(trailing)
+    body.append(0)
+    return DIALOGUE_MARKER + bytes(body)
+
+
 @dataclass(frozen=True, slots=True)
 class EnglishEngineAudit:
     total_records: int
