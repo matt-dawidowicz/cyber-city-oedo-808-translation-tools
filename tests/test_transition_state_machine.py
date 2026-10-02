@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from cyber_oedo.runtime.transition_state_machine import (
+    BAR_TEARDOWN_FADE_CLEAR_SECONDS,
     BAR_WAIT_SECONDS,
     MOVEMENT_OVERLAY_WAIT_SECONDS,
     build_transition_state_machine,
@@ -24,6 +25,13 @@ class TransitionStateMachineTests(unittest.TestCase):
         self.assertEqual(MOVEMENT_OVERLAY_WAIT_SECONDS, 2.0)
         self.assertFalse(report["other_movement_overlay"]["applies_to_bar_measurement"])
         self.assertNotIn("candidate_combined_if_ordered_seconds", report)
+
+    def test_bar_return_uses_measured_fade_clear_duration(self) -> None:
+        report = build_transition_state_machine()["dialogue_to_exploration"]
+        phase = report["phases"][0]
+        self.assertAlmostEqual(BAR_TEARDOWN_FADE_CLEAR_SECONDS, 127 / 60.0)
+        self.assertEqual(phase["measured_bar_fade_clear_frames"], 127)
+        self.assertAlmostEqual(phase["measured_bar_fade_clear_seconds"], 127 / 60.0)
 
     def test_analysis_remains_release_disabled(self) -> None:
         self.assertFalse(build_transition_state_machine()["release_enabled"])
