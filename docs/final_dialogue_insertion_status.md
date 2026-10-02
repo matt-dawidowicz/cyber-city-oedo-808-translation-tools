@@ -1,5 +1,11 @@
 # Final dialogue insertion status
 
+> **Architecture update:** capacity figures in this document describe the older
+> packed-pair insertion path. Final release dialogue is moving to the native
+> one-byte English engine documented in `native_english_text_engine.md`. The
+> authenticated workbook/payload mapping remains useful, but release insertion
+> will compile native English records and relocate resources as needed.
+
 This document tracks the path from the reviewed 2026-09-24 localization master
 to binary dialogue patches.
 
