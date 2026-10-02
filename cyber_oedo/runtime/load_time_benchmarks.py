@@ -79,6 +79,11 @@ EXPLORATION_WAIT_LDY_OFFSET = (
 )
 EXPLORATION_WAIT_EXPECTED = bytes.fromhex("A0 78")
 
+DIALOGUE_SETUP_VSYNC_CPU = 0x7B7C
+DIALOGUE_SETUP_VSYNC_OFFSET = MISSION0_B_PAYLOAD_BASE + DIALOGUE_SETUP_VSYNC_CPU
+DIALOGUE_SETUP_VSYNC_EXPECTED = bytes.fromhex("20 7B E0")
+DIALOGUE_SETUP_VSYNC_REPLACEMENT = bytes.fromhex("EA EA EA")
+
 BAR_RESTORE_CALL_OFFSET = 0x00A4442E
 BAR_RESTORE_CALL_EXPECTED = bytes.fromhex("20 59 44 60")
 BAR_RESTORE_CALL_REPLACEMENT = bytes.fromhex("4C 1C A3 EA")
@@ -203,6 +208,31 @@ def build_short_exploration_wait_benchmark(frames: int = 8) -> LoadBenchmarkSet:
     )
 
 
+def build_dialogue_setup_vsync_benchmark() -> LoadBenchmarkSet:
+    """Remove the guarded $7B7C EX_VSYNC call for one timing experiment.
+
+    Live profiling observed 64 calls returning through this setup path during a
+    bartender load. Static code shows this is a counter-gated pacing call, not
+    the bar's separate 30-frame transition wait. The benchmark is intentionally
+    release-disabled until live state equivalence and animation/audio behavior
+    are checked.
+    """
+
+    return LoadBenchmarkSet(
+        name="dialogue-setup-vsync-bypass",
+        patches=(
+            PayloadPatch(
+                offset=DIALOGUE_SETUP_VSYNC_OFFSET,
+                expected=DIALOGUE_SETUP_VSYNC_EXPECTED,
+                replacement=DIALOGUE_SETUP_VSYNC_REPLACEMENT,
+                label=(
+                    "Mission 0 benchmark: bypass counter-gated EX_VSYNC at $7B7C"
+                ),
+            ),
+        ),
+    )
+
+
 def build_selective_bar_vram_restore_benchmark() -> LoadBenchmarkSet:
     """Benchmark the measured two-span bar VRAM restore.
 
@@ -260,6 +290,7 @@ def validate_load_benchmark_sources(payload: bytes) -> dict[str, object]:
         build_resident_module_benchmark(),
         build_speaker_cache_retention_benchmark(),
         build_short_exploration_wait_benchmark(),
+        build_dialogue_setup_vsync_benchmark(),
         build_selective_bar_vram_restore_benchmark(),
     )
     rows = []
