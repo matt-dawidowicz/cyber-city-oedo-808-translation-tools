@@ -710,7 +710,7 @@ proven.
 
 ### Remaining setup VSync gate
 
-The Mission 0 B overlay contains a counter-gated `JSR $E07B` at `$7B7C`.
+The Mission 0 B overlay contains a counter-gated `JSR $E07B` at `$7B7D`.
 Live profiling previously observed 64 calls through this setup path during the
 bartender loader window. Static code shows this is **not** the bar's separate
 30-frame transition delay: it decrements counter `$44`, VSyncs only when the
