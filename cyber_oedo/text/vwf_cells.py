@@ -25,6 +25,12 @@ from cyber_oedo.text.vwf_text import LINE_PIXELS, VwfFont, measure_text, wrap_vw
 
 VWF_MODE_SIGNATURE = bytes((0x7D, 0x56))
 VWF_SEGMENT_END_TOKEN = 0xFFFF
+# Stored VWF cells use first bytes $01-$1F. Stock Japanese glyph cells never
+# use that range, and fixed native-English cells use $20-$7E, so redraw can
+# identify VWF without a transient parser flag.
+VWF_TOKEN_FIRST_MIN = 0x01
+VWF_TOKEN_FIRST_MAX = 0x1F
+VWF_TOKEN_CAPACITY = (VWF_TOKEN_FIRST_MAX - VWF_TOKEN_FIRST_MIN + 1) * 0x100
 VWF_CELL_PIXELS = 16
 VWF_CELLS_PER_LINE = LINE_PIXELS // VWF_CELL_PIXELS
 MAX_CELL_GLYPHS = 6
@@ -61,8 +67,10 @@ class VwfCellDictionary:
     descriptors: tuple[VwfCellDescriptor, ...]
 
     def __post_init__(self) -> None:
-        if len(self.descriptors) >= VWF_SEGMENT_END_TOKEN:
-            raise VwfCellCompileError("VWF dictionary exceeds 16-bit token space")
+        if len(self.descriptors) > VWF_TOKEN_CAPACITY:
+            raise VwfCellCompileError(
+                f"VWF dictionary exceeds {VWF_TOKEN_CAPACITY} self-identifying tokens"
+            )
 
     @property
     def encoded(self) -> bytes:
@@ -91,8 +99,8 @@ class VwfCompiledText:
         for line_index, line in enumerate(self.lines):
             out.extend(VWF_MODE_SIGNATURE)
             for token in line.tokens:
-                out.extend(token.to_bytes(2, "little"))
-            out.extend(VWF_SEGMENT_END_TOKEN.to_bytes(2, "little"))
+                out.extend(encode_vwf_token(token))
+            out.extend(VWF_SEGMENT_END_TOKEN.to_bytes(2, "big"))
             if line_index < len(self.lines) - 1:
                 out.append(0x40)
         return bytes(out)
@@ -109,14 +117,33 @@ class _DictionaryBuilder:
         if existing is not None:
             return existing
         token = len(self._rows)
-        if token == VWF_SEGMENT_END_TOKEN:
-            raise VwfCellCompileError("VWF token space exhausted")
+        if token >= VWF_TOKEN_CAPACITY:
+            raise VwfCellCompileError("VWF self-identifying token space exhausted")
         self._rows.append(descriptor)
         self._by_glyphs[key] = token
         return token
 
     def finish(self) -> VwfCellDictionary:
         return VwfCellDictionary(tuple(self._rows))
+
+
+def encode_vwf_token(token: int) -> bytes:
+    """Encode a dictionary index as one redraw-safe two-byte cell token."""
+    if not 0 <= token < VWF_TOKEN_CAPACITY:
+        raise VwfCellCompileError("VWF token lies outside self-identifying range")
+    first = VWF_TOKEN_FIRST_MIN + (token >> 8)
+    second = token & 0xFF
+    return bytes((first, second))
+
+
+def decode_vwf_token(raw: bytes) -> int:
+    """Decode a stored VWF cell token and reject non-VWF cell bytes."""
+    if len(raw) != 2:
+        raise VwfCellCompileError("stored VWF token must contain two bytes")
+    first, second = raw
+    if not VWF_TOKEN_FIRST_MIN <= first <= VWF_TOKEN_FIRST_MAX:
+        raise VwfCellCompileError("stored cell is not a VWF token")
+    return ((first - VWF_TOKEN_FIRST_MIN) << 8) | second
 
 
 def _cell_width(text: str, font: VwfFont) -> int:
@@ -231,12 +258,17 @@ __all__ = [
     "VWF_DESCRIPTOR_BYTES",
     "VWF_MODE_SIGNATURE",
     "VWF_SEGMENT_END_TOKEN",
+    "VWF_TOKEN_CAPACITY",
+    "VWF_TOKEN_FIRST_MAX",
+    "VWF_TOKEN_FIRST_MIN",
     "VwfCellCompileError",
     "VwfCellDescriptor",
     "VwfCellDictionary",
     "VwfCompiledLine",
     "VwfCompiledText",
     "compile_vwf_text",
+    "decode_vwf_token",
+    "encode_vwf_token",
     "normalized_vwf_atlas",
     "pack_vwf_line",
     "vwf_advance_table",
