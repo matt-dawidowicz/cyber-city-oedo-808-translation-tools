@@ -79,7 +79,11 @@ def build_packed_dialogue_test(
         payload = payload_path.read_bytes()
         audits = audit_rows(payload, rows, dictionary)
         dialogue_patches = build_in_place_patches(
-            payload, rows, dictionary, allowed_banks=frozenset({"MISSION_0"})
+            payload,
+            rows,
+            dictionary,
+            allowed_banks=frozenset({"MISSION_0"}),
+            allow_padding_candidates=False,
         )
         patches = runtime_payload_patches(runtime) + dialogue_patches
         reports = apply_payload_patches(
@@ -100,7 +104,7 @@ def build_packed_dialogue_test(
                 "detail": audit.detail,
             }
             for audit in audits
-            if audit.row.bank == "MISSION_0" and not audit.can_patch_in_place
+            if audit.row.bank == "MISSION_0" and not audit.can_patch_exactly
         ]
         manifest = {
             "build_profile": BUILD_PROFILE,
