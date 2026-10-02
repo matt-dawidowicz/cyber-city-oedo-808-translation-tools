@@ -79,7 +79,7 @@ EXPLORATION_WAIT_LDY_OFFSET = (
 )
 EXPLORATION_WAIT_EXPECTED = bytes.fromhex("A0 78")
 
-DIALOGUE_SETUP_VSYNC_CPU = 0x7B7C
+DIALOGUE_SETUP_VSYNC_CPU = 0x7B7D
 DIALOGUE_SETUP_VSYNC_OFFSET = MISSION0_B_PAYLOAD_BASE + DIALOGUE_SETUP_VSYNC_CPU
 DIALOGUE_SETUP_VSYNC_EXPECTED = bytes.fromhex("20 7B E0")
 DIALOGUE_SETUP_VSYNC_REPLACEMENT = bytes.fromhex("EA EA EA")
@@ -226,7 +226,7 @@ def build_dialogue_setup_vsync_benchmark() -> LoadBenchmarkSet:
                 expected=DIALOGUE_SETUP_VSYNC_EXPECTED,
                 replacement=DIALOGUE_SETUP_VSYNC_REPLACEMENT,
                 label=(
-                    "Mission 0 benchmark: bypass counter-gated EX_VSYNC at $7B7C"
+                    "Mission 0 benchmark: bypass counter-gated EX_VSYNC at $7B7D"
                 ),
             ),
         ),
