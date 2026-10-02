@@ -44,7 +44,19 @@ RESIDENT_LOADER_EXPECTED = bytes.fromhex(
     "AD 00 80 0D 03 80 C9 4C A9 00 85 00"
 )
 RESIDENT_LOADER_REPLACEMENT = bytes.fromhex(
-    "AD 00 80 0D 03 80 C9 4C F0 1D 64 00"
+    "4C 6A 4C EA EA EA EA EA EA EA EA EA"
+)
+RESIDENT_CHECK_CAVE_CPU = 0x4C6A
+RESIDENT_CHECK_CAVE_OFFSET = MISSION0_B_PAYLOAD_BASE + RESIDENT_CHECK_CAVE_CPU
+RESIDENT_CHECK_CAVE_EXPECTED = bytes(41)
+RESIDENT_CHECK_CAVE_REPLACEMENT = bytes.fromhex(
+    "AD 00 80 C9 4C D0 1F "
+    "AD 03 80 C9 4C D0 18 "
+    "AD 06 80 C9 8E D0 11 "
+    "AD 07 80 C9 DD D0 0A "
+    "AD 08 80 C9 8F D0 03 "
+    "4C CD 48 "
+    "4C AE 48"
 )
 
 COMMAND0_CACHE_INVALIDATE_CPU = 0x801E
@@ -121,8 +133,17 @@ def build_resident_module_benchmark() -> LoadBenchmarkSet:
                 expected=RESIDENT_LOADER_EXPECTED,
                 replacement=RESIDENT_LOADER_REPLACEMENT,
                 label=(
-                    "Mission 0 benchmark: branch around dialogue-module CD reload "
-                    "when both JMP entrypoints are resident"
+                    "Mission 0 benchmark: redirect resident-module probe to "
+                    "fail-closed signature trampoline"
+                ),
+            ),
+            PayloadPatch(
+                offset=RESIDENT_CHECK_CAVE_OFFSET,
+                expected=RESIDENT_CHECK_CAVE_EXPECTED,
+                replacement=RESIDENT_CHECK_CAVE_REPLACEMENT,
+                label=(
+                    "Mission 0 benchmark: require both JMP entrypoints and "
+                    "immutable $8006-$8008 module signature before reload skip"
                 ),
             ),
         ),
