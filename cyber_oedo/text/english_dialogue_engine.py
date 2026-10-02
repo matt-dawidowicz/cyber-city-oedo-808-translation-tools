@@ -352,7 +352,13 @@ def compile_paced_record(
     *,
     width: int = ENGLISH_LINE_WIDTH,
 ) -> bytes:
-    """Compile a record whose only mid-text semantic bytes are 2F waits."""
+    """Diagnostic-only legacy pacing compiler.
+
+    Definitive Edition release builds MUST use explicit translator-reviewed
+    fragments for every mid-text control, including 2F.  This helper is kept
+    only to compare historical automatic placements against the frozen anchor
+    manifest; it must not be used by the release build.
+    """
     leading, trailing, mids = _boundary_controls(source_record)
     if any(command.opcode != int(DialogueOpcode.TIMED_WAIT) for command in mids):
         raise EnglishDialogueCompileError(
