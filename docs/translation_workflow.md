@@ -11,7 +11,12 @@ analysis tools. It is suitable for:
 - renderer/control reverse engineering; and
 - locating candidate resources and padding.
 
-It is not yet a reinsertion toolchain.
+The repository now contains the first guarded reinsertion path for the final
+dialogue master. The packed-English Mission 0 test builder can insert every
+reviewed spoken/narration row that both maps exactly to the authenticated
+payload and fits its existing visible-text footprint. Growth, split/control
+records, later-bank renderer activation, and full release QA remain gated.
+See `final_dialogue_insertion_status.md`.
 
 ## Phase 1: establish a stable source baseline
 
@@ -138,6 +143,38 @@ The automated builder proves the address-to-disc rebuild path independently of
 the English font project. The compact-renderer experiment is frozen at commit
 `3abaf64` and is not part of the playable build. Human testing must still prove
 runtime behavior.
+
+## Phase 4b: packed final-dialogue insertion
+
+The final 2026-09-24 localization workbook is now an authenticated editorial
+input rather than an informal external reference.
+
+```bash
+python -m pip install -e ".[dev,editorial]"
+
+cyber-oedo export-final-dialogue \
+  Cyber_City_Oedo_808_Final_Localization_2026-09-24.xlsx \
+  final_dialogue_2026-09-24.tsv
+
+cyber-oedo build-packed-dialogue-test \
+  "Cyber City Oedo 808 - Kemono no Alignment (Japan).ccd" \
+  packed-dialogue-test \
+  final_dialogue_2026-09-24.tsv \
+  /path/to/user-supplied-font.ttf
+```
+
+The build is fail-closed:
+
+- the workbook and exported TSV hashes are fixed;
+- each row must map to an exact `27 28` marker and exact Shift-JIS source span;
+- packed English that exceeds the owned span is reported for relocation rather
+  than shortened;
+- rows whose workbook representation is not one contiguous binary span are
+  reported for record-aware mapping;
+- only Mission 0 is activated today because later overlay font-hook residency
+  has not yet been certified.
+
+The test profile emits both a build manifest and a Mission 0 relocation queue.
 
 ## Phase 5: stock-renderer page design
 
