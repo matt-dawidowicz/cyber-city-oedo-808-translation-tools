@@ -19,6 +19,7 @@ the live bartender/bar overlay uses a different 30-frame transition path.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 
 from cyber_oedo.disc.cdrom_mode1 import PayloadPatch
 from cyber_oedo.runtime.card_ram_adpcm_cache import (
@@ -26,6 +27,7 @@ from cyber_oedo.runtime.card_ram_adpcm_cache import (
 )
 from cyber_oedo.runtime.card_ram_portrait_cache import build_portrait_cache_benchmark
 from cyber_oedo.runtime.fast_fade_benchmark import build_fast_fade_benchmark_patch
+from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
 from cyber_oedo.runtime.load_time_benchmarks import (
     build_dialogue_setup_vsync_benchmark,
     build_resident_module_benchmark,
@@ -100,3 +102,40 @@ def build_combined_bar_benchmark(
     )
     result.assert_non_overlapping()
     return result
+
+
+def validate_combined_bar_sources(
+    payload: bytes,
+    *,
+    aggressive: bool = False,
+    include_lifetime_sensitive_speaker_retention: bool = False,
+) -> dict[str, object]:
+    """Validate the authenticated payload and every composed source guard."""
+
+    result = build_combined_bar_benchmark(
+        aggressive=aggressive,
+        include_lifetime_sensitive_speaker_retention=(
+            include_lifetime_sensitive_speaker_retention
+        ),
+    )
+    digest = hashlib.sha256(payload).hexdigest()
+    rows = []
+    for patch in result.patches:
+        actual = payload[patch.offset : patch.end_offset]
+        rows.append(
+            {
+                "label": patch.label,
+                "offset": f"0x{patch.offset:08X}",
+                "bytes": len(patch.expected),
+                "source_match": actual == patch.expected,
+            }
+        )
+    return {
+        "payload_sha256": digest,
+        "payload_authenticated": digest == TRACK2_PAYLOAD_SHA256,
+        "benchmark": result.name,
+        "patch_count": len(result.patches),
+        "all_source_guards_match": all(row["source_match"] for row in rows),
+        "patches": rows,
+        "release_enabled": False,
+    }
