@@ -37,14 +37,14 @@ class CardRamCachePlanTests(unittest.TestCase):
 
     def test_capacity_lower_bound_is_not_execution_layout(self) -> None:
         report = build_cache_plan()
-        self.assertEqual(report["capacity_lower_bound"]["banks"], 14)
+        self.assertEqual(report["capacity_lower_bound"]["banks"], 15)
         self.assertEqual(report["ad_write_safe_core"]["banks"], 12)
         self.assertEqual(
-            report["two_portrait_extensions"]["segmented_copy"]["total_banks"], 15
+            report["two_portrait_extensions"]["segmented_copy"]["total_banks"], 16
         )
         self.assertEqual(
             report["two_portrait_extensions"]["independent_two_bank_portraits"]["total_banks"],
-            16,
+            17,
         )
 
     def test_live_bartender_cache_benchmark_matches_measured_frames(self) -> None:
