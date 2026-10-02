@@ -6,6 +6,8 @@ from cyber_oedo.runtime.load_time_benchmarks import (
     CACHE_INVALIDATE_REPLACEMENT,
     COMMAND0_CACHE_INVALIDATE_EXPECTED,
     COMMAND5_CACHE_INVALIDATE_EXPECTED,
+    DIALOGUE_SETUP_VSYNC_EXPECTED,
+    DIALOGUE_SETUP_VSYNC_REPLACEMENT,
     EXPLORATION_WAIT_EXPECTED,
     RESIDENT_CHECK_CAVE_REPLACEMENT,
     RESIDENT_LOADER_EXPECTED,
@@ -13,6 +15,7 @@ from cyber_oedo.runtime.load_time_benchmarks import (
     BAR_PRIMARY_DESCRIPTOR_EXPECTED,
     BAR_PRIMARY_DESCRIPTOR_REPLACEMENT,
     BAR_SELECTIVE_CAVE_REPLACEMENT,
+    build_dialogue_setup_vsync_benchmark,
     build_resident_module_benchmark,
     build_short_exploration_wait_benchmark,
     build_speaker_cache_retention_benchmark,
@@ -61,6 +64,13 @@ class LoadTimeBenchmarkTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "1..120"):
                 build_short_exploration_wait_benchmark(frames)
 
+    def test_dialogue_setup_vsync_benchmark_is_single_guarded_call(self) -> None:
+        benchmark = build_dialogue_setup_vsync_benchmark()
+        self.assertEqual(len(benchmark.patches), 1)
+        self.assertEqual(DIALOGUE_SETUP_VSYNC_EXPECTED, bytes.fromhex("20 7B E0"))
+        self.assertEqual(DIALOGUE_SETUP_VSYNC_REPLACEMENT, bytes.fromhex("EA EA EA"))
+        self.assertEqual(benchmark.changed_bytes, 3)
+
     def test_selective_bar_vram_restore_encodes_two_real_loader_calls(self) -> None:
         benchmark = build_selective_bar_vram_restore_benchmark()
         self.assertEqual(len(benchmark.patches), 3)
@@ -74,6 +84,7 @@ class LoadTimeBenchmarkTests(unittest.TestCase):
             build_resident_module_benchmark(),
             build_speaker_cache_retention_benchmark(),
             build_short_exploration_wait_benchmark(),
+            build_dialogue_setup_vsync_benchmark(),
             build_selective_bar_vram_restore_benchmark(),
         ):
             self.assertFalse(benchmark.release_enabled)
