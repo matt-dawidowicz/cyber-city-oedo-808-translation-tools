@@ -19,7 +19,9 @@ HISTORICAL_DIALOGUE_LOAD_TO_READY_SECONDS = (5.7, 6.2)
 BAR_COLD_BUTTON_TO_READY_SECONDS = 457 / 60.0
 BAR_COLD_LOAD_TO_READY_SECONDS = 370 / 60.0
 BAR_WARM_LOAD_TO_READY_SECONDS = 342 / 60.0
-DIALOGUE_TEARDOWN_FADE_SECONDS_APPROX = 2.5
+BAR_TEARDOWN_FADE_CLEAR_FRAMES = 127
+BAR_TEARDOWN_FADE_CLEAR_SECONDS = BAR_TEARDOWN_FADE_CLEAR_FRAMES / 60.0
+HISTORICAL_MODE_0E_FADE_SECONDS_APPROX = 2.5
 
 
 def build_transition_state_machine() -> dict[str, object]:
@@ -59,7 +61,11 @@ def build_transition_state_machine() -> dict[str, object]:
                 {
                     "phase": "dialogue audio fade request",
                     "evidence": "command 2 / CD_FADE mode $0E",
-                    "approximate_fade_seconds": DIALOGUE_TEARDOWN_FADE_SECONDS_APPROX,
+                    "measured_bar_fade_clear_frames": BAR_TEARDOWN_FADE_CLEAR_FRAMES,
+                    "measured_bar_fade_clear_seconds": BAR_TEARDOWN_FADE_CLEAR_SECONDS,
+                    "historical_api_duration_seconds_approx": (
+                        HISTORICAL_MODE_0E_FADE_SECONDS_APPROX
+                    ),
                 },
                 {
                     "phase": "synchronous audio-state gate",
