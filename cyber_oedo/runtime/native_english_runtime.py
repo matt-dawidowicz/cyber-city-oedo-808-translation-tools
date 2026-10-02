@@ -1,15 +1,18 @@
-"""Source-guarded Mission 0 native-English fixed-width runtime.
+"""Source-guarded native-English fixed-width runtime for Mission 0-8.
 
-This is the executable fallback/runtime foundation for the Definitive Edition.
-It deliberately preserves the game's proven 3x12-cell dialogue grid. An
-English segment carries one-byte glyph IDs, but the runtime packs two glyphs
-into each existing 16-pixel cell. The existing cursor, three-row redraw,
-scroll, pacing, BAT writer, and all low-byte dialogue controls therefore remain
-stock.
+English stream segments are decoded into pairs of compact glyph IDs and stored
+inside the game's existing 3x12x3-byte dialogue grid. The stock cursor,
+three-row redraw, scroll, pacing, BAT writer, and low-byte control handlers stay
+unchanged.
 
-The higher-quality proportional renderer is compiled separately. This fixed
-8x16 path is the compatibility/debug renderer and the live path for dynamic
-strings that must be generated at runtime.
+Every common text overlay has the same parser/renderer contract but different
+relocated parser addresses. Small overlay-local fill regions hold the native
+interpreter. The 16 row tables of the 8x16 atlas may be split across multiple
+fill regions; the compositor uses explicit absolute row addresses, so atlas
+storage does not need to be contiguous.
+
+This is the compatibility/dynamic-string renderer. Static dialogue may use the
+build-time proportional renderer once that runtime path is certified.
 """
 
 from __future__ import annotations
@@ -105,14 +108,31 @@ class _Assembler:
 
 
 @dataclass(frozen=True, slots=True)
+class FontRegion:
+    """One source-guarded fill region assigned to consecutive atlas rows."""
+
+    cpu_address: int
+    first_row: int
+    row_count: int
+    fill_byte: int
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.first_row < GLYPH_HEIGHT:
+            raise NativeEnglishRuntimeError("font first row is outside 0..15")
+        if self.row_count <= 0 or self.first_row + self.row_count > GLYPH_HEIGHT:
+            raise NativeEnglishRuntimeError("font row range is invalid")
+        if not 0 <= self.fill_byte <= 0xFF:
+            raise NativeEnglishRuntimeError("font fill byte is invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class NativeOverlayLayout:
     label: str
     payload_base: int
     parser_entry: int
     code_cpu: int
-    font_cpu: int
     code_fill: int
-    font_fill: int
+    font_regions: tuple[FontRegion, ...]
 
     @property
     def parser_delta(self) -> int:
@@ -131,33 +151,63 @@ class NativeOverlayLayout:
         return self.payload_base + FONT_FETCH_HOOK_CPU
 
 
-MISSION0_NATIVE_LAYOUTS = (
+COMMON_SPLIT_FONT = (
+    FontRegion(0xC261, 0, 15, 0x00),
+)
+
+TEXT_NATIVE_LAYOUTS = (
     NativeOverlayLayout(
-        "MISSION_0_A",
-        payload_base=0x00074800,
-        parser_entry=0x94A7,
-        code_cpu=0xAA50,
-        font_cpu=0xAC00,
-        code_fill=0xFF,
-        font_fill=0xFF,
+        "MISSION_0_A", 0x00074800, 0x94A7, 0xAA50, 0xFF,
+        (FontRegion(0xAC00, 0, 16, 0xFF),),
     ),
     NativeOverlayLayout(
-        "MISSION_0_B",
-        payload_base=0x00131800,
-        parser_entry=0x9543,
-        code_cpu=0xA300,
-        font_cpu=0xA800,
-        code_fill=0x00,
-        font_fill=0xE5,
+        "MISSION_0_B", 0x00131800, 0x9543, 0xA300, 0x00,
+        (FontRegion(0xA800, 0, 16, 0xE5),),
+    ),
+    NativeOverlayLayout(
+        "MISSION_1", 0x00CE4000, 0x95AA, 0xA3C0, 0x00,
+        (FontRegion(0xA800, 0, 16, 0xE5),),
+    ),
+    NativeOverlayLayout(
+        "MISSION_2", 0x017B3800, 0x95AE, 0xA400, 0x00,
+        COMMON_SPLIT_FONT + (FontRegion(0xA600, 15, 1, 0x00),),
+    ),
+    NativeOverlayLayout(
+        "MISSION_3", 0x0222C000, 0x9580, 0xA480, 0x00,
+        COMMON_SPLIT_FONT + (FontRegion(0xA600, 15, 1, 0x00),),
+    ),
+    NativeOverlayLayout(
+        "MISSION_4", 0x02B1C000, 0x950E, 0xA4A0, 0x00,
+        COMMON_SPLIT_FONT + (FontRegion(0xA620, 15, 1, 0x00),),
+    ),
+    NativeOverlayLayout(
+        "MISSION_5", 0x03356800, 0x9581, 0xA500, 0x00,
+        COMMON_SPLIT_FONT + (FontRegion(0xA680, 15, 1, 0x00),),
+    ),
+    NativeOverlayLayout(
+        "MISSION_6", 0x03B34000, 0x9526, 0xA500, 0x00,
+        COMMON_SPLIT_FONT + (FontRegion(0xA680, 15, 1, 0x00),),
+    ),
+    NativeOverlayLayout(
+        "MISSION_7", 0x04281800, 0x94A8, 0xA500, 0x00,
+        COMMON_SPLIT_FONT + (FontRegion(0xA680, 15, 1, 0x00),),
+    ),
+    NativeOverlayLayout(
+        "MISSION_8", 0x04848000, 0x94A7, 0xA500, 0x00,
+        COMMON_SPLIT_FONT + (FontRegion(0xA680, 15, 1, 0x00),),
     ),
 )
+
+# Compatibility name retained for callers that specifically need Mission 0.
+MISSION0_NATIVE_LAYOUTS = TEXT_NATIVE_LAYOUTS[:2]
 
 
 @dataclass(frozen=True, slots=True)
 class NativeOverlayRuntime:
     layout: NativeOverlayLayout
     code: bytes
-    atlas_row_major: bytes
+    font_row_bytes: tuple[bytes, ...]
+    font_row_cpus: tuple[int, ...]
     labels: dict[str, int]
     glyph_count: int
     space_glyph_id: int
@@ -168,22 +218,39 @@ class NativeOverlayRuntime:
         return self.labels["glyph_hook"]
 
     def __post_init__(self) -> None:
-        if self.layout.code_cpu + len(self.code) > self.layout.font_cpu:
-            raise NativeEnglishRuntimeError(
-                f"{self.layout.label}: code overlaps font storage"
-            )
+        if len(self.font_row_bytes) != GLYPH_HEIGHT:
+            raise NativeEnglishRuntimeError("runtime must carry exactly 16 font rows")
+        if len(self.font_row_cpus) != GLYPH_HEIGHT:
+            raise NativeEnglishRuntimeError("runtime must address exactly 16 font rows")
         if self.glyph_count > STORAGE_CODE_CAPACITY:
             raise NativeEnglishRuntimeError(
                 f"{self.layout.label}: glyph repertoire exceeds 95 storage codes"
             )
 
 
-def _atlas_row_major(atlas: RasterizedAtlas) -> bytes:
-    return bytes(
-        atlas.glyphs[glyph_id][row]
+def _font_rows(atlas: RasterizedAtlas) -> tuple[bytes, ...]:
+    return tuple(
+        bytes(atlas.glyphs[glyph_id][row] for glyph_id in range(len(atlas.glyphs)))
         for row in range(GLYPH_HEIGHT)
-        for glyph_id in range(len(atlas.glyphs))
     )
+
+
+def _resolve_font_row_cpus(
+    layout: NativeOverlayLayout,
+    glyph_count: int,
+) -> tuple[int, ...]:
+    addresses: list[int | None] = [None] * GLYPH_HEIGHT
+    for region in layout.font_regions:
+        for relative_row in range(region.row_count):
+            row = region.first_row + relative_row
+            if addresses[row] is not None:
+                raise NativeEnglishRuntimeError(
+                    f"{layout.label}: font row {row} assigned twice"
+                )
+            addresses[row] = region.cpu_address + relative_row * glyph_count
+    if any(address is None for address in addresses):
+        raise NativeEnglishRuntimeError(f"{layout.label}: font row layout is incomplete")
+    return tuple(int(address) for address in addresses)
 
 
 def _emit_runtime(
@@ -192,9 +259,12 @@ def _emit_runtime(
     glyph_count: int,
     space_glyph_id: int,
     question_glyph_id: int,
+    font_row_cpus: tuple[int, ...],
 ) -> tuple[bytes, dict[str, int]]:
     if not 0 < glyph_count <= STORAGE_CODE_CAPACITY:
         raise NativeEnglishRuntimeError("glyph count must fit $20-$7E storage codes")
+    if len(font_row_cpus) != GLYPH_HEIGHT:
+        raise NativeEnglishRuntimeError("font row address table must contain 16 rows")
     for glyph_id in (space_glyph_id, question_glyph_id):
         if not 0 <= glyph_id < glyph_count:
             raise NativeEnglishRuntimeError("special glyph ID lies outside atlas")
@@ -207,8 +277,6 @@ def _emit_runtime(
 
     assembler = _Assembler(layout.code_cpu)
 
-    # The hook replaces the stock CMP #$80 / BEQ prefix. Detect 7D 45 only;
-    # otherwise reconstruct the stock <=$80 decision exactly.
     assembler.label("parser_dispatch")
     assembler.immediate(0xC9, ENGLISH_MODE_SIGNATURE[0])
     assembler.branch(0xD0, "normal_compare")
@@ -230,8 +298,6 @@ def _emit_runtime(
     assembler.label("parser_restart")
     assembler.absolute(0x4C, parser_restart)
 
-    # Convert a stream glyph ID ($80+index) into the compact byte persisted in
-    # the stock two-byte cell ($20+index). Invalid IDs become '?'.
     assembler.label("english_left")
     assembler.absolute(0x20, stream_read)
     assembler.absolute(0x20, stream_advance)
@@ -241,7 +307,7 @@ def _emit_runtime(
     assembler.branch(0x90, "left_question")
     assembler.immediate(0xC9, ENGLISH_GLYPH_BASE + glyph_count)
     assembler.branch(0xB0, "left_question")
-    assembler.emit(0x38)  # SEC
+    assembler.emit(0x38)
     assembler.immediate(0xE9, ENGLISH_GLYPH_BASE - STORAGE_CODE_BASE)
     assembler.branch(0x80, "left_ready")
 
@@ -277,9 +343,6 @@ def _emit_runtime(
     assembler.absolute(0x20, RENDER_CELL_CPU)
     assembler.branch(0x80, "parser_restart")
 
-    # The stock renderer copies the persisted cell bytes into $F9/$F8 before
-    # the overwritten EX_GETFNT call. Both bytes in our compact storage range
-    # select the custom 8x16 compositor; every other pair jumps to the BIOS.
     assembler.label("glyph_hook")
     for zero_page in (0xF9, 0xF8):
         assembler.zero_page(0xA5, zero_page)
@@ -298,14 +361,13 @@ def _emit_runtime(
     assembler.zero_page(0xA5, 0xF9)
     assembler.emit(0x38)
     assembler.immediate(0xE9, STORAGE_CODE_BASE)
-    assembler.emit(0xAA)  # TAX
+    assembler.emit(0xAA)
     assembler.zero_page(0xA5, 0xF8)
     assembler.emit(0x38)
     assembler.immediate(0xE9, STORAGE_CODE_BASE)
-    assembler.emit(0xA8)  # TAY
+    assembler.emit(0xA8)
 
-    for row in range(GLYPH_HEIGHT):
-        row_base = layout.font_cpu + row * glyph_count
+    for row, row_base in enumerate(font_row_cpus):
         destination = FONT_STAGE_BUFFER + row * 2
         assembler.absolute(0xBD, row_base)
         assembler.absolute(0x8D, destination)
@@ -314,7 +376,7 @@ def _emit_runtime(
 
     assembler.emit(0x7A)  # PLY
     assembler.emit(0xFA)  # PLX
-    assembler.emit(0x60)  # RTS
+    assembler.emit(0x60)
     return assembler.finish(), dict(assembler.labels)
 
 
@@ -335,16 +397,31 @@ def build_overlay_runtime(
             "native glyph repertoire must contain space and '?'"
         ) from error
 
+    row_cpus = _resolve_font_row_cpus(layout, len(glyphs.characters))
     code, labels = _emit_runtime(
         layout,
         glyph_count=len(glyphs.characters),
         space_glyph_id=space_id,
         question_glyph_id=question_id,
+        font_row_cpus=row_cpus,
     )
+    font_rows = _font_rows(atlas)
+
+    # Code must not overlap any assigned font row in CPU address space.
+    code_start = layout.code_cpu
+    code_end = code_start + len(code)
+    for row_cpu in row_cpus:
+        row_end = row_cpu + len(glyphs.characters)
+        if code_start < row_end and code_end > row_cpu:
+            raise NativeEnglishRuntimeError(
+                f"{layout.label}: runtime code overlaps font row at 0x{row_cpu:04X}"
+            )
+
     return NativeOverlayRuntime(
         layout=layout,
         code=code,
-        atlas_row_major=_atlas_row_major(atlas),
+        font_row_bytes=font_rows,
+        font_row_cpus=row_cpus,
         labels=labels,
         glyph_count=len(glyphs.characters),
         space_glyph_id=space_id,
@@ -354,24 +431,18 @@ def build_overlay_runtime(
 
 def overlay_runtime_patches(runtime: NativeOverlayRuntime) -> tuple[PayloadPatch, ...]:
     layout = runtime.layout
-    return (
+    patches: list[PayloadPatch] = [
         PayloadPatch(
             offset=layout.parser_hook_offset,
             expected=bytes.fromhex("C9 80 F0"),
-            replacement=bytes(
-                (0x4C, layout.code_cpu & 0xFF, layout.code_cpu >> 8)
-            ),
+            replacement=bytes((0x4C, layout.code_cpu & 0xFF, layout.code_cpu >> 8)),
             label=f"{layout.label}: native-English parser trampoline",
         ),
         PayloadPatch(
             offset=layout.font_hook_offset,
             expected=FONT_FETCH_HOOK_EXPECTED,
             replacement=bytes(
-                (
-                    0x20,
-                    runtime.glyph_hook_cpu & 0xFF,
-                    runtime.glyph_hook_cpu >> 8,
-                )
+                (0x20, runtime.glyph_hook_cpu & 0xFF, runtime.glyph_hook_cpu >> 8)
             ),
             label=f"{layout.label}: native-English 8x16 glyph compositor",
         ),
@@ -381,22 +452,47 @@ def overlay_runtime_patches(runtime: NativeOverlayRuntime) -> tuple[PayloadPatch
             replacement=runtime.code,
             label=f"{layout.label}: native-English runtime code",
         ),
-        PayloadPatch(
-            offset=layout.payload_base + layout.font_cpu,
-            expected=bytes((layout.font_fill,)) * len(runtime.atlas_row_major),
-            replacement=runtime.atlas_row_major,
-            label=f"{layout.label}: native-English row-major font atlas",
-        ),
-    )
+    ]
+
+    for region in layout.font_regions:
+        region_bytes = b"".join(
+            runtime.font_row_bytes[row]
+            for row in range(region.first_row, region.first_row + region.row_count)
+        )
+        patches.append(
+            PayloadPatch(
+                offset=layout.payload_base + region.cpu_address,
+                expected=bytes((region.fill_byte,)) * len(region_bytes),
+                replacement=region_bytes,
+                label=(
+                    f"{layout.label}: native-English font rows "
+                    f"{region.first_row}-{region.first_row + region.row_count - 1}"
+                ),
+            )
+        )
+    return tuple(patches)
+
+
+def build_native_runtime_patches(
+    glyphs: EnglishGlyphTable,
+    atlas: RasterizedAtlas,
+    *,
+    layouts: tuple[NativeOverlayLayout, ...] = TEXT_NATIVE_LAYOUTS,
+) -> tuple[PayloadPatch, ...]:
+    patches: list[PayloadPatch] = []
+    for layout in layouts:
+        patches.extend(
+            overlay_runtime_patches(build_overlay_runtime(layout, glyphs, atlas))
+        )
+    return tuple(patches)
 
 
 def build_mission0_native_runtime_patches(
     glyphs: EnglishGlyphTable,
     atlas: RasterizedAtlas,
 ) -> tuple[PayloadPatch, ...]:
-    patches: list[PayloadPatch] = []
-    for layout in MISSION0_NATIVE_LAYOUTS:
-        patches.extend(
-            overlay_runtime_patches(build_overlay_runtime(layout, glyphs, atlas))
-        )
-    return tuple(patches)
+    return build_native_runtime_patches(
+        glyphs,
+        atlas,
+        layouts=MISSION0_NATIVE_LAYOUTS,
+    )
