@@ -11,6 +11,8 @@ from cyber_oedo.text.english_dialogue_engine import (
     EnglishGlyphTable,
     compile_anchored_record,
     compile_automatic_record,
+    compile_paced_record,
+    pacing_split_points,
     encode_english_segment,
     source_requires_manual_anchors,
     wrap_english,
@@ -53,6 +55,25 @@ class EnglishDialogueEngineTests(unittest.TestCase):
         self.assertIn(bytes((ENGLISH_SEGMENT_END, 0x40)) + ENGLISH_MODE_SIGNATURE, compiled)
         self.assertTrue(compiled.endswith(bytes((ENGLISH_SEGMENT_END, 0x21, 0x00))))
         self.assertNotEqual(compiled, source)
+
+    def test_timed_waits_can_be_reanchored_as_pacing(self) -> None:
+        source = (
+            bytes.fromhex("27 28")
+            + "猫".encode("shift_jis")
+            + bytes((0x2F,))
+            + "犬".encode("shift_jis")
+            + bytes((0x00,))
+        )
+        text = "Wait here, then go."
+        table = EnglishGlyphTable.from_texts((text + "?",))
+        points = pacing_split_points(source, text)
+        self.assertEqual(len(points), 1)
+        compiled = compile_paced_record(source, text, table)
+        self.assertEqual(compiled.count(bytes((0x2F,))), 1)
+        self.assertIn(
+            bytes((ENGLISH_SEGMENT_END, 0x2F)) + ENGLISH_MODE_SIGNATURE,
+            compiled,
+        )
 
     def test_mid_timed_wait_requires_explicit_anchor(self) -> None:
         source = (
