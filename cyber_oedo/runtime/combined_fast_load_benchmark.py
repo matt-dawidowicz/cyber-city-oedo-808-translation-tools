@@ -3,7 +3,8 @@
 The core stack contains only mutations with an existing correctness argument or
 stock fallback:
 * fail-closed resident dialogue-module reuse;
-* speaker-local cache retention;
+* speaker-local retention is deliberately NOT in the default core because its
+  physical lifetime across the $22DE exploration load is still unresolved;
 * portrait Card-RAM read-through;
 * speaker ADPCM Card-RAM read-through;
 * native two-span bar VRAM restore.
@@ -67,16 +68,22 @@ def _extend(rows: list[PayloadPatch], benchmark: object) -> None:
     rows.append(patch)
 
 
-def build_combined_bar_benchmark(*, aggressive: bool = False) -> CombinedBarBenchmark:
+def build_combined_bar_benchmark(
+    *,
+    aggressive: bool = False,
+    include_lifetime_sensitive_speaker_retention: bool = False,
+) -> CombinedBarBenchmark:
     rows: list[PayloadPatch] = []
     for benchmark in (
         build_resident_module_benchmark(),
-        build_speaker_cache_retention_benchmark(),
         build_portrait_cache_benchmark(),
         build_speaker_adpcm_cache_benchmark(),
         build_selective_bar_vram_restore_benchmark(),
     ):
         _extend(rows, benchmark)
+
+    if include_lifetime_sensitive_speaker_retention:
+        _extend(rows, build_speaker_cache_retention_benchmark())
 
     if aggressive:
         _extend(rows, build_dialogue_setup_vsync_benchmark())
