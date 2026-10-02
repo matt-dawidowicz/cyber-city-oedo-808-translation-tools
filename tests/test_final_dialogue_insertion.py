@@ -38,7 +38,28 @@ class FinalDialogueInsertionTests(unittest.TestCase):
         self.assertTrue(audit.needs_relocation)
         self.assertEqual(build_in_place_patches(payload, (row,), dictionary), ())
 
-    def test_shorter_text_is_padding_candidate_and_not_default_patched(self) -> None:\n        row = FinalDialogueRow("T4","MISSION_0","Spoken dialogue","TEST",0,"あいう","Hi")\n        payload = bytes.fromhex("27 28 82 A0 82 A2 82 A4 00")\n        dictionary = self._dictionary("Hi")\n        audit = audit_row(payload, row, dictionary)\n        self.assertTrue(audit.is_padding_candidate)\n        self.assertEqual(build_in_place_patches(payload, (row,), dictionary), ())\n        self.assertEqual(\n            len(build_in_place_patches(\n                payload, (row,), dictionary, allow_padding_candidates=True\n            )),\n            1,\n        )\n\n    def test_wrong_binary_mapping_never_patches(self) -> None:
+    def test_shorter_text_is_padding_candidate_and_not_default_patched(self) -> None:
+        row = FinalDialogueRow(
+            "T4", "MISSION_0", "Spoken dialogue", "TEST", 0, "あいう", "Hi"
+        )
+        payload = bytes.fromhex("27 28 82 A0 82 A2 82 A4 00")
+        dictionary = self._dictionary("Hi")
+        audit = audit_row(payload, row, dictionary)
+        self.assertTrue(audit.is_padding_candidate)
+        self.assertEqual(build_in_place_patches(payload, (row,), dictionary), ())
+        self.assertEqual(
+            len(
+                build_in_place_patches(
+                    payload,
+                    (row,),
+                    dictionary,
+                    allow_padding_candidates=True,
+                )
+            ),
+            1,
+        )
+
+    def test_wrong_binary_mapping_never_patches(self) -> None:
         row = FinalDialogueRow("T3","MISSION_1","Spoken dialogue","TEST",0,"あ","Hi")
         dictionary = self._dictionary("Hi")
         audit = audit_row(bytes.fromhex("27 28 82 A2 00"), row, dictionary)
