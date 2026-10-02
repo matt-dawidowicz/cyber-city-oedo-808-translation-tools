@@ -73,8 +73,16 @@ class DialogueInsertionAudit:
     detail: str
 
     @property
+    def can_patch_exactly(self) -> bool:
+        return self.status == "exact_footprint"
+
+    @property
+    def is_padding_candidate(self) -> bool:
+        return self.status == "padding_candidate"
+
+    @property
     def can_patch_in_place(self) -> bool:
-        return self.status == "in_place"
+        return self.status in {"exact_footprint", "padding_candidate"}
 
     @property
     def needs_relocation(self) -> bool:
@@ -131,18 +139,35 @@ def audit_row(payload: bytes, row: FinalDialogueRow, dictionary: PackedEnglishDi
         return DialogueInsertionAudit(row, True, True, len(source), None, "encoding_required", str(error))
     if len(packed) > len(source):
         return DialogueInsertionAudit(row, True, True, len(source), len(packed), "relocation_required", f"packed English needs {len(packed)} bytes; source span owns {len(source)}")
-    return DialogueInsertionAudit(row, True, True, len(source), len(packed), "in_place", f"fits source span; unused bytes use ${IGNORED_FIELD_PADDING:02X} padding")
+    if len(packed) == len(source):
+        return DialogueInsertionAudit(
+            row, True, True, len(source), len(packed), "exact_footprint",
+            "packed English exactly fills the authenticated visible span",
+        )
+    return DialogueInsertionAudit(
+        row, True, True, len(source), len(packed), "padding_candidate",
+        f"fits only if stock-ignored ${IGNORED_FIELD_PADDING:02X} padding is live-certified",
+    )
 
 def audit_rows(payload: bytes, rows: Iterable[FinalDialogueRow], dictionary: PackedEnglishDictionary) -> tuple[DialogueInsertionAudit, ...]:
     return tuple(audit_row(payload, row, dictionary) for row in rows)
 
-def build_in_place_patches(payload: bytes, rows: Iterable[FinalDialogueRow], dictionary: PackedEnglishDictionary, *, allowed_banks: frozenset[str] | None = None) -> tuple[PayloadPatch, ...]:
+def build_in_place_patches(
+    payload: bytes,
+    rows: Iterable[FinalDialogueRow],
+    dictionary: PackedEnglishDictionary,
+    *,
+    allowed_banks: frozenset[str] | None = None,
+    allow_padding_candidates: bool = False,
+) -> tuple[PayloadPatch, ...]:
     patches: list[PayloadPatch] = []
     for row in rows:
         if allowed_banks is not None and row.bank not in allowed_banks:
             continue
         audit = audit_row(payload, row, dictionary)
-        if not audit.can_patch_in_place:
+        if not audit.can_patch_exactly and not (
+            allow_padding_candidates and audit.is_padding_candidate
+        ):
             continue
         source = row.source_bytes
         replacement = encode_fixed_footprint(dictionary, row.english, len(source))
@@ -155,7 +180,14 @@ def build_in_place_patches(payload: bytes, rows: Iterable[FinalDialogueRow], dic
     return tuple(patches)
 
 def summarize_audit(audits: Iterable[DialogueInsertionAudit]) -> dict[str, int]:
-    counts = {"total": 0, "in_place": 0, "relocation_required": 0, "mapping_required": 0, "encoding_required": 0}
+    counts = {
+        "total": 0,
+        "exact_footprint": 0,
+        "padding_candidate": 0,
+        "relocation_required": 0,
+        "mapping_required": 0,
+        "encoding_required": 0,
+    }
     for audit in audits:
         counts["total"] += 1
         counts[audit.status] += 1
