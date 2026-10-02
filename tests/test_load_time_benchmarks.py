@@ -7,6 +7,7 @@ from cyber_oedo.runtime.load_time_benchmarks import (
     COMMAND0_CACHE_INVALIDATE_EXPECTED,
     COMMAND5_CACHE_INVALIDATE_EXPECTED,
     EXPLORATION_WAIT_EXPECTED,
+    RESIDENT_CHECK_CAVE_REPLACEMENT,
     RESIDENT_LOADER_EXPECTED,
     RESIDENT_LOADER_REPLACEMENT,
     BAR_PRIMARY_DESCRIPTOR_EXPECTED,
@@ -20,20 +21,26 @@ from cyber_oedo.runtime.load_time_benchmarks import (
 
 
 class LoadTimeBenchmarkTests(unittest.TestCase):
-    def test_resident_loader_patch_preserves_cache_miss_setup(self) -> None:
+    def test_resident_loader_uses_fail_closed_signature_trampoline(self) -> None:
+        benchmark = build_resident_module_benchmark()
+        self.assertEqual(len(benchmark.patches), 2)
         self.assertEqual(len(RESIDENT_LOADER_EXPECTED), 12)
         self.assertEqual(len(RESIDENT_LOADER_REPLACEMENT), 12)
-        self.assertEqual(
-            RESIDENT_LOADER_REPLACEMENT[:8],
-            RESIDENT_LOADER_EXPECTED[:8],
-        )
-        self.assertEqual(RESIDENT_LOADER_REPLACEMENT[8:10], bytes.fromhex("F0 1D"))
-        self.assertEqual(RESIDENT_LOADER_REPLACEMENT[10:], bytes.fromhex("64 00"))
+        self.assertTrue(RESIDENT_LOADER_REPLACEMENT.startswith(bytes.fromhex("4C 6A 4C")))
+        self.assertEqual(len(RESIDENT_CHECK_CAVE_REPLACEMENT), 41)
 
-    def test_resident_branch_targets_stock_loader_epilogue(self) -> None:
-        # Patch begins at $48A6; BEQ operand is at $48AF and branches from
-        # the following PC $48B0. $48B0 + $1D = $48CD, the stock PLA.
-        self.assertEqual(0x48B0 + RESIDENT_LOADER_REPLACEMENT[9], 0x48CD)
+    def test_resident_signature_checks_both_entrypoints_and_immutable_bytes(self) -> None:
+        cave = RESIDENT_CHECK_CAVE_REPLACEMENT
+        for check in (
+            bytes.fromhex("AD 00 80 C9 4C"),
+            bytes.fromhex("AD 03 80 C9 4C"),
+            bytes.fromhex("AD 06 80 C9 8E"),
+            bytes.fromhex("AD 07 80 C9 DD"),
+            bytes.fromhex("AD 08 80 C9 8F"),
+        ):
+            self.assertIn(check, cave)
+        self.assertTrue(cave.endswith(bytes.fromhex("4C CD 48 4C AE 48")))
+
 
     def test_speaker_cache_retention_only_nops_invalidations(self) -> None:
         benchmark = build_speaker_cache_retention_benchmark()
