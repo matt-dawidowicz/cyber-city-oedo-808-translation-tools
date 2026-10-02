@@ -20,6 +20,17 @@ local pending22DE = {}
 local registeredReturns = {}
 local interactiveArmed = false
 
+local MOVEMENT_SIGNATURES = {
+  [0x4000] = {0x20, 0x99, 0xE0},
+  [0x4012] = {0x20, 0x7B, 0xE0},
+  [0x40E9] = {0x20, 0xF9, 0x40},
+  [0x419E] = {0xAD, 0x01, 0x37},
+  [0x423B] = {0xB2, 0x1E, 0x85},
+  [0x4262] = {0xB2, 0x1E, 0x85},
+  [0x470C] = {0x9C, 0x5D, 0x26},
+  [0x5519] = {0x9C, 0x80, 0x27},
+}
+
 local MODULE_PHYS_START = 0xA000
 local MODULE_PHYS_END = 0xAF50
 local MUTABLE_A = 0xA617
@@ -112,6 +123,15 @@ local function log(line)
   end
 end
 
+local function movementMappedAt(address)
+  local sig = MOVEMENT_SIGNATURES[address]
+  if not sig then return false end
+  for index,value in ipairs(sig) do
+    if r8(address + index - 1) ~= value then return false end
+  end
+  return true
+end
+
 local function logLandmark(name)
   log(string.format(
     "[%s] frame=%d module=$%08X speaker=$%08X %s %s",
@@ -134,13 +154,14 @@ local function ensureReturnCallback(target)
         "[SCENE_LOCAL_B_RETURN %03d] frame=%d elapsed_frames=%d " ..
         "MPR4=$%02X MPR5=$%02X module_before=$%08X module_after=$%08X " ..
         "module_changed=%s speaker_before=$%08X speaker_after=$%08X " ..
-        "speaker_changed=%s same_page85_mpr4=%s %s %s",
+        "speaker_changed=%s same_page85_mpr4=%s same_page85_mpr5=%s %s %s",
         item.ordinal, frame, frame - item.startFrame,
         m[4], m[5], item.moduleBefore, moduleAfter,
         moduleAfter ~= item.moduleBefore and "yes" or "no",
         item.speakerBefore, speakerAfter,
         speakerAfter ~= item.speakerBefore and "yes" or "no",
         m[4] == 0x85 and "yes" or "no",
+        m[5] == 0x85 and "yes" or "no",
         sceneState(), mprString(m)
       ))
       interactiveArmed = true
@@ -172,10 +193,12 @@ local function onCdRead()
   log(string.format(
     "[SCENE_LOCAL_B_START %03d] frame=%d sector=$%06X dest=$%04X len=$%04X " ..
     "type=$%02X caller_return=$%04X MPR4=$%02X MPR5=$%02X " ..
-    "module_before=$%08X speaker_before=$%08X same_page85_mpr4=%s %s %s",
+    "module_before=$%08X speaker_before=$%08X same_page85_mpr4=%s " ..
+    "same_page85_mpr5=%s %s %s",
     readOrdinal, frame, lba, destination, r16(0x20F8), r8(0x20FF), target,
     m[4], m[5], item.moduleBefore, item.speakerBefore,
-    m[4] == 0x85 and "yes" or "no", sceneState(), mprString(m)
+    m[4] == 0x85 and "yes" or "no",
+    m[5] == 0x85 and "yes" or "no", sceneState(), mprString(m)
   ))
 end
 
@@ -199,6 +222,7 @@ local landmarkCounts = {}
 for _, item in ipairs(landmarks) do
   emu.addMemoryCallback(
     function()
+      if not movementMappedAt(item.address) then return end
       if item.name == "EXPLORATION_INTERACTIVE" then
         if not interactiveArmed then return end
         interactiveArmed = false
