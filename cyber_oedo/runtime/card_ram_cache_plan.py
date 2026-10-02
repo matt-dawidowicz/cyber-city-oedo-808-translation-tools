@@ -29,6 +29,8 @@ CARD_RAM_BANK_BYTES = 0x2000
 CARD_RAM_BANK_COUNT = CARD_RAM_LAST_BANK - CARD_RAM_FIRST_BANK + 1
 CARD_RAM_TOTAL_BYTES = CARD_RAM_BANK_COUNT * CARD_RAM_BANK_BYTES
 ACTIVE_ADPCM_BLOCKS = 7
+BAR_EXTRA_ADPCM_LBA = 0x1292
+BAR_EXTRA_ADPCM_BYTES = ADPCM_BLOCK_SECTORS * SECTOR_BYTES
 
 BAR_STOCK_INPUT_TO_PARSER_FRAMES = 457
 BAR_PORTRAIT_CACHE_INPUT_TO_PARSER_FRAMES = 362
@@ -167,18 +169,23 @@ def build_cache_plan() -> dict[str, object]:
         + SPEAKER_BLOCK_COUNT * SPEAKER_BLOCK_SECTORS * SECTOR_BYTES
         + ACTIVE_ADPCM_BLOCKS * ADPCM_BLOCK_SECTORS * SECTOR_BYTES
     )
-    raw_core_sector_bytes = (
-        46 * SECTOR_BYTES
-    )
+    raw_core_sector_bytes = 46 * SECTOR_BYTES
     portrait_bytes = 2 * PORTRAIT_TRANSFER_BYTES
-    packed_lower_bound_bytes = raw_core_sector_bytes + portrait_bytes
+    packed_lower_bound_bytes = (
+        raw_core_sector_bytes + BAR_EXTRA_ADPCM_BYTES + portrait_bytes
+    )
     packed_lower_bound_banks = (
         packed_lower_bound_bytes + CARD_RAM_BANK_BYTES - 1
     ) // CARD_RAM_BANK_BYTES
 
-    # With the core kept in an AD_WRITE-friendly 12-bank layout, two 0x2020
-    # portraits occupy three additional banks only if the RAM->VRAM copy can be
-    # segmented at bank boundaries. Otherwise each portrait needs two banks.
+    # The bartender route also uses the out-of-core $1292 ADPCM source. Under
+    # the one-bank AD_WRITE constraint it needs one dedicated bank in addition
+    # to the 12-bank $1425-$1452 core.
+    bartender_core_banks = len(core_banks) + 1
+
+    # Two 0x2020 portraits occupy three additional banks only if the RAM->VRAM
+    # copy can be segmented at bank boundaries. Otherwise each portrait needs
+    # two banks.
     split_portrait_banks = 3
     independent_portrait_banks = 4
 
@@ -198,8 +205,9 @@ def build_cache_plan() -> dict[str, object]:
             "raw_core_plus_two_portraits_bytes": packed_lower_bound_bytes,
             "banks": packed_lower_bound_banks,
             "meaning": (
-                "14 banks is only the byte-capacity lower bound for the raw "
-                "46-sector core extent plus two 0x2020 portraits; it does not "
+                "15 banks is the byte-capacity lower bound for the raw "
+                "46-sector core extent, the extra $1292 8 KiB ADPCM source, "
+                "and two 0x2020 portraits; it does not "
                 "by itself provide AD_WRITE-friendly alignment."
             ),
         },
@@ -221,10 +229,10 @@ def build_cache_plan() -> dict[str, object]:
         "two_portrait_extensions": {
             "segmented_copy": {
                 "additional_banks": split_portrait_banks,
-                "total_banks": len(core_banks) + split_portrait_banks,
-                "banks_left": CARD_RAM_BANK_COUNT - len(core_banks) - split_portrait_banks,
+                "total_banks": bartender_core_banks + split_portrait_banks,
+                "banks_left": CARD_RAM_BANK_COUNT - bartender_core_banks - split_portrait_banks,
                 "bytes_left": (
-                    CARD_RAM_BANK_COUNT - len(core_banks) - split_portrait_banks
+                    CARD_RAM_BANK_COUNT - bartender_core_banks - split_portrait_banks
                 ) * CARD_RAM_BANK_BYTES,
                 "requirement": (
                     "RAM-to-VRAM copy may split a 0x2020 portrait at Card-RAM "
@@ -233,12 +241,12 @@ def build_cache_plan() -> dict[str, object]:
             },
             "independent_two_bank_portraits": {
                 "additional_banks": independent_portrait_banks,
-                "total_banks": len(core_banks) + independent_portrait_banks,
+                "total_banks": bartender_core_banks + independent_portrait_banks,
                 "banks_left": (
-                    CARD_RAM_BANK_COUNT - len(core_banks) - independent_portrait_banks
+                    CARD_RAM_BANK_COUNT - bartender_core_banks - independent_portrait_banks
                 ),
                 "bytes_left": (
-                    CARD_RAM_BANK_COUNT - len(core_banks) - independent_portrait_banks
+                    CARD_RAM_BANK_COUNT - bartender_core_banks - independent_portrait_banks
                 ) * CARD_RAM_BANK_BYTES,
                 "requirement": (
                     "each portrait gets its own two-bank allocation; simpler "
@@ -312,11 +320,11 @@ def build_cache_plan() -> dict[str, object]:
             ),
         },
         "static_conclusion": (
-            "The core cache fits cleanly in 12 Card-RAM banks. A practical bar "
-            "working set is 15 banks if portrait copies can be segmented, or 16 "
-            "banks with independent two-bank portrait allocations. The previous "
-            "14-bank figure remains a capacity lower bound, not the preferred "
-            "execution layout."
+            "The $1425-$1452 core fits in 12 Card-RAM banks, but the bartender "
+            "route also needs the out-of-core $1292 ADPCM block in one dedicated "
+            "bank. A practical bar working set is therefore 16 banks with "
+            "segmented portraits or 17 banks with independent two-bank portrait "
+            "allocations. The complete byte-capacity lower bound is 15 banks."
         ),
         "runtime_gates": [
             "prove Card RAM ownership/lifetime for $68-$7F",
