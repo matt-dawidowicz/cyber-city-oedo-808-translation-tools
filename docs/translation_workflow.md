@@ -12,9 +12,11 @@ analysis tools. It is suitable for:
 - locating candidate resources and padding.
 
 The repository now contains the first guarded reinsertion path for the final
-dialogue master. The packed-English Mission 0 test builder can insert every
-reviewed spoken/narration row that both maps exactly to the authenticated
-payload and fits its existing visible-text footprint. Growth, split/control
+dialogue master. The packed-English Mission 0 test builder conservatively inserts reviewed
+spoken/narration rows only when they map exactly to the authenticated payload
+and the packed English exactly fills the existing visible-text footprint.
+Shorter padding-dependent rows are classified separately until final-runtime
+padding behavior is live-certified. Growth, split/control
 records, later-bank renderer activation, and full release QA remain gated.
 See `final_dialogue_insertion_status.md`.
 
@@ -167,6 +169,8 @@ The build is fail-closed:
 
 - the workbook and exported TSV hashes are fixed;
 - each row must map to an exact `27 28` marker and exact Shift-JIS source span;
+- exact-footprint packed English is enabled immediately; shorter rows are
+  reported as padding candidates until the ignored-padding behavior is certified;
 - packed English that exceeds the owned span is reported for relocation rather
   than shortened;
 - rows whose workbook representation is not one contiguous binary span are
