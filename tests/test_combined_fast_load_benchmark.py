@@ -22,6 +22,15 @@ class CombinedFastLoadBenchmarkTests(unittest.TestCase):
         self.assertTrue(aggressive.aggressive)
         self.assertEqual(len(aggressive.patches), len(core.patches) + 2)
 
+    def test_speaker_retention_requires_explicit_lifetime_sensitive_opt_in(self) -> None:
+        core = build_combined_bar_benchmark()
+        with_speaker = build_combined_bar_benchmark(
+            include_lifetime_sensitive_speaker_retention=True
+        )
+        self.assertEqual(len(with_speaker.patches), len(core.patches) + 2)
+        labels = " ".join(patch.label.lower() for patch in core.patches)
+        self.assertNotIn("speaker cache selector", labels)
+
     def test_other_overlay_120_frame_patch_is_not_composed(self) -> None:
         result = build_combined_bar_benchmark(aggressive=True)
         labels = " ".join(patch.label.lower() for patch in result.patches)
