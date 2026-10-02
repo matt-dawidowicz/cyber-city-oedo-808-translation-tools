@@ -20,20 +20,20 @@ UI/information/ending paths.
 
 The final master contains 2,237 spoken/narration rows.
 
-| Bank | Total | In-place packed | Relocation required | Mapping required |
-|---|---:|---:|---:|---:|
-| Mission 0 | 433 | 85 | 214 | 134 |
-| Mission 1 | 362 | 73 | 195 | 94 |
-| Mission 2 | 344 | 86 | 174 | 84 |
-| Mission 3 | 248 | 50 | 98 | 100 |
-| Mission 4 | 195 | 34 | 84 | 77 |
-| Mission 5 | 195 | 41 | 99 | 55 |
-| Mission 6 | 207 | 19 | 92 | 96 |
-| Mission 7 | 137 | 12 | 74 | 51 |
-| Mission 8 | 116 | 11 | 33 | 72 |
-| **Total** | **2,237** | **411** | **1,063** | **763** |
+| Bank | Total | Exact footprint | Padding candidate | Relocation required | Mapping required |
+|---|---:|---:|---:|---:|---:|
+| Mission 0 | 433 | 19 | 66 | 214 | 134 |
+| Mission 1 | 362 | 21 | 52 | 195 | 94 |
+| Mission 2 | 344 | 22 | 64 | 174 | 84 |
+| Mission 3 | 248 | 7 | 43 | 98 | 100 |
+| Mission 4 | 195 | 12 | 22 | 84 | 77 |
+| Mission 5 | 195 | 10 | 31 | 99 | 55 |
+| Mission 6 | 207 | 3 | 16 | 92 | 96 |
+| Mission 7 | 137 | 4 | 8 | 74 | 51 |
+| Mission 8 | 116 | 2 | 9 | 33 | 72 |
+| **Total** | **2,237** | **100** | **311** | **1,063** | **763** |
 
-`In-place packed` means all of the following are true:
+`Exact footprint` means the packed English uses exactly the authenticated visible span.\n\n`Padding candidate` means the packed English is shorter and would require the existing `$80` ignored-padding convention. The Mission 0 builder does **not** enable these rows by default until that convention is live-certified with the final runtime.\n\nFor either capacity class, the following mapping gates must already pass:
 
 1. the workbook offset points to a real `27 28` dialogue marker;
 2. the workbook Japanese text exactly matches the authenticated bytes after
@@ -69,13 +69,11 @@ human-test build.
 
 ## Immediate Mission 0 result
 
-The first real build target contains **85 final Mission 0 spoken/narration
-rows**, plus the packed-English renderer. Those rows need no pointer changes.
+The conservative first build target contains **19 exact-footprint final Mission 0\nspoken/narration rows**, plus the packed-English renderer. Another **66** Mission 0\nrows are padding candidates and remain disabled until the final-runtime padding\nbehavior is certified.
 
 The remaining Mission 0 work is:
 
-- 214 mapped rows requiring owned growth/relocation;
-- 134 rows requiring record/control-aware binary mapping;
+- 66 mapped rows that fit only with certified `$80` padding;\n- 214 mapped rows requiring owned growth/relocation;\n- 134 rows requiring record/control-aware binary mapping;
 - renderer runtime certification with the final dictionary/atlas rather than the
   single-line bartender proof;
 - then full Mission 0 playthrough and save/load QA.
