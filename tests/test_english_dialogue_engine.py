@@ -1,1 +1,75 @@
-from __future__ import annotations\n\nimport unittest\n\nfrom cyber_oedo.text.english_dialogue_engine import (\n    ENGLISH_GLYPH_BASE,\n    ENGLISH_LINE_WIDTH,\n    ENGLISH_MODE_SIGNATURE,\n    EnglishDialogueCompileError,\n    EnglishGlyphTable,\n    compile_automatic_record,\n    source_requires_manual_anchors,\n    wrap_english,\n)\n\n\nclass EnglishDialogueEngineTests(unittest.TestCase):\n    def test_one_byte_glyph_round_trip(self) -> None:\n        table = EnglishGlyphTable.from_texts(("Bartender: Welcome.",))\n        encoded = table.encode("Welcome.")\n        self.assertEqual(len(encoded), len("Welcome."))\n        self.assertTrue(all(value >= ENGLISH_GLYPH_BASE for value in encoded))\n        self.assertEqual(table.decode(encoded), "Welcome.")\n\n    def test_wrap_uses_22_character_field(self) -> None:\n        self.assertEqual(ENGLISH_LINE_WIDTH, 22)\n        lines = wrap_english("First time around here, is it?")\n        self.assertTrue(all(len(line) <= 22 for line in lines))\n        self.assertEqual(" ".join(lines), "First time around here, is it?")\n\n    def test_source_line_breaks_are_recomputed(self) -> None:\n        source = (\n            bytes.fromhex("27 28")\n            + "猫".encode("shift_jis")\n            + bytes((0x40,))\n            + "犬".encode("shift_jis")\n            + bytes((0x21, 0x00))\n        )\n        text = "Bartender: Welcome to Old City."\n        table = EnglishGlyphTable.from_texts((text,))\n        compiled = compile_automatic_record(source, text, table)\n        self.assertTrue(compiled.startswith(bytes.fromhex("27 28") + ENGLISH_MODE_SIGNATURE))\n        self.assertTrue(compiled.endswith(bytes((0x21, 0x00))))\n        self.assertNotEqual(compiled, source)\n\n    def test_mid_timed_wait_requires_explicit_anchor(self) -> None:\n        source = (\n            bytes.fromhex("27 28")\n            + "猫".encode("shift_jis")\n            + bytes((0x2F,))\n            + "犬".encode("shift_jis")\n            + bytes((0x00,))\n        )\n        self.assertTrue(source_requires_manual_anchors(source))\n        table = EnglishGlyphTable.from_texts(("Cat... dog.",))\n        with self.assertRaisesRegex(EnglishDialogueCompileError, "anchors"):\n            compile_automatic_record(source, "Cat... dog.", table)\n\n    def test_mid_line_advance_does_not_require_anchor(self) -> None:\n        source = (\n            bytes.fromhex("27 28")\n            + "猫".encode("shift_jis")\n            + bytes((0x40,))\n            + "犬".encode("shift_jis")\n            + bytes((0x00,))\n        )\n        self.assertFalse(source_requires_manual_anchors(source))\n\n    def test_long_unbreakable_word_is_rejected(self) -> None:\n        with self.assertRaisesRegex(EnglishDialogueCompileError, "word exceeds"):\n            wrap_english("x" * 23)\n\n\nif __name__ == "__main__":\n    unittest.main()\n
+from __future__ import annotations
+
+import unittest
+
+from cyber_oedo.text.english_dialogue_engine import (
+    ENGLISH_GLYPH_BASE,
+    ENGLISH_LINE_WIDTH,
+    ENGLISH_MODE_SIGNATURE,
+    EnglishDialogueCompileError,
+    EnglishGlyphTable,
+    compile_automatic_record,
+    source_requires_manual_anchors,
+    wrap_english,
+)
+
+
+class EnglishDialogueEngineTests(unittest.TestCase):
+    def test_one_byte_glyph_round_trip(self) -> None:
+        table = EnglishGlyphTable.from_texts(("Bartender: Welcome.",))
+        encoded = table.encode("Welcome.")
+        self.assertEqual(len(encoded), len("Welcome."))
+        self.assertTrue(all(value >= ENGLISH_GLYPH_BASE for value in encoded))
+        self.assertEqual(table.decode(encoded), "Welcome.")
+
+    def test_wrap_uses_22_character_field(self) -> None:
+        self.assertEqual(ENGLISH_LINE_WIDTH, 22)
+        lines = wrap_english("First time around here, is it?")
+        self.assertTrue(all(len(line) <= 22 for line in lines))
+        self.assertEqual(" ".join(lines), "First time around here, is it?")
+
+    def test_source_line_breaks_are_recomputed(self) -> None:
+        source = (
+            bytes.fromhex("27 28")
+            + "猫".encode("shift_jis")
+            + bytes((0x40,))
+            + "犬".encode("shift_jis")
+            + bytes((0x21, 0x00))
+        )
+        text = "Bartender: Welcome to Old City."
+        table = EnglishGlyphTable.from_texts((text,))
+        compiled = compile_automatic_record(source, text, table)
+        self.assertTrue(compiled.startswith(bytes.fromhex("27 28") + ENGLISH_MODE_SIGNATURE))
+        self.assertTrue(compiled.endswith(bytes((0x21, 0x00))))
+        self.assertNotEqual(compiled, source)
+
+    def test_mid_timed_wait_requires_explicit_anchor(self) -> None:
+        source = (
+            bytes.fromhex("27 28")
+            + "猫".encode("shift_jis")
+            + bytes((0x2F,))
+            + "犬".encode("shift_jis")
+            + bytes((0x00,))
+        )
+        self.assertTrue(source_requires_manual_anchors(source))
+        table = EnglishGlyphTable.from_texts(("Cat... dog.",))
+        with self.assertRaisesRegex(EnglishDialogueCompileError, "anchors"):
+            compile_automatic_record(source, "Cat... dog.", table)
+
+    def test_mid_line_advance_does_not_require_anchor(self) -> None:
+        source = (
+            bytes.fromhex("27 28")
+            + "猫".encode("shift_jis")
+            + bytes((0x40,))
+            + "犬".encode("shift_jis")
+            + bytes((0x00,))
+        )
+        self.assertFalse(source_requires_manual_anchors(source))
+
+    def test_long_unbreakable_word_is_rejected(self) -> None:
+        with self.assertRaisesRegex(EnglishDialogueCompileError, "word exceeds"):
+            wrap_english("x" * 23)
+
+
+if __name__ == "__main__":
+    unittest.main()
