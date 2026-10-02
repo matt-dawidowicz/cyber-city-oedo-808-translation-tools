@@ -239,21 +239,25 @@ def build_resource_lifetime_report() -> dict[str, object]:
                 )
             ),
             "same_page_hypothesis": (
-                "If exploration MPR4 remains $85, the $9000-$9FFF half of the "
-                "$22DE load overwrites exactly the speaker-local half of page $85 "
-                "while leaving the module at page offsets 0x0000-0x0F50 intact. "
-                "The remaining $A000-$A7FF portion is in MPR5 and cannot touch "
-                "the page-$85 speaker bytes."
+                "If exploration MPR4 is $85, the $9000-$9FFF half of the $22DE "
+                "load overwrites exactly the speaker-local half of page $85. "
+                "Separately, if exploration MPR5 is also $85, the $A000-$A7FF "
+                "half aliases page-$85 offsets 0x0000-0x07FF and clobbers the "
+                "first 2 KiB of the resident dialogue module. MPR slots may alias "
+                "the same physical page, so module survival cannot be certified "
+                "from MPR4 alone."
             ),
             "remapped_page_hypothesis": (
-                "If exploration MPR4 is not $85, the logical $9000-$9FFF write "
-                "targets a different physical 8 KiB page and page $85 survives "
-                "unchanged. Static logical addresses alone cannot choose between "
-                "these two cases."
+                "Page $85 survives this three-sector write only when neither "
+                "participating exploration mapping aliases the protected portion: "
+                "MPR4 must not map $85 for speaker-local survival, and MPR5 must "
+                "not map $85 for module offsets 0x0000-0x07FF. Static logical "
+                "addresses alone cannot choose those runtime mappings."
             ),
             "proof_needed": (
-                "MPR4 at the exploration $22DE CD_READ and MPR4 at dialogue "
-                "speaker-local use, or an equivalent physical-CD-RAM checksum."
+                "Capture both MPR4 and MPR5 at the exploration $22DE CD_READ, "
+                "plus an immutable module checksum and speaker-local checksum "
+                "before/after the read."
             ),
         },
         "static_implication": (
@@ -266,15 +270,15 @@ def build_resource_lifetime_report() -> dict[str, object]:
             "Logical $9000 is in MPR4 and $A000 begins MPR5. Dialogue page $85 "
             "places the module in offsets 0x0000-0x0F50 and speaker-local data in "
             "0x1000-0x1FFF. The exploration write therefore has a precise "
-            "conditional consequence: speaker clobber occurs if and only if its "
-            "MPR4 maps the same physical page $85. Static evidence has not yet "
-            "proven that exploration MPR4 value."
+            "conditional consequences: MPR4=$85 clobbers speaker-local data, "
+            "while MPR5=$85 clobbers module offsets 0x0000-0x07FF. Static "
+            "evidence has not yet proven either exploration mapping."
         ),
         "optimization_priority": (
             "Keep resident-module and speaker-cache benchmarks independent. "
-            "Static overlap makes the speaker-local cache the higher-risk "
-            "lifetime assumption; module residency has no equivalent known "
-            "logical scene-write overlap."
+            "Both paths require physical-lifetime proof: speaker retention is "
+            "exposed through MPR4, while module residency can be clobbered by "
+            "an MPR5 alias of page $85 despite having no direct logical overlap."
         ),
         "release_enabled": False,
     }
