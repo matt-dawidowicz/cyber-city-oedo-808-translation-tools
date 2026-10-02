@@ -83,12 +83,6 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Pipeline",
     ),
     CommandSpec(
-        "build-packed-dialogue-test",
-        "cyber_oedo.build.packed_dialogue_test",
-        "Build a Mission 0 packed-English dialogue test image.",
-        "Pipeline",
-    ),
-    CommandSpec(
         "build-analysis-db",
         "cyber_oedo.analysis.build_analysis_db",
         "Build a local SQLite database from generated evidence.",
