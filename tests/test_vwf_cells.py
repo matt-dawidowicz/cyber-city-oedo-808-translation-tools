@@ -9,8 +9,12 @@ from cyber_oedo.text.vwf_cells import (
     VWF_DESCRIPTOR_BYTES,
     VWF_MODE_SIGNATURE,
     VWF_SEGMENT_END_TOKEN,
+    VWF_TOKEN_FIRST_MAX,
+    VWF_TOKEN_FIRST_MIN,
     VwfCellDescriptor,
     compile_vwf_text,
+    decode_vwf_token,
+    encode_vwf_token,
 )
 from cyber_oedo.text.vwf_text import derive_vwf_font
 
@@ -51,6 +55,13 @@ class VwfCellTests(unittest.TestCase):
         stream = result.stream
         self.assertTrue(stream.startswith(VWF_MODE_SIGNATURE))
         self.assertIn(VWF_SEGMENT_END_TOKEN.to_bytes(2, "little"), stream)
+
+    def test_tokens_are_self_identifying_after_stock_redraw_storage(self) -> None:
+        for token in (0, 255, 256, 2048):
+            raw = encode_vwf_token(token)
+            self.assertGreaterEqual(raw[0], VWF_TOKEN_FIRST_MIN)
+            self.assertLessEqual(raw[0], VWF_TOKEN_FIRST_MAX)
+            self.assertEqual(decode_vwf_token(raw), token)
 
     def test_dictionary_deduplicates_repeated_cells(self) -> None:
         result = compile_vwf_text("AI AI AI", self.font, self.table)
