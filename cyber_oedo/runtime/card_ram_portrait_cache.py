@@ -26,7 +26,7 @@ PORTRAIT_CD_READ_CPU = 0x8405
 PORTRAIT_CD_READ_OFFSET = MISSION0_B_PAYLOAD_BASE + PORTRAIT_CD_READ_CPU
 PORTRAIT_CD_READ_EXPECTED = bytes.fromhex("20 09 E0")
 
-PORTRAIT_CACHE_CAVE_CPU = 0x4CA0
+PORTRAIT_CACHE_CAVE_CPU = 0x4C93
 PORTRAIT_CACHE_CAVE_OFFSET = MISSION0_B_PAYLOAD_BASE + PORTRAIT_CACHE_CAVE_CPU
 
 PORTRAIT_BANK0 = 0x68
@@ -35,6 +35,7 @@ PORTRAIT_LOCAL_ADDRESS = 0xA000
 PORTRAIT_SECTORS = 5
 PORTRAIT_TRANSFER_BYTES = 0x2020
 PORTRAIT_TAG_ADDRESS = 0xC800
+PORTRAIT_TAG_MAGIC_ADDRESS = 0xC801
 PORTRAIT_TAG_MAGIC = 0xA5
 
 
@@ -77,12 +78,15 @@ def build_portrait_cache_cave() -> bytes:
     a.emit(0xA9, PORTRAIT_BANK0, 0x53, 0x20)
     a.emit(0xA9, PORTRAIT_BANK1, 0x53, 0x40)
 
-    # Fail closed unless the valid byte and all three LBA bytes match.
-    a.emit(0xAD, 0x03, 0xC8, 0xC9, PORTRAIT_TAG_MAGIC)
+    # Fail closed unless the valid byte and Mission-0 portrait index match.
+    # The source table is source-guarded, so index $03 uniquely identifies the
+    # five-sector LBA without spending cave bytes on a redundant three-byte tag.
+    a.emit(0xAD, PORTRAIT_TAG_MAGIC_ADDRESS & 0xFF, PORTRAIT_TAG_MAGIC_ADDRESS >> 8)
+    a.emit(0xC9, PORTRAIT_TAG_MAGIC)
     a.branch(0xD0, "miss")
-    for address, zp in ((0xC800, 0xFC), (0xC801, 0xFE), (0xC802, 0xFD)):
-        a.emit(0xAD, address & 0xFF, address >> 8, 0xC5, zp)
-        a.branch(0xD0, "miss")
+    a.emit(0xAD, PORTRAIT_TAG_ADDRESS & 0xFF, PORTRAIT_TAG_ADDRESS >> 8)
+    a.emit(0xC5, 0x03)
+    a.branch(0xD0, "miss")
     a.branch(0x80, "copy")
 
     a.label("miss")
@@ -96,10 +100,15 @@ def build_portrait_cache_cave() -> bytes:
     a.emit(0x20, 0x09, 0xE0)
     a.branch(0xD0, "read_retry")
 
-    # Tag the complete cached source by the game's native three-byte LBA order.
-    for address, zp in ((0xC800, 0xFC), (0xC801, 0xFE), (0xC802, 0xFD)):
-        a.emit(0xA5, zp, 0x8D, address & 0xFF, address >> 8)
-    a.emit(0xA9, PORTRAIT_TAG_MAGIC, 0x8D, 0x03, 0xC8)
+    # Tag the cached source by the stable Mission-0 portrait index.
+    a.emit(0xA5, 0x03)
+    a.emit(0x8D, PORTRAIT_TAG_ADDRESS & 0xFF, PORTRAIT_TAG_ADDRESS >> 8)
+    a.emit(0xA9, PORTRAIT_TAG_MAGIC)
+    a.emit(
+        0x8D,
+        PORTRAIT_TAG_MAGIC_ADDRESS & 0xFF,
+        PORTRAIT_TAG_MAGIC_ADDRESS >> 8,
+    )
 
     a.label("copy")
     # Map hardware I/O at MPR0, set VDC MAWR from the stock destination,
