@@ -158,7 +158,9 @@ cyber-oedo export-final-dialogue \
   Cyber_City_Oedo_808_Final_Localization_2026-09-24.xlsx \
   final_dialogue_2026-09-24.tsv
 
-cyber-oedo build-packed-dialogue-test \
+# Historical packed-renderer proof only; this command is intentionally not
+# registered in the public cyber-oedo command table.
+python -m cyber_oedo.build.packed_dialogue_test \
   "Cyber City Oedo 808 - Kemono no Alignment (Japan).ccd" \
   packed-dialogue-test \
   final_dialogue_2026-09-24.tsv \
