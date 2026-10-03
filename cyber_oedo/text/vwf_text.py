@@ -141,6 +141,10 @@ def measure_text(text: str, font: VwfFont) -> int:
 def wrap_vwf(text: str, font: VwfFont, *, max_pixels: int = LINE_PIXELS) -> tuple[str, ...]:
     if max_pixels <= 0:
         raise VwfTextError("max_pixels must be positive")
+    if max_pixels > LINE_PIXELS:
+        raise VwfTextError(
+            f"max_pixels cannot exceed the fixed {LINE_PIXELS}px dialogue canvas"
+        )
     if not text or text.strip() != text or "  " in text:
         raise VwfTextError("text must use single spaces without outer whitespace")
     words = text.split(" ")
