@@ -447,27 +447,59 @@ def _emit_runtime(
     assembler.emit(0x60)  # RTS
 
     assembler.label("custom_glyph")
+    # Fixed 8x16 fallback, compacted through a row-pointer table.
     assembler.emit(0xDA)  # PHX
     assembler.emit(0x5A)  # PHY
+    for scratch in (0x00, 0x01, 0x04, 0x05):
+        assembler.zero_page(0xA5, scratch)
+        assembler.emit(0x48)  # PHA
+
     assembler.zero_page(0xA5, 0xF9)
-    assembler.emit(0x38)
+    assembler.emit(0x38)  # SEC
     assembler.immediate(0xE9, STORAGE_CODE_BASE)
-    assembler.emit(0xAA)
+    assembler.zero_page(0x85, 0x05)
     assembler.zero_page(0xA5, 0xF8)
-    assembler.emit(0x38)
+    assembler.emit(0x38)  # SEC
     assembler.immediate(0xE9, STORAGE_CODE_BASE)
-    assembler.emit(0xA8)
+    assembler.zero_page(0x85, 0x04)
 
-    for row, row_base in enumerate(font_row_cpus):
-        destination = FONT_STAGE_BUFFER + row * 2
-        assembler.absolute(0xBD, row_base)
-        assembler.absolute(0x8D, destination)
-        assembler.absolute(0xB9, row_base)
-        assembler.absolute(0x8D, destination + 1)
+    assembler.immediate(0xA0, 0x00)  # LDY #0
+    assembler.label("fixed_row_loop")
+    assembler.absolute_label(0xB9, "fixed_row_table")
+    assembler.emit(0x18)  # CLC
+    assembler.zero_page(0x65, 0x05)
+    assembler.zero_page(0x85, 0x00)
+    assembler.absolute_label(0xB9, "fixed_row_table_high")
+    assembler.immediate(0x69, 0x00)
+    assembler.zero_page(0x85, 0x01)
+    assembler.emit(0xB2, 0x00)
+    assembler.absolute(0x99, FONT_STAGE_BUFFER)
 
+    assembler.absolute_label(0xB9, "fixed_row_table")
+    assembler.emit(0x18)  # CLC
+    assembler.zero_page(0x65, 0x04)
+    assembler.zero_page(0x85, 0x00)
+    assembler.absolute_label(0xB9, "fixed_row_table_high")
+    assembler.immediate(0x69, 0x00)
+    assembler.zero_page(0x85, 0x01)
+    assembler.emit(0xB2, 0x00)
+    assembler.emit(0x99, (FONT_STAGE_BUFFER + 1) & 0xFF, (FONT_STAGE_BUFFER + 1) >> 8)
+
+    assembler.emit(0xC8, 0xC8)
+    assembler.immediate(0xC0, 0x20)
+    assembler.branch(0xD0, "fixed_row_loop")
+
+    for scratch in (0x05, 0x04, 0x01, 0x00):
+        assembler.emit(0x68)
+        assembler.zero_page(0x85, scratch)
     assembler.emit(0x7A)  # PLY
     assembler.emit(0xFA)  # PLX
     assembler.emit(0x60)
+
+    assembler.label("fixed_row_table")
+    assembler.labels["fixed_row_table_high"] = assembler.address + 1
+    for row_base in font_row_cpus:
+        assembler.emit(row_base & 0xFF, row_base >> 8)
     return assembler.finish(), dict(assembler.labels)
 
 
