@@ -3,7 +3,9 @@ from __future__ import annotations
 import unittest
 
 from cyber_oedo.text.vwf_text import (
+    LINE_PIXELS,
     LINE_TILE_BYTES_4BPP,
+    VwfTextError,
     character_delta_tiles,
     derive_vwf_font,
     measure_text,
@@ -35,6 +37,10 @@ class VwfTextTests(unittest.TestCase):
 
     def test_measurement_is_proportional(self) -> None:
         self.assertGreater(measure_text("AA", self.font), measure_text("II", self.font))
+
+    def test_wrap_rejects_width_larger_than_fixed_canvas(self) -> None:
+        with self.assertRaises(VwfTextError):
+            wrap_vwf("AI AI", self.font, max_pixels=LINE_PIXELS + 1)
 
     def test_wrap_uses_pixel_width_not_character_count(self) -> None:
         lines = wrap_vwf("AI AI AI AI AI AI AI", self.font, max_pixels=30)
