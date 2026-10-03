@@ -16,6 +16,7 @@ from cyber_oedo.text.vwf_cells import (
     compile_vwf_text,
     decode_vwf_token,
     encode_vwf_token,
+    render_vwf_dictionary,
 )
 from cyber_oedo.text.vwf_text import derive_vwf_font
 
@@ -74,6 +75,11 @@ class VwfCellTests(unittest.TestCase):
                 descriptor = result.dictionary.descriptors[token]
                 rebuilt += "".join(reverse[glyph_id] for glyph_id in descriptor.glyph_ids)
             self.assertEqual(rebuilt, line.text)
+
+    def test_dictionary_pre_renders_to_32_byte_stock_cells(self) -> None:
+        result = compile_vwf_text("AI AI", self.font, self.table)
+        payload = render_vwf_dictionary(result.dictionary, self.font)
+        self.assertEqual(len(payload), len(result.dictionary.descriptors) * 32)
 
     def test_mission_corpus_uses_one_shared_dictionary(self) -> None:
         first, second = compile_vwf_corpus(
