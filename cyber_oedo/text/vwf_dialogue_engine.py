@@ -7,14 +7,11 @@ compiler instance owns one shared VWF token dictionary for the entire mission.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from cyber_oedo.script import ControlCommand, TextRun, parse_dialogue_record
 from cyber_oedo.script.opcodes import DIALOGUE_MARKER, DialogueOpcode
-from cyber_oedo.text.english_dialogue_engine import (
-    EnglishDialogueCompileError,
-    EnglishGlyphTable,
-)
+from cyber_oedo.text.english_dialogue_engine import EnglishGlyphTable
 from cyber_oedo.text.vwf_cells import (
     VWF_MODE_SIGNATURE,
     VWF_SEGMENT_END_TOKEN,
@@ -24,7 +21,7 @@ from cyber_oedo.text.vwf_cells import (
     pack_vwf_line,
     render_vwf_dictionary,
 )
-from cyber_oedo.text.vwf_text import LINE_PIXELS, VwfFont, wrap_vwf
+from cyber_oedo.text.vwf_text import LINE_PIXELS, VwfFont, VwfTextError, wrap_vwf
 
 
 class VwfDialogueCompileError(ValueError):
@@ -65,13 +62,17 @@ def _boundary_controls(source_record: bytes) -> tuple[bytes, bytes, bool]:
 class VwfMissionDialogueCompiler:
     font: VwfFont
     glyphs: EnglishGlyphTable
+    _dictionary: VwfDictionaryBuilder = field(
+        init=False,
+        repr=False,
+        default_factory=VwfDictionaryBuilder,
+    )
 
     def __post_init__(self) -> None:
         if self.font.characters != self.glyphs.characters:
             raise VwfDialogueCompileError(
                 "VWF font and native glyph table must use identical character order"
             )
-        self._dictionary = VwfDictionaryBuilder()
 
     def _encode_line(self, line: str) -> bytes:
         compiled = pack_vwf_line(line, self.font, self.glyphs, self._dictionary)
@@ -91,7 +92,7 @@ class VwfMissionDialogueCompiler:
             )
         try:
             lines = wrap_vwf(english, self.font, max_pixels=LINE_PIXELS)
-        except Exception as error:
+        except VwfTextError as error:
             raise VwfDialogueCompileError(str(error)) from error
 
         body = bytearray(leading)
