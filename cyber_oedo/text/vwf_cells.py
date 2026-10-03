@@ -106,7 +106,7 @@ class VwfCompiledText:
         return bytes(out)
 
 
-class _DictionaryBuilder:
+class VwfDictionaryBuilder:
     def __init__(self) -> None:
         self._rows: list[VwfCellDescriptor] = []
         self._by_glyphs: dict[tuple[int, ...], int] = {}
@@ -154,7 +154,7 @@ def pack_vwf_line(
     text: str,
     font: VwfFont,
     glyphs: EnglishGlyphTable,
-    dictionary: _DictionaryBuilder,
+    dictionary: VwfDictionaryBuilder,
 ) -> VwfCompiledLine:
     """Pack one already-wrapped line into <=11 proportional 16-pixel cells."""
 
@@ -175,13 +175,12 @@ def pack_vwf_line(
                 or _cell_width(candidate, font) > VWF_CELL_PIXELS
             )
         ):
-            # A space that would become the final pixel(s) of a cell is allowed
-            # to fall on the cell boundary rather than creating a blank-leading
-            # next cell.
-            cells.append(current.rstrip() or current)
-            current = character.lstrip()
-            if not current:
-                continue
+            # Preserve the exact visible character stream. If the character
+            # that overflows is a space, carry that space into the next cell;
+            # dropping it can visually concatenate adjacent words when the
+            # preceding cell is full.
+            cells.append(current)
+            current = character
         else:
             current = candidate
 
@@ -191,7 +190,7 @@ def pack_vwf_line(
             )
 
     if current:
-        cells.append(current.rstrip() or current)
+        cells.append(current)
 
     if len(cells) > VWF_CELLS_PER_LINE:
         raise VwfCellCompileError(
@@ -211,21 +210,47 @@ def pack_vwf_line(
     )
 
 
-def compile_vwf_text(
+def _compile_vwf_lines(
     text: str,
     font: VwfFont,
     glyphs: EnglishGlyphTable,
-) -> VwfCompiledText:
-    """Wrap by pixels, pack into stock cells, and deduplicate cell descriptors."""
-
+    dictionary: VwfDictionaryBuilder,
+) -> tuple[VwfCompiledLine, ...]:
     if font.characters != glyphs.characters:
         raise VwfCellCompileError(
             "VWF font and one-byte English glyph table must share character order"
         )
     lines = wrap_vwf(text, font, max_pixels=LINE_PIXELS)
-    dictionary = _DictionaryBuilder()
-    compiled = tuple(pack_vwf_line(line, font, glyphs, dictionary) for line in lines)
-    return VwfCompiledText(compiled, dictionary.finish())
+    return tuple(pack_vwf_line(line, font, glyphs, dictionary) for line in lines)
+
+
+def compile_vwf_corpus(
+    texts: tuple[str, ...],
+    font: VwfFont,
+    glyphs: EnglishGlyphTable,
+) -> tuple[VwfCompiledText, ...]:
+    """Compile one mission corpus against a single shared cell dictionary."""
+
+    if not texts:
+        return ()
+    dictionary = VwfDictionaryBuilder()
+    compiled_lines = tuple(
+        _compile_vwf_lines(text, font, glyphs, dictionary) for text in texts
+    )
+    final_dictionary = dictionary.finish()
+    return tuple(
+        VwfCompiledText(lines, final_dictionary) for lines in compiled_lines
+    )
+
+
+def compile_vwf_text(
+    text: str,
+    font: VwfFont,
+    glyphs: EnglishGlyphTable,
+) -> VwfCompiledText:
+    """Compile one text using the same shared-dictionary machinery as missions."""
+
+    return compile_vwf_corpus((text,), font, glyphs)[0]
 
 
 def normalized_vwf_atlas(font: VwfFont) -> tuple[bytes, ...]:
@@ -262,10 +287,12 @@ __all__ = [
     "VWF_TOKEN_FIRST_MAX",
     "VWF_TOKEN_FIRST_MIN",
     "VwfCellCompileError",
+    "VwfDictionaryBuilder",
     "VwfCellDescriptor",
     "VwfCellDictionary",
     "VwfCompiledLine",
     "VwfCompiledText",
+    "compile_vwf_corpus",
     "compile_vwf_text",
     "decode_vwf_token",
     "encode_vwf_token",
