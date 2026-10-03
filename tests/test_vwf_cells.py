@@ -12,6 +12,7 @@ from cyber_oedo.text.vwf_cells import (
     VWF_TOKEN_FIRST_MAX,
     VWF_TOKEN_FIRST_MIN,
     VwfCellDescriptor,
+    compile_vwf_corpus,
     compile_vwf_text,
     decode_vwf_token,
     encode_vwf_token,
@@ -62,6 +63,31 @@ class VwfCellTests(unittest.TestCase):
             self.assertGreaterEqual(raw[0], VWF_TOKEN_FIRST_MIN)
             self.assertLessEqual(raw[0], VWF_TOKEN_FIRST_MAX)
             self.assertEqual(decode_vwf_token(raw), token)
+
+
+    def test_cell_tokens_round_trip_every_visible_character(self) -> None:
+        result = compile_vwf_text("AI AI AI AI AI AI", self.font, self.table)
+        reverse = {value - 0x80: key for key, value in self.table.char_to_byte.items()}
+        for line in result.lines:
+            rebuilt = ""
+            for token in line.tokens:
+                descriptor = result.dictionary.descriptors[token]
+                rebuilt += "".join(reverse[glyph_id] for glyph_id in descriptor.glyph_ids)
+            self.assertEqual(rebuilt, line.text)
+
+    def test_mission_corpus_uses_one_shared_dictionary(self) -> None:
+        first, second = compile_vwf_corpus(
+            ("AI AI", "IIIIII"),
+            self.font,
+            self.table,
+        )
+        self.assertEqual(first.dictionary, second.dictionary)
+        self.assertGreater(len(first.dictionary.descriptors), 1)
+        for compiled in (first, second):
+            for line in compiled.lines:
+                self.assertTrue(
+                    all(token < len(compiled.dictionary.descriptors) for token in line.tokens)
+                )
 
     def test_dictionary_deduplicates_repeated_cells(self) -> None:
         result = compile_vwf_text("AI AI AI", self.font, self.table)
