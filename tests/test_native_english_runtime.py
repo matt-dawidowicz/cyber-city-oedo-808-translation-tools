@@ -36,7 +36,12 @@ class NativeEnglishRuntimeTests(unittest.TestCase):
         glyphs, atlas = self._fixture()
         for layout in MISSION0_NATIVE_LAYOUTS:
             runtime = build_overlay_runtime(layout, glyphs, atlas)
-            self.assertLessEqual(layout.code_cpu + len(runtime.code), layout.font_cpu)
+            code_start = layout.code_cpu
+            code_end = code_start + len(runtime.code)
+            for region in layout.font_regions:
+                region_start = region.cpu_address
+                region_end = region_start + region.row_count * len(glyphs.characters)
+                self.assertFalse(code_start < region_end and code_end > region_start)
             self.assertIn("parser_dispatch", runtime.labels)
             self.assertIn("glyph_hook", runtime.labels)
 
