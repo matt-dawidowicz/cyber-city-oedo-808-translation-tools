@@ -44,6 +44,9 @@ class NativeEnglishRuntimeTests(unittest.TestCase):
                 self.assertFalse(code_start < region_end and code_end > region_start)
             self.assertIn("parser_dispatch", runtime.labels)
             self.assertIn("glyph_hook", runtime.labels)
+            self.assertIn("vwf_first", runtime.labels)
+            self.assertIn("vwf_glyph", runtime.labels)
+            self.assertIn("vwf_copy_cell", runtime.labels)
 
     def test_patch_set_covers_parser_font_code_and_atlas_for_each_overlay(self) -> None:
         glyphs, atlas = self._fixture()
