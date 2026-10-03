@@ -3,8 +3,11 @@ from __future__ import annotations
 import unittest
 
 from cyber_oedo.text.english_dialogue_engine import EnglishGlyphTable
+from cyber_oedo.runtime.fast_load_stack import BAR_CACHE_LAYOUT
 from cyber_oedo.text.vwf_cells import (
     MAX_CELL_GLYPHS,
+    VWF_CARD_RAM_BASE_BANK,
+    VWF_CARD_RAM_BANK_COUNT,
     VWF_CELLS_PER_LINE,
     VWF_DESCRIPTOR_BYTES,
     VWF_MODE_SIGNATURE,
@@ -39,6 +42,23 @@ class VwfCellTests(unittest.TestCase):
         characters = "AI ?"
         self.table = EnglishGlyphTable(characters)
         self.font = derive_vwf_font(characters, tuple(glyphs[c] for c in characters))
+
+    def test_vwf_bank_range_is_disjoint_from_cache_and_stream_pool(self) -> None:
+        vwf = set(
+            range(
+                VWF_CARD_RAM_BASE_BANK,
+                VWF_CARD_RAM_BASE_BANK + VWF_CARD_RAM_BANK_COUNT,
+            )
+        )
+        cache = {
+            bank
+            for item in BAR_CACHE_LAYOUT
+            for bank in range(item.first_bank, item.first_bank + item.bank_count)
+        }
+        stream_pool = set(range(0x7C, 0x80))
+        self.assertFalse(vwf & cache)
+        self.assertFalse(vwf & stream_pool)
+        self.assertEqual(vwf, set(range(0x73, 0x7C)))
 
     def test_descriptor_is_fixed_width(self) -> None:
         row = VwfCellDescriptor((0, 1), 8)
