@@ -29,10 +29,13 @@ VWF_SEGMENT_END_TOKEN = 0xFFFF
 # use that range, and fixed native-English cells use $20-$7E, so redraw can
 # identify VWF without a transient parser flag.
 VWF_TOKEN_FIRST_MIN = 0x01
-# Super System Card banks $70-$7B are reserved for pre-rendered authored VWF
-# cells.  At 32 bytes per cell, each 8 KiB bank owns exactly 256 tokens.
-VWF_CARD_RAM_BASE_BANK = 0x70
-VWF_CARD_RAM_BANK_COUNT = 12
+# Super System Card ownership is deliberately disjoint:
+#   $68-$72 maintained fast-load/cache stack
+#   $73-$7B pre-rendered authored VWF cells
+#   $7C-$7F external English stream pool
+# At 32 bytes per cell, each 8 KiB VWF bank owns exactly 256 tokens.
+VWF_CARD_RAM_BASE_BANK = 0x73
+VWF_CARD_RAM_BANK_COUNT = 9
 VWF_TOKEN_FIRST_MAX = VWF_TOKEN_FIRST_MIN + VWF_CARD_RAM_BANK_COUNT - 1
 VWF_TOKEN_CAPACITY = VWF_CARD_RAM_BANK_COUNT * 0x100
 VWF_STAGED_CELL_BYTES = 32
