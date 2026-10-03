@@ -404,9 +404,10 @@ def _emit_runtime(
 
     assembler.label("vwf_glyph")
     # Token high byte selects one 8 KiB Card-RAM bank. Token low byte
-    # selects one of its 256 pre-rendered 32-byte staging cells.
+    # selects one of its 256 pre-rendered 32-byte staging cells. The copy
+    # window is MPR3/$6000-$7FFF so code executing from $Axxx remains mapped.
     assembler.emit(0x5A)  # PHY
-    assembler.emit(0x43, 0x20)  # TMA #$20: preserve MPR5.
+    assembler.emit(0x43, 0x08)  # TMA #$08: preserve MPR3 ($6000-$7FFF).
     assembler.emit(0x48)  # PHA
     assembler.zero_page(0xA5, 0x00)
     assembler.emit(0x48)
@@ -416,7 +417,7 @@ def _emit_runtime(
     assembler.zero_page(0xA5, 0xF9)
     assembler.emit(0x18)  # CLC
     assembler.immediate(0x69, VWF_CARD_RAM_BASE_BANK - VWF_TOKEN_FIRST_MIN)
-    assembler.emit(0x53, 0x20)  # TAM #$20 -> map selected bank at $A000.
+    assembler.emit(0x53, 0x08)  # TAM #$08 -> map selected bank at $6000.
 
     assembler.zero_page(0xA5, 0xF8)
     for _ in range(5):
@@ -426,7 +427,7 @@ def _emit_runtime(
     for _ in range(3):
         assembler.emit(0x4A)  # LSR A
     assembler.emit(0x18)  # CLC
-    assembler.immediate(0x69, 0xA0)
+    assembler.immediate(0x69, 0x60)
     assembler.zero_page(0x85, 0x01)
 
     assembler.immediate(0xA0, 0x00)  # LDY #0
@@ -442,7 +443,7 @@ def _emit_runtime(
     assembler.emit(0x68)  # PLA
     assembler.zero_page(0x85, 0x00)
     assembler.emit(0x68)  # PLA
-    assembler.emit(0x53, 0x20)  # TAM #$20: restore MPR5.
+    assembler.emit(0x53, 0x08)  # TAM #$08: restore MPR3.
     assembler.emit(0x7A)  # PLY
     assembler.emit(0x60)  # RTS
 
