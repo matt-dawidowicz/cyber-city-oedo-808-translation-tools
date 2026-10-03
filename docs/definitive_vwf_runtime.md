@@ -37,14 +37,15 @@ advances, dynamic text, attributes and input waits.
 
 ### Cell dictionary
 
-Each mission owns a deduplicated dictionary of VWF cell descriptors. A
+Each mission first owns a deduplicated dictionary of VWF cell descriptors. A
 descriptor records the ordered glyph IDs needed to reconstruct one 16-pixel
 cell. The build-time compiler rejects a cell whose proportional glyph advances
 exceed 16 pixels.
 
-The dictionary lives with the mission English pool rather than in overlay code.
-This keeps the overlay-resident runtime small and allows the dictionary to grow
-with the script.
+For runtime use, every unique descriptor is then pre-rendered into the stock
+32-byte 16x16 font-staging format. Tokens index those ready-to-copy cells
+directly. This moves proportional composition out of the HuC6280 hot path:
+initial typing and redraw both consume the same byte-identical staged cell.
 
 ### Runtime compositor
 
@@ -54,14 +55,14 @@ The font hook distinguishes three cases from the stored cell bytes:
 2. fixed native-English cell -> existing 8x16 compositor;
 3. VWF token -> VWF descriptor lookup and 16x16 composition.
 
-The VWF compositor:
+The implemented VWF hot path:
 
 1. decodes the cell token;
-2. temporarily maps the Card-RAM bank containing its descriptor;
-3. obtains the ordered glyph IDs;
-4. composes their normalized 8x16 bitmaps at their proportional X advances into
-   the existing 32-byte font staging buffer;
-5. restores the prior MPR mapping;
+2. maps the corresponding Card-RAM bank at $A000 through MPR5;
+3. converts the token low byte to a 32-byte aligned source address;
+4. copies the pre-rendered cell directly into the existing $4C6C font staging
+   buffer;
+5. restores MPR5 and temporary direct-page state;
 6. returns to the stock transform/BAT path.
 
 The same hook runs during initial typing and stock redraw/scroll, so both paths
@@ -69,10 +70,11 @@ must produce byte-identical staged cells.
 
 ### Memory budget
 
-The current external English pool uses Super System Card banks `$7C-$7F`.
-VWF adds a mission-specific descriptor dictionary and may expand the
-translation allocation downward as required. The release builder must compute
-the exact per-mission bank count rather than hard-code a global maximum.
+The current external English stream pool uses Super System Card banks
+`$7C-$7F`. Pre-rendered VWF cells reserve `$70-$7B`: twelve 8 KiB banks,
+256 staged cells per bank, for a runtime capacity of 3,072 unique cells per
+mission. The token high byte selects the bank and the low byte selects the
+32-byte cell within that bank.
 
 Translation storage and load-time caches must have disjoint, manifest-declared
 Card-RAM ownership. No cache optimization may silently reuse a translation
