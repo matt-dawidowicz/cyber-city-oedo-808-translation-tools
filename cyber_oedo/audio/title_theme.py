@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
+import shutil
 import wave
 from dataclasses import dataclass
 
@@ -149,12 +150,15 @@ def inject_theme_into_clonecd_img(
 ) -> ThemeBuild:
     """Copy a CloneCD IMG and replace only the raw Track-1 audio extent."""
 
-    image = source_img.read_bytes()
-    if len(image) < TRACK1_BYTES:
+    if source_img.stat().st_size < TRACK1_BYTES:
         raise TitleThemeError("CloneCD IMG is shorter than Track 1")
-    verify_retail_track1(image[:TRACK1_BYTES])
+    with source_img.open("rb") as stream:
+        verify_retail_track1(stream.read(TRACK1_BYTES))
 
     theme = build_theme_track(wav_path, fade_out_seconds=fade_out_seconds)
     output_img.parent.mkdir(parents=True, exist_ok=True)
-    output_img.write_bytes(theme.raw_cdda + image[TRACK1_BYTES:])
+    shutil.copyfile(source_img, output_img)
+    with output_img.open("r+b") as stream:
+        stream.seek(0)
+        stream.write(theme.raw_cdda)
     return theme
