@@ -146,8 +146,8 @@ local function cd_read_hit()
   -- Game/System Card CD_READ convention uses $FC/$FD/$FE as
   -- [high, low, middle] LBA bytes.
   local high = dp8(0xFC)
-  local low = dp8(0xFD)
-  local middle = dp8(0xFE)
+  local low = dp8(0xFE)
+  local middle = dp8(0xFD)
   local lba = (high << 16) | (middle << 8) | low
   if lba >= POOL_FIRST_LBA and lba <= POOL_LAST_LBA then
     poolReads = poolReads + 1
