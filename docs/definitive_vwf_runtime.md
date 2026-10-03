@@ -58,11 +58,11 @@ The font hook distinguishes three cases from the stored cell bytes:
 The implemented VWF hot path:
 
 1. decodes the cell token;
-2. maps the corresponding Card-RAM bank at $A000 through MPR5;
+2. maps the corresponding Card-RAM bank at $6000 through MPR3;
 3. converts the token low byte to a 32-byte aligned source address;
 4. copies the pre-rendered cell directly into the existing $4C6C font staging
    buffer;
-5. restores MPR5 and temporary direct-page state;
+5. restores MPR3 and temporary direct-page state;
 6. returns to the stock transform/BAT path.
 
 The same hook runs during initial typing and stock redraw/scroll, so both paths
@@ -70,11 +70,14 @@ must produce byte-identical staged cells.
 
 ### Memory budget
 
-The current external English stream pool uses Super System Card banks
-`$7C-$7F`. Pre-rendered VWF cells reserve `$70-$7B`: twelve 8 KiB banks,
-256 staged cells per bank, for a runtime capacity of 3,072 unique cells per
-mission. The token high byte selects the bank and the low byte selects the
-32-byte cell within that bank.
+The maintained fast-load/cache stack owns Super System Card banks
+`$68-$72`, and the external English stream pool owns `$7C-$7F`.
+Pre-rendered VWF cells therefore reserve only the disjoint middle range
+`$73-$7B`: nine 8 KiB banks, 256 staged cells per bank, for a runtime
+capacity of 2,304 unique cells per mission. The token high byte selects the
+bank and the low byte selects the 32-byte cell within that bank. The runtime
+temporarily maps that bank through MPR3/$6000, never the MPR5/$A000 window
+that contains the overlay-resident compositor itself.
 
 Translation storage and load-time caches must have disjoint, manifest-declared
 Card-RAM ownership. No cache optimization may silently reuse a translation
