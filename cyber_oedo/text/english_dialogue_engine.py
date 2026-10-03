@@ -266,13 +266,6 @@ def _compile_anchored_visible_text(
         cursor += 1
 
     body = bytearray()
-    pending = bytearray()
-
-    def flush() -> None:
-        if not pending:
-            return
-        body.extend(encode_english_segment(pending.decode("utf-8"), glyphs))
-        pending.clear()
 
     # Keep text as Python characters rather than encoded bytes while walking
     # anchor indexes; the glyph table handles the final one-byte encoding.
