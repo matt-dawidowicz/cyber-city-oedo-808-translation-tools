@@ -5,6 +5,7 @@ import unittest
 from cyber_oedo.runtime.native_english_runtime import (
     MISSION0_NATIVE_LAYOUTS,
     STORAGE_CODE_CAPACITY,
+    TEXT_NATIVE_LAYOUTS,
     build_mission0_native_runtime_patches,
     build_overlay_runtime,
 )
@@ -47,6 +48,21 @@ class NativeEnglishRuntimeTests(unittest.TestCase):
             self.assertIn("vwf_first", runtime.labels)
             self.assertIn("vwf_glyph", runtime.labels)
             self.assertIn("vwf_copy_cell", runtime.labels)
+
+    def test_all_ten_overlays_fit_combined_fixed_and_vwf_runtime(self) -> None:
+        glyphs, atlas = self._fixture()
+        for layout in TEXT_NATIVE_LAYOUTS:
+            runtime = build_overlay_runtime(layout, glyphs, atlas)
+            self.assertIn("vwf_copy_cell", runtime.labels)
+            code_start = layout.code_cpu
+            code_end = code_start + len(runtime.code)
+            for region in layout.font_regions:
+                region_start = region.cpu_address
+                region_end = region_start + region.row_count * len(glyphs.characters)
+                self.assertFalse(
+                    code_start < region_end and code_end > region_start,
+                    layout.label,
+                )
 
     def test_patch_set_covers_parser_font_code_and_atlas_for_each_overlay(self) -> None:
         glyphs, atlas = self._fixture()
