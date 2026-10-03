@@ -9,13 +9,13 @@ from typing import Iterable
 
 from cyber_oedo.script import ControlCommand, TextRun, parse_dialogue_record
 from cyber_oedo.script.opcodes import DialogueOpcode
+from cyber_oedo.text.composite_dialogue_records import BY_OWNER_ID, CONTINUATION_IDS
 from cyber_oedo.text.definitive_control_anchors import DEFINITIVE_CONTROL_ANCHORS
 from cyber_oedo.text.english_dialogue_engine import (
     EnglishDialogueCompileError,
     EnglishGlyphTable,
     compile_anchored_record,
     compile_automatic_record,
-    compile_paced_record,
 )
 
 DEFINITIVE_WORKBOOK_SHA256 = (
@@ -146,9 +146,6 @@ def compile_direct_row(
         if not controls:
             compiled = compile_automatic_record(source, row.english, glyphs)
             mode = "automatic"
-        elif all(opcode == int(DialogueOpcode.TIMED_WAIT) for opcode in controls):
-            compiled = compile_paced_record(source, row.english, glyphs)
-            mode = "paced"
         else:
             fragments = DEFINITIVE_CONTROL_ANCHORS.get(row.entry_id)
             if fragments is None:
@@ -157,7 +154,7 @@ def compile_direct_row(
                     source,
                     None,
                     "anchor_required",
-                    "semantic control has no reviewed English fragment anchor",
+                    "mid-text control has no frozen reviewed English fragment anchor",
                     controls,
                 )
             compiled = compile_anchored_record(source, fragments, glyphs)
@@ -176,12 +173,114 @@ def compile_direct_row(
     )
 
 
+def _compile_composite_row(
+    payload: bytes,
+    owner: DefinitiveScriptRow,
+    continuation: DefinitiveScriptRow,
+    glyphs: EnglishGlyphTable,
+) -> CompiledDialogueRow:
+    spec = BY_OWNER_ID[owner.entry_id]
+    if continuation.entry_id != spec.continuation_id:
+        return CompiledDialogueRow(
+            owner, None, None, "composite_mapping_error",
+            f"expected continuation {spec.continuation_id}, found {continuation.entry_id}",
+        )
+    if owner.bank != spec.bank or owner.resource != spec.resource:
+        return CompiledDialogueRow(
+            owner, None, None, "composite_mapping_error",
+            "composite owner bank/resource differs from reviewed ownership map",
+        )
+    record = parse_dialogue_record(payload, spec.marker_offset)
+    if record is None:
+        return CompiledDialogueRow(
+            owner, None, None, "not_dialogue_record",
+            "composite marker is not a valid 27 28 dialogue record",
+        )
+    source = payload[spec.marker_offset : record.end_offset + 1]
+    expected_visible = owner.japanese_source + continuation.japanese_source
+    if record.body.visible_text != expected_visible:
+        return CompiledDialogueRow(
+            owner, source, None, "composite_source_mismatch",
+            "physical composite visible text differs from owner + continuation rows",
+            _mid_controls(record),
+        )
+    mid_commands = tuple(
+        node
+        for node in record.body.nodes
+        if isinstance(node, ControlCommand)
+        and node.opcode != int(DialogueOpcode.PAGE_BREAK)
+    )
+    if len(mid_commands) != 1 or mid_commands[0].raw != spec.control:
+        return CompiledDialogueRow(
+            owner, source, None, "composite_control_mismatch",
+            "physical composite control differs from reviewed opcode-3D command",
+            _mid_controls(record),
+        )
+    fragments = DEFINITIVE_CONTROL_ANCHORS.get(owner.entry_id)
+    if fragments is None:
+        return CompiledDialogueRow(
+            owner, source, None, "anchor_required",
+            "composite record has no frozen reviewed fragment anchor",
+            _mid_controls(record),
+        )
+    try:
+        compiled = compile_anchored_record(source, fragments, glyphs)
+    except EnglishDialogueCompileError as error:
+        return CompiledDialogueRow(
+            owner, source, None, "compile_error", str(error), _mid_controls(record)
+        )
+    return CompiledDialogueRow(
+        owner,
+        source,
+        compiled,
+        "composite_anchored",
+        f"compiled with continuation {continuation.entry_id} and exact opcode-3D control",
+        _mid_controls(record),
+    )
+
+
 def compile_direct_rows(
     payload: bytes,
     rows: Iterable[DefinitiveScriptRow],
     glyphs: EnglishGlyphTable,
 ) -> tuple[CompiledDialogueRow, ...]:
-    return tuple(compile_direct_row(payload, row, glyphs) for row in rows)
+    """Compile rows in workbook order, resolving registered composite records."""
+
+    ordered = tuple(rows)
+    by_id = {row.entry_id: row for row in ordered}
+    result: list[CompiledDialogueRow] = []
+    for row in ordered:
+        if row.entry_id in CONTINUATION_IDS:
+            result.append(
+                CompiledDialogueRow(
+                    row,
+                    None,
+                    None,
+                    "composite_continuation",
+                    "compiled as part of its registered physical owner record",
+                )
+            )
+            continue
+        spec = BY_OWNER_ID.get(row.entry_id)
+        if spec is not None:
+            continuation = by_id.get(spec.continuation_id)
+            if continuation is None:
+                result.append(
+                    CompiledDialogueRow(
+                        row,
+                        None,
+                        None,
+                        "composite_mapping_error",
+                        f"missing continuation row {spec.continuation_id}",
+                    )
+                )
+            else:
+                result.append(
+                    _compile_composite_row(payload, row, continuation, glyphs)
+                )
+            continue
+        result.append(compile_direct_row(payload, row, glyphs))
+    return tuple(result)
 
 
 def summarize_compilation(
