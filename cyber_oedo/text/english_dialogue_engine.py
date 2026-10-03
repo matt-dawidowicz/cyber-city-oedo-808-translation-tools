@@ -225,6 +225,84 @@ def compile_automatic_record(
     return DIALOGUE_MARKER + bytes(body)
 
 
+def _compile_anchored_visible_text(
+    english_fragments: tuple[str, ...],
+    mids: tuple[ControlCommand, ...],
+    glyphs: EnglishGlyphTable,
+    *,
+    width: int,
+) -> bytes:
+    """Wrap the complete visible sentence while preserving reviewed anchors.
+
+    The workbook stores a control at an English phrase boundary.  The visible
+    sentence still contains one ordinary space at that boundary unless normal
+    word wrapping replaces that space with a page break.  Wrapping fragments
+    independently would lose that space and could overflow the stock line
+    after the parser resumes from a control.
+    """
+
+    visible = " ".join(english_fragments)
+    lines = wrap_english(visible, width)
+
+    # Reconstruct the source-string indexes of spaces consumed as line breaks.
+    wrap_spaces: set[int] = set()
+    cursor = 0
+    for line_index, line in enumerate(lines[:-1]):
+        cursor += len(line)
+        if cursor >= len(visible) or visible[cursor] != " ":
+            raise EnglishDialogueCompileError(
+                "wrapped English could not be mapped back to the visible sentence"
+            )
+        wrap_spaces.add(cursor)
+        cursor += 1
+
+    # Control anchors sit immediately before the single joining space between
+    # reviewed fragments.
+    control_positions: dict[int, ControlCommand] = {}
+    cursor = 0
+    for index, fragment in enumerate(english_fragments[:-1]):
+        cursor += len(fragment)
+        control_positions[cursor] = mids[index]
+        cursor += 1
+
+    body = bytearray()
+    pending = bytearray()
+
+    def flush() -> None:
+        if not pending:
+            return
+        body.extend(encode_english_segment(pending.decode("utf-8"), glyphs))
+        pending.clear()
+
+    # Keep text as Python characters rather than encoded bytes while walking
+    # anchor indexes; the glyph table handles the final one-byte encoding.
+    pending_text: list[str] = []
+
+    def flush_text() -> None:
+        if not pending_text:
+            return
+        body.extend(encode_english_segment("".join(pending_text), glyphs))
+        pending_text.clear()
+
+    for position, character in enumerate(visible):
+        control = control_positions.get(position)
+        if control is not None:
+            flush_text()
+            body.extend(control.raw)
+        if position in wrap_spaces:
+            if character != " ":
+                raise EnglishDialogueCompileError(
+                    "line-wrap boundary does not point at a visible space"
+                )
+            flush_text()
+            body.append(int(DialogueOpcode.PAGE_BREAK))
+            continue
+        pending_text.append(character)
+
+    flush_text()
+    return bytes(body)
+
+
 def compile_anchored_record(
     source_record: bytes,
     english_fragments: tuple[str, ...],
@@ -232,28 +310,35 @@ def compile_anchored_record(
     *,
     width: int = ENGLISH_LINE_WIDTH,
 ) -> bytes:
-    """Compile one of the semantic-control records with explicit text anchors.
+    """Compile one semantic-control record using frozen English phrase anchors.
 
     The number of fragments must be exactly one greater than the number of
-    meaningful mid-text source controls. The source controls are copied
-    byte-for-byte in their original order between translator-supplied English
-    fragments. This prevents timing placement from being inferred by byte
-    percentage or Japanese character position.
+    meaningful mid-text source controls. Source controls are copied byte for
+    byte in their original order. Line wrapping is calculated over the complete
+    visible English sentence so spaces and the stock 22-column budget remain
+    correct across control boundaries.
     """
+
     leading, trailing, mids = _boundary_controls(source_record)
     if len(english_fragments) != len(mids) + 1:
         raise EnglishDialogueCompileError(
             "anchored record needs exactly one more English fragment than "
             f"semantic mid controls ({len(mids)})"
         )
-    if any(not fragment for fragment in english_fragments):
-        raise EnglishDialogueCompileError("anchored English fragments must not be empty")
+    if any(not fragment or fragment.strip() != fragment for fragment in english_fragments):
+        raise EnglishDialogueCompileError(
+            "anchored English fragments must be non-empty without outer whitespace"
+        )
 
     body = bytearray(leading)
-    for index, fragment in enumerate(english_fragments):
-        body.extend(_compile_wrapped_text(fragment, glyphs, width=width))
-        if index < len(mids):
-            body.extend(mids[index].raw)
+    body.extend(
+        _compile_anchored_visible_text(
+            english_fragments,
+            mids,
+            glyphs,
+            width=width,
+        )
+    )
     body.extend(trailing)
     body.append(0)
     return DIALOGUE_MARKER + bytes(body)
