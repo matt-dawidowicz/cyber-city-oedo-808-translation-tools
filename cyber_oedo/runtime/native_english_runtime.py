@@ -27,6 +27,13 @@ from cyber_oedo.text.english_dialogue_engine import (
     EnglishGlyphTable,
 )
 from cyber_oedo.text.font_atlas import GLYPH_HEIGHT, RasterizedAtlas
+from cyber_oedo.text.vwf_cells import (
+    VWF_CARD_RAM_BASE_BANK,
+    VWF_MODE_SIGNATURE,
+    VWF_SEGMENT_END_TOKEN,
+    VWF_TOKEN_FIRST_MAX,
+    VWF_TOKEN_FIRST_MIN,
+)
 
 SYSTEM_CARD_EX_GETFNT = 0xE060
 FONT_STAGE_BUFFER = 0x4C6C
@@ -282,9 +289,18 @@ def _emit_runtime(
     assembler.branch(0xD0, "normal_compare")
     assembler.emit(0xB2, 0x7F)  # LDA ($7F): signature byte 2.
     assembler.immediate(0xC9, ENGLISH_MODE_SIGNATURE[1])
-    assembler.branch(0xD0, "restore_first_signature")
+    assembler.branch(0xF0, "fixed_signature")
+    assembler.immediate(0xC9, VWF_MODE_SIGNATURE[1])
+    assembler.branch(0xF0, "vwf_signature")
+    assembler.branch(0x80, "restore_first_signature")
+
+    assembler.label("fixed_signature")
     assembler.absolute(0x20, stream_advance)
     assembler.branch(0x80, "english_left")
+
+    assembler.label("vwf_signature")
+    assembler.absolute(0x20, stream_advance)
+    assembler.branch(0x80, "vwf_first")
 
     assembler.label("restore_first_signature")
     assembler.immediate(0xA9, ENGLISH_MODE_SIGNATURE[0])
@@ -297,6 +313,29 @@ def _emit_runtime(
 
     assembler.label("parser_restart")
     assembler.absolute(0x4C, parser_restart)
+
+    assembler.label("vwf_first")
+    assembler.absolute(0x20, stream_read)
+    assembler.absolute(0x20, stream_advance)
+    assembler.immediate(0xC9, 0xFF)
+    assembler.branch(0xF0, "vwf_end_second")
+    assembler.immediate(0xC9, VWF_TOKEN_FIRST_MIN)
+    assembler.branch(0x90, "parser_restart")
+    assembler.immediate(0xC9, VWF_TOKEN_FIRST_MAX + 1)
+    assembler.branch(0xB0, "parser_restart")
+    assembler.zero_page(0x85, 0x03)
+    assembler.absolute(0x20, stream_read)
+    assembler.absolute(0x20, stream_advance)
+    assembler.zero_page(0x85, 0x02)
+    assembler.absolute(0x20, character_delay)
+    assembler.absolute(0x20, RENDER_CELL_CPU)
+    assembler.branch(0x80, "vwf_first")
+
+    assembler.label("vwf_end_second")
+    assembler.absolute(0x20, stream_read)
+    assembler.absolute(0x20, stream_advance)
+    assembler.immediate(0xC9, VWF_SEGMENT_END_TOKEN & 0xFF)
+    assembler.branch(0x80, "parser_restart")
 
     assembler.label("english_left")
     assembler.absolute(0x20, stream_read)
@@ -344,6 +383,14 @@ def _emit_runtime(
     assembler.branch(0x80, "parser_restart")
 
     assembler.label("glyph_hook")
+    # VWF cells are redraw-self-identifying: first stored byte $01-$0C.
+    assembler.zero_page(0xA5, 0xF9)
+    assembler.immediate(0xC9, VWF_TOKEN_FIRST_MIN)
+    assembler.branch(0x90, "fixed_glyph_check")
+    assembler.immediate(0xC9, VWF_TOKEN_FIRST_MAX + 1)
+    assembler.branch(0x90, "vwf_glyph")
+
+    assembler.label("fixed_glyph_check")
     for zero_page in (0xF9, 0xF8):
         assembler.zero_page(0xA5, zero_page)
         assembler.immediate(0xC9, STORAGE_CODE_BASE)
@@ -354,6 +401,50 @@ def _emit_runtime(
 
     assembler.label("stock_glyph")
     assembler.absolute(0x4C, SYSTEM_CARD_EX_GETFNT)
+
+    assembler.label("vwf_glyph")
+    # Token high byte selects one 8 KiB Card-RAM bank. Token low byte
+    # selects one of its 256 pre-rendered 32-byte staging cells.
+    assembler.emit(0x5A)  # PHY
+    assembler.emit(0x43, 0x20)  # TMA #$20: preserve MPR5.
+    assembler.emit(0x48)  # PHA
+    assembler.zero_page(0xA5, 0x00)
+    assembler.emit(0x48)
+    assembler.zero_page(0xA5, 0x01)
+    assembler.emit(0x48)
+
+    assembler.zero_page(0xA5, 0xF9)
+    assembler.emit(0x18)  # CLC
+    assembler.immediate(0x69, VWF_CARD_RAM_BASE_BANK - VWF_TOKEN_FIRST_MIN)
+    assembler.emit(0x53, 0x20)  # TAM #$20 -> map selected bank at $A000.
+
+    assembler.zero_page(0xA5, 0xF8)
+    for _ in range(5):
+        assembler.emit(0x0A)  # ASL A
+    assembler.zero_page(0x85, 0x00)
+    assembler.zero_page(0xA5, 0xF8)
+    for _ in range(3):
+        assembler.emit(0x4A)  # LSR A
+    assembler.emit(0x18)  # CLC
+    assembler.immediate(0x69, 0xA0)
+    assembler.zero_page(0x85, 0x01)
+
+    assembler.immediate(0xA0, 0x00)  # LDY #0
+    assembler.label("vwf_copy_cell")
+    assembler.emit(0xB1, 0x00)  # LDA ($00),Y
+    assembler.emit(0x99, FONT_STAGE_BUFFER & 0xFF, FONT_STAGE_BUFFER >> 8)  # STA abs,Y
+    assembler.emit(0xC8)  # INY
+    assembler.immediate(0xC0, 0x20)  # CPY #32
+    assembler.branch(0xD0, "vwf_copy_cell")
+
+    assembler.emit(0x68)  # PLA
+    assembler.zero_page(0x85, 0x01)
+    assembler.emit(0x68)  # PLA
+    assembler.zero_page(0x85, 0x00)
+    assembler.emit(0x68)  # PLA
+    assembler.emit(0x53, 0x20)  # TAM #$20: restore MPR5.
+    assembler.emit(0x7A)  # PLY
+    assembler.emit(0x60)  # RTS
 
     assembler.label("custom_glyph")
     assembler.emit(0xDA)  # PHX
@@ -444,7 +535,7 @@ def overlay_runtime_patches(runtime: NativeOverlayRuntime) -> tuple[PayloadPatch
             replacement=bytes(
                 (0x20, runtime.glyph_hook_cpu & 0xFF, runtime.glyph_hook_cpu >> 8)
             ),
-            label=f"{layout.label}: native-English 8x16 glyph compositor",
+            label=f"{layout.label}: native-English fixed/VWF glyph compositor",
         ),
         PayloadPatch(
             offset=layout.payload_base + layout.code_cpu,
