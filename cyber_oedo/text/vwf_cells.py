@@ -29,8 +29,13 @@ VWF_SEGMENT_END_TOKEN = 0xFFFF
 # use that range, and fixed native-English cells use $20-$7E, so redraw can
 # identify VWF without a transient parser flag.
 VWF_TOKEN_FIRST_MIN = 0x01
-VWF_TOKEN_FIRST_MAX = 0x1F
-VWF_TOKEN_CAPACITY = (VWF_TOKEN_FIRST_MAX - VWF_TOKEN_FIRST_MIN + 1) * 0x100
+# Super System Card banks $70-$7B are reserved for pre-rendered authored VWF
+# cells.  At 32 bytes per cell, each 8 KiB bank owns exactly 256 tokens.
+VWF_CARD_RAM_BASE_BANK = 0x70
+VWF_CARD_RAM_BANK_COUNT = 12
+VWF_TOKEN_FIRST_MAX = VWF_TOKEN_FIRST_MIN + VWF_CARD_RAM_BANK_COUNT - 1
+VWF_TOKEN_CAPACITY = VWF_CARD_RAM_BANK_COUNT * 0x100
+VWF_STAGED_CELL_BYTES = 32
 VWF_CELL_PIXELS = 16
 VWF_CELLS_PER_LINE = LINE_PIXELS // VWF_CELL_PIXELS
 MAX_CELL_GLYPHS = 6
@@ -253,6 +258,54 @@ def compile_vwf_text(
     return compile_vwf_corpus((text,), font, glyphs)[0]
 
 
+def render_vwf_cell(
+    descriptor: VwfCellDescriptor,
+    font: VwfFont,
+) -> bytes:
+    """Pre-render one descriptor into the stock 32-byte 16x16 staging format."""
+
+    rows = [0] * 16
+    x = 0
+    for glyph_id in descriptor.glyph_ids:
+        if not 0 <= glyph_id < len(font.glyphs):
+            raise VwfCellCompileError("VWF descriptor glyph ID is outside the font")
+        glyph = font.glyphs[glyph_id]
+        metric = font.metrics[glyph_id]
+        if metric.width:
+            for y, source in enumerate(glyph):
+                for gx in range(metric.left, metric.right + 1):
+                    if source & (0x80 >> gx):
+                        px = x + gx - metric.left
+                        if not 0 <= px < VWF_CELL_PIXELS:
+                            raise VwfCellCompileError(
+                                "VWF glyph writes outside its 16-pixel staged cell"
+                            )
+                        rows[y] |= 1 << (15 - px)
+        x += metric.advance
+
+    if x < descriptor.pixel_width or x > VWF_CELL_PIXELS + 1:
+        raise VwfCellCompileError("VWF staged-cell advance is inconsistent")
+
+    out = bytearray()
+    for row in rows:
+        out.extend(((row >> 8) & 0xFF, row & 0xFF))
+    if len(out) != VWF_STAGED_CELL_BYTES:
+        raise AssertionError("VWF staged cell has the wrong byte length")
+    return bytes(out)
+
+
+def render_vwf_dictionary(
+    dictionary: VwfCellDictionary,
+    font: VwfFont,
+) -> bytes:
+    """Render a mission dictionary as token-indexed 32-byte Card-RAM cells."""
+
+    payload = b"".join(render_vwf_cell(item, font) for item in dictionary.descriptors)
+    if len(payload) > VWF_CARD_RAM_BANK_COUNT * 0x2000:
+        raise VwfCellCompileError("pre-rendered VWF dictionary exceeds reserved Card RAM")
+    return payload
+
+
 def normalized_vwf_atlas(font: VwfFont) -> tuple[bytes, ...]:
     """Return 8x16 glyph rows shifted left to their visible metric bound.
 
@@ -278,11 +331,14 @@ def vwf_advance_table(font: VwfFont) -> bytes:
 
 __all__ = [
     "MAX_CELL_GLYPHS",
+    "VWF_CARD_RAM_BASE_BANK",
+    "VWF_CARD_RAM_BANK_COUNT",
     "VWF_CELL_PIXELS",
     "VWF_CELLS_PER_LINE",
     "VWF_DESCRIPTOR_BYTES",
     "VWF_MODE_SIGNATURE",
     "VWF_SEGMENT_END_TOKEN",
+    "VWF_STAGED_CELL_BYTES",
     "VWF_TOKEN_CAPACITY",
     "VWF_TOKEN_FIRST_MAX",
     "VWF_TOKEN_FIRST_MIN",
@@ -297,6 +353,8 @@ __all__ = [
     "decode_vwf_token",
     "encode_vwf_token",
     "normalized_vwf_atlas",
+    "render_vwf_cell",
+    "render_vwf_dictionary",
     "pack_vwf_line",
     "vwf_advance_table",
 ]
