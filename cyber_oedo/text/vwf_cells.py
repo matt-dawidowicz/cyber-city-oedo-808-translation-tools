@@ -224,6 +224,10 @@ def pack_vwf_line(
 ) -> VwfCompiledLine:
     """Pack one already-wrapped line into <=11 proportional 16-pixel cells."""
 
+    mapping = glyphs.char_to_byte
+    for character in text:
+        if character not in mapping:
+            raise VwfCellCompileError(f"character {character!r} is absent from glyph table")
     cells = _split_vwf_cells(text, font)
     if len(cells) > VWF_CELLS_PER_LINE:
         raise VwfCellCompileError(
