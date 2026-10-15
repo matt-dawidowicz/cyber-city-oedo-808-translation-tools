@@ -14,8 +14,10 @@ stock 16-pixel dialogue cell.
 
 Signature: `7D 56`
 
-Authored dialogue is wrapped by pixel width, then packed into the game's
-existing 11-by-3 grid of 16-pixel cells. Each cell contains one or more
+Authored dialogue is wrapped by both pixel width and cell count, then packed
+into the game's existing 11-by-3 grid of 16-pixel cells. The source compiler
+enforces **176 pixels and at most eleven 16-pixel cells on every line**;
+fitting the pixel width alone is insufficient. Each cell contains one or more
 proportional English glyphs whose total advance fits within 16 pixels.
 
 The critical invariant is that VWF identity is carried by the cell token itself.

@@ -1,7 +1,13 @@
 # External dialogue-pool runtime certification status
 
-The external English-pool build is structurally complete but is not yet marked
-release-certified.
+A separately constructed external English-pool image was previously
+structurally inspected. **That image's redirect helper is not reproduced
+by the current checked-in native-English runtime assembler.** Consequently
+the branch itself does not implement the full `27 28 7B` redirect path and
+must not be presented as a complete or release-certified pool-capable build.
+
+The image-level findings below describe the historical experimental image,
+not a runtime handler available from `native_english_runtime.py`.
 
 ## Proven
 
@@ -38,7 +44,13 @@ facts:
 Therefore this harness cannot honestly establish the required live redirect
 chain.
 
-## Remaining release gate
+## Remaining implementation and release gates
+
+Before runtime certification, check a pool redirect loader/dispatcher into
+the repository itself, source-guard the `$7C-$7F` Card-RAM mapping and stream
+pointer lifecycle, add synthetic tests for cross-bank bounds/terminators and
+stock-parser fallbacks, and demonstrate that the checked-in build reproduces
+the prior image-level evidence.
 
 A valid certification run must observe, in normal execution order:
 

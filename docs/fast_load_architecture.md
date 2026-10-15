@@ -530,13 +530,17 @@ boundary:
 
 Therefore:
 
-- if exploration MPR4 is still `$85`, the first 4 KiB overwrites exactly the
-  speaker-local half while leaving the module body intact;
-- if exploration MPR4 is another page, physical page `$85` survives.
+- if exploration MPR4 is `$85`, the first 4 KiB overwrites the speaker-local
+  half. This alone does not prove the module body survives;
+- if exploration MPR5 is `$85`, the following 2 KiB aliases page-$85 offsets
+  `0x0000-0x07FF` and overwrites the resident dialogue module;
+- physical page `$85` survives unchanged only if neither participating MPR
+  maps the page during its corresponding write (or independent before/after
+  source hashes prove equivalence).
 
-This is stronger than a generic "logical overlap" warning, but it still does
-not select which case occurs. The missing proof is specifically MPR4 at the
-`$22DE` load (or an equivalent physical CD-RAM checksum).
+The missing proof is **both MPR4 and MPR5** at the `$22DE` load,
+plus the immutable module/speaker checksums. Logical non-overlap alone
+cannot certify resident-module lifetime.
 
 ### C5. Static MPR and same-room call-reference diagnostics
 
