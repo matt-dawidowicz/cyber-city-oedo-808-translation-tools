@@ -180,6 +180,12 @@ local function hit(target)
     -- The MPR log is required to authenticate this against the expected bank.
     log(string.format("[outer_event_code] D800=[%s] %s",
       bytes_string(0xD800, 64), mpr_string()))
+    log(string.format(
+      "[event_cd_args] DP_FC/FD/FE=[%02X %02X %02X] " ..
+      "DP_F8/F9=[%02X %02X] DP_FA/FB=[%02X %02X] mode_FF=%02X",
+      r8(0x20FC), r8(0x20FD), r8(0x20FE),
+      r8(0x20F8), r8(0x20F9), r8(0x20FA), r8(0x20FB), r8(0x20FF)
+    ))
   end
   if target.name == "object_init" or target.name == "object_frame_update"
       or target.name == "object_init_completed"
