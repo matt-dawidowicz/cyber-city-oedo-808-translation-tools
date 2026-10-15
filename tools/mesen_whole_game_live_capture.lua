@@ -11,15 +11,25 @@ local MEM = emu.memType.pceMemory
 local frame = 0
 local logFile = nil
 local hitCounts = {}
+local rejectedHits = {}
 
 local targets = {
-  {name="outer_event_entry", address=0xD800},
+  {name="outer_event_entry", address=0xD800, guard={address=0xD800, bytes={0x4C,0x4B,0xD8}}},
   {name="exploration_loop", address=0x4000},
   {name="transition_promote", address=0x403D},
   {name="interaction_scan", address=0x4B20},
-  {name="interaction_copy_entry_pre_write", address=0x4BD8},
-  {name="object_init", address=0x5519},
-  {name="object_frame_update", address=0x55E9},
+  {name="interaction_copy_entry_pre_write", address=0x4BD8,
+   guard={address=0x4BD8, bytes={0x82,0xB1,0x24,0x9D,0x03,0x37}}},
+  {name="interaction_copy_completed", address=0x4BE4,
+   guard={address=0x4BD8, bytes={0x82,0xB1,0x24,0x9D,0x03,0x37}}},
+  {name="object_init", address=0x5519,
+   guard={address=0x5519, bytes={0x9C,0x80,0x27,0x20,0x3B,0x55}}},
+  {name="object_init_completed", address=0x553A,
+   guard={address=0x5519, bytes={0x9C,0x80,0x27,0x20,0x3B,0x55}}},
+  {name="object_frame_update", address=0x55E9,
+   guard={address=0x55E9, bytes={0xAD,0x7D,0x27,0x8D,0x80,0x27}}},
+  {name="object_frame_update_completed", address=0x5602,
+   guard={address=0x55E9, bytes={0xAD,0x7D,0x27,0x8D,0x80,0x27}}},
 
   -- Reusable ADPCM driver.
   {name="adpcm_voice_start", address=0x8108},
@@ -31,10 +41,26 @@ local targets = {
   {name="bios_bm_free", address=0xE04B},
   {name="bios_bm_read", address=0xE04E},
   {name="bios_bm_write", address=0xE051},
+  -- Call-site continuations *after* BM_READ returns: not BIOS-entry snapshots.
+  {name="startup_bm_read_return", address=0x67C3,
+   guard={address=0x67C0, bytes={0x20,0x4E,0xE0,0x1A,0x0A,0xAA}}},
+  {name="mission_bm_read_return", address=0x604F,
+   guard={address=0x604C, bytes={0x20,0x4E,0xE0,0x1A,0x0A,0xAA}}},
 }
 
 local function r8(address)
   return emu.read(address, MEM)
+end
+
+-- Code-address overlap between overlays is common. Validate mapped opcode
+-- bytes before attributing any CPU-PC callback to this specific game routine.
+-- These signatures were read directly from the authenticated original IMG.
+local function guard_matches(target)
+  if not target.guard then return true end
+  for offset, expected in ipairs(target.guard.bytes) do
+    if r8(target.guard.address + offset - 1) ~= expected then return false end
+  end
+  return true
 end
 
 local function r16(address)
@@ -103,6 +129,10 @@ local function log(line)
 end
 
 local function hit(target)
+  if not guard_matches(target) then
+    rejectedHits[target.name] = (rejectedHits[target.name] or 0) + 1
+    return
+  end
   local c = cpu()
   hitCounts[target.name] = (hitCounts[target.name] or 0) + 1
   -- Exec hooks fire before an instruction. Copy entry and BIOS calls are
@@ -111,8 +141,17 @@ local function hit(target)
   local phase = "instruction_entry"
   if target.name == "interaction_copy_entry_pre_write" then
     phase = "before_interaction_copy"
+  elseif target.name == "interaction_copy_completed" then
+    phase = "after_ninth_copy_before_rts"
+  elseif target.name == "object_init_completed" then
+    phase = "after_object_initialization_before_rts"
+  elseif target.name == "object_frame_update_completed" then
+    phase = "after_object_update_before_rts"
   elseif target.name == "bios_bm_read" then
     phase = "before_bios_read"
+  elseif target.name == "startup_bm_read_return"
+      or target.name == "mission_bm_read_return" then
+    phase = "after_bios_read_return"
   end
   log(string.format(
     "[%s #%d] phase=%s frame=%d PC=$%04X A=$%02X X=$%02X Y=$%02X SP=$%02X " ..
@@ -142,7 +181,9 @@ local function hit(target)
     log(string.format("[outer_event_code] D800=[%s] %s",
       bytes_string(0xD800, 64), mpr_string()))
   end
-  if target.name == "object_init" or target.name == "object_frame_update" then
+  if target.name == "object_init" or target.name == "object_frame_update"
+      or target.name == "object_init_completed"
+      or target.name == "object_frame_update_completed" then
     -- A bounded sample plus count: these are instruction-entry snapshots,
     -- not claims that the current object update has finished.
     log(string.format(
@@ -150,12 +191,16 @@ local function hit(target)
       r8(0x277D), bytes_string(0x2783, 16), bytes_string(0x2823, 16)
     ))
   end
-  if target.name == "bios_bm_read" or target.name == "bios_bm_write" then
+  if target.name == "bios_bm_read" or target.name == "bios_bm_write"
+      or target.name == "startup_bm_read_return"
+      or target.name == "mission_bm_read_return" then
     -- $2E91 is the startup reader's destination; $268F is the mission
     -- reader's buffer. A BIOS entry callback cannot prove completed I/O.
     log(string.format(
-      "[bram_call_entry] boot_buffer_2E91=[%s] mission_buffer_268F=[%s]",
-      bytes_string(0x2E91, 4), bytes_string(0x268F, 4)
+      "[bram_snapshot] phase=%s boot_status=$%02X boot_2E91=[%s] " ..
+      "mission_status=$%02X mission_268F=[%s] %s",
+      phase, r8(0x2E90), bytes_string(0x2E91, 4),
+      r8(0x268E), bytes_string(0x268F, 4), mpr_string()
     ))
   end
 end
@@ -194,7 +239,8 @@ end, emu.eventType.endFrame)
 emu.addEventCallback(function()
   log("=== WHOLE GAME LIVE SESSION SUMMARY ===")
   for _, target in ipairs(targets) do
-    log(string.format("%s=%d", target.name, hitCounts[target.name] or 0))
+    log(string.format("%s=%d rejected_by_opcode_guard=%d",
+      target.name, hitCounts[target.name] or 0, rejectedHits[target.name] or 0))
   end
   if logFile then
     logFile:flush()

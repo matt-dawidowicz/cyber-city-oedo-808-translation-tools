@@ -9,6 +9,8 @@ from cyber_oedo.runtime.whole_game import (
     MISSION_SCRIPT_OPCODES,
     SAVE_SLOT_BYTES,
     TRACK2_START_LBA,
+    LIVE_CAPTURE_POST_GUARDS,
+    live_capture_post_guard_report,
     _decode_cd_descriptor,
     _decode_adpcm_record,
     _object_and_interaction_report,
@@ -16,6 +18,24 @@ from cyber_oedo.runtime.whole_game import (
 
 
 class WholeGameProofTests(unittest.TestCase):
+    def test_post_operation_capture_guards_require_authenticated_bytes(self) -> None:
+        length = max(offset + len(signature) for _, offset, signature
+                     in LIVE_CAPTURE_POST_GUARDS)
+        payload = bytearray(length)
+        for _, offset, signature in LIVE_CAPTURE_POST_GUARDS:
+            payload[offset:offset + len(signature)] = signature
+        report = live_capture_post_guard_report(payload)
+        self.assertTrue(all(row["matched"] for row in report))
+        self.assertEqual({row["name"] for row in report}, {
+            "interaction_copy_completed", "object_init_completed",
+            "object_frame_update_completed", "startup_bm_read_return",
+            "mission_bm_read_return", "outer_event_entry",
+        })
+        payload[LIVE_CAPTURE_POST_GUARDS[0][1]] ^= 1
+        report = live_capture_post_guard_report(payload)
+        self.assertFalse(report[0]["matched"])
+        self.assertTrue(all(row["matched"] for row in report[1:]))
+
     def test_save_file_shape_is_four_one_byte_slots(self) -> None:
         self.assertEqual(SAVE_SLOT_BYTES, 4)
         self.assertEqual(SAVE_FILE_DESCRIPTOR[:2], b"\x07\x00")

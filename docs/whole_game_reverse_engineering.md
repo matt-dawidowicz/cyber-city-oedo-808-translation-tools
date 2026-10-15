@@ -303,6 +303,32 @@ It is read-only and captures:
 Logical addresses are reused heavily. A PC hit without its MPR mapping is not
 sufficient runtime evidence.
 
+### Read-only post-operation landmarks (verified original bytes)
+
+The original movement copy at `$4BD8` repeats nine `LDA ($24),Y /
+STA $3703,X` iterations. Its `$4BE4` RTS is reached **after** all
+nine writes. The object initializer returns at `$553A`, while the
+per-frame object update returns at `$5602`. The earlier object-entry
+hooks remain available and are now paired with these completed-state
+snapshots. Do not confuse `$553B` (the next routine) with the init RTS.
+
+After System Card `BM_READ ($E04E)` returns, the boot caller continues at
+`$67C3` and the shared Mission 1-8/ENDING caller continues at `$604F`.
+At these PC values the four-byte buffers at `$2E91-$2E94` and
+`$268F-$2692` have been filled or the BIOS has returned an error status.
+Record the corresponding status bytes (`$2E90`/`$268E`) and register A;
+**an error-status return must not be described as a successful read**.
+
+All six post-operation/event locations are checked against authenticated
+original opcode signatures by `live_capture_post_guard_report()`. The Mesen
+script also checks mapped opcode signatures before logging those events and
+logs all eight MPRs. These probes do not modify CPU state or game memory.
+An execution callback on `$4BE4` fires before RTS but after the copy loop;
+one on `$67C3` fires after the BIOS JSR has completed.
+
+The probes still need gameplay runs to validate the expected bank mapping
+and to correlate the opaque interaction bytes with scene behavior.
+
 ## Remaining whole-game work
 
 After this static pass, the $D800 controller itself is mapped as executable

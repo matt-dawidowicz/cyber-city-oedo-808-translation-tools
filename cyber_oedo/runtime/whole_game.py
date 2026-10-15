@@ -95,6 +95,38 @@ M0_SCRIPT_RESULT_HANDLER_SHA256 = (
 )
 
 
+
+# Authenticated source-byte landmarks for Mesen *post-operation* capture.
+# These are CPU offsets in their proven module copies, not raw IMG offsets.
+LIVE_CAPTURE_POST_GUARDS = (
+    ("interaction_copy_completed", 0x000A4800 + 0x4BD8,
+     bytes.fromhex("82 B1 24 9D 03 37 C8 E8 E0 09 D0 F5 60")),
+    ("object_init_completed", 0x000A4800 + 0x5519,
+     bytes.fromhex("9C 80 27 20 3B 55")),
+    ("object_frame_update_completed", 0x000A4800 + 0x55E9,
+     bytes.fromhex("AD 7D 27 8D 80 27")),
+    ("startup_bm_read_return", 0x00003FC0,
+     bytes.fromhex("20 4E E0 1A 0A AA")),
+    ("mission_bm_read_return", 0x00CC4000 + 0x604C,
+     bytes.fromhex("20 4E E0 1A 0A AA")),
+    ("outer_event_entry", EVENT_OVERLAY_OFFSET, bytes.fromhex("4C 4B D8")),
+)
+
+
+def live_capture_post_guard_report(payload: bytes) -> tuple[dict[str, Any], ...]:
+    """Prove trace sites are the expected original routines, not byte aliases."""
+    return tuple(
+        {
+            "name": name,
+            "payload_offset": f"0x{at:08X}",
+            "expected_hex": expected.hex(),
+            "actual_hex": payload[at:at + len(expected)].hex(),
+            "matched": payload[at:at + len(expected)] == expected,
+        }
+        for name, at, expected in LIVE_CAPTURE_POST_GUARDS
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class GuardedRegion:
     name: str
@@ -517,6 +549,7 @@ def build_whole_game_report(path: pathlib.Path) -> dict[str, Any]:
         "payload_sha256": digest,
         "payload_authenticated": digest == TRACK2_PAYLOAD_SHA256,
         "save": _save_report(payload),
+        "post_operation_capture_guards": live_capture_post_guard_report(payload),
         "event_control_boundary": {
             "boot_loader": _guard(
                 payload,
@@ -600,8 +633,12 @@ def main(argv: list[str] | None = None) -> int:
         report["mission_script"]["all_nine_modules_have_common_opcode_set"]
         and report["mission_script"]["decoded_commands"]["0x49"]["handler_guard"]["matched"]
     )
+    post_hooks_ok = all(
+        row["matched"] for row in report["post_operation_capture_guards"]
+    )
     return 0 if (
-        report["payload_authenticated"] and save_ok and adpcm_ok and event_ok and script_ok
+        report["payload_authenticated"] and save_ok and adpcm_ok
+        and event_ok and script_ok and post_hooks_ok
     ) else 1
 
 
