@@ -30,7 +30,7 @@ from cyber_oedo.text.final_dialogue_insertion import (
     FINAL_DIALOGUE_MASTER_SHA256,
     audit_rows,
     build_in_place_patches,
-    load_final_dialogue_tsv,
+    load_authenticated_dialogue_master,
     summarize_audit,
 )
 from cyber_oedo.text.font_atlas import RasterConfig, rasterize_atlas
@@ -114,6 +114,7 @@ def build_packed_dialogue_test(
     final_dialogue_tsv: pathlib.Path,
     font_path: pathlib.Path,
     *,
+    master_edition: str = "legacy",
     mission0b_evidence: pathlib.Path | None = None,
     include_definitive_menu: bool = False,
     menu_audio_track: int = DEFAULT_MENU_AUDIO_TRACK,
@@ -121,9 +122,9 @@ def build_packed_dialogue_test(
     threshold: int = 96,
 ) -> pathlib.Path:
     """Build a guarded, M0-B-evidence-limited historical packed-English disc."""
-    if sha256_file(final_dialogue_tsv) != FINAL_DIALOGUE_MASTER_SHA256:
-        raise ValueError("final-dialogue TSV SHA-256 does not match the reviewed master")
-    rows = load_final_dialogue_tsv(final_dialogue_tsv)
+    rows = load_authenticated_dialogue_master(
+        final_dialogue_tsv, edition=master_edition
+    )
     proven_m0b_ids = load_mission0b_evidence(mission0b_evidence, rows)
     english = tuple(row.english for row in rows)
     repertoire = compact_repertoire_for_texts(english)
@@ -192,7 +193,8 @@ def build_packed_dialogue_test(
         ]
         manifest = {
             "build_profile": BUILD_PROFILE,
-            "final_dialogue_tsv_sha256": FINAL_DIALOGUE_MASTER_SHA256,
+            "final_dialogue_tsv_sha256": sha256_file(final_dialogue_tsv),
+            "final_dialogue_master_edition": master_edition,
             "font_sha256": atlas.source_sha256,
             "font_point_size": point_size,
             "font_threshold": threshold,
@@ -241,6 +243,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--mission0b-evidence", type=pathlib.Path, required=True,
         help="JSON mapping selected dialogue IDs to observed MISSION_0_B runtime traces",
     )
+    parser.add_argument(
+        "--master-edition", choices=("legacy", "definitive"), default="legacy",
+        help="Select the archived September master or pinned revised Definitive TSV",
+    )
     parser.add_argument("--definitive-menu", action="store_true")
     parser.add_argument("--menu-audio-track", type=int, default=DEFAULT_MENU_AUDIO_TRACK)
     parser.add_argument("--point-size", type=int, default=13)
@@ -253,6 +259,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         output = build_packed_dialogue_test(
             args.source_ccd, args.output_directory, args.final_dialogue_tsv, args.font,
+            master_edition=args.master_edition,
             mission0b_evidence=args.mission0b_evidence,
             include_definitive_menu=args.definitive_menu,
             menu_audio_track=args.menu_audio_track,

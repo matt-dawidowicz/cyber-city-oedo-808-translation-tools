@@ -18,6 +18,11 @@ from cyber_oedo.runtime.packed_english_runtime import (
     IGNORED_FIELD_PADDING,
     encode_fixed_footprint,
 )
+from cyber_oedo.text.definitive_script_compiler import (
+    DEFINITIVE_DIALOGUE_TSV_SHA256,
+    DEFINITIVE_SCRIPT_TSV_SHA256,
+    load_definitive_script_tsv,
+)
 from cyber_oedo.text.layout import DIALOGUE_MARKER
 from cyber_oedo.text.packed_english import PackedEnglishDictionary, PackedEnglishError
 
@@ -122,6 +127,67 @@ def load_final_dialogue_tsv(path: Path) -> tuple[FinalDialogueRow, ...]:
                 display_strategy=(raw.get("Display Strategy") or "").strip(),
             ))
     return tuple(rows)
+
+
+def load_authenticated_dialogue_master(
+    path: Path,
+    *,
+    edition: str = "legacy",
+) -> tuple[FinalDialogueRow, ...]:
+    """Authenticate and normalize one *reviewed* dialogue TSV.
+
+    Never replace the frozen September-24 hash with the hash of an arbitrary
+    edited workbook. The revised Definitive Edition's already-pinned full-script
+    and spoken/narration TSVs are the only approved alternative sources.
+    """
+    from cyber_oedo.io import sha256_file
+
+    digest = sha256_file(path)
+    if edition == "legacy":
+        if digest != FINAL_DIALOGUE_MASTER_SHA256:
+            raise FinalDialogueInsertionError(
+                "legacy dialogue TSV SHA-256 differs from approved 2026-09-24 master"
+            )
+        return load_final_dialogue_tsv(path)
+    if edition != "definitive":
+        raise FinalDialogueInsertionError(f"unknown dialogue-master edition: {edition}")
+    approved = frozenset(
+        (DEFINITIVE_SCRIPT_TSV_SHA256, DEFINITIVE_DIALOGUE_TSV_SHA256)
+    )
+    if digest not in approved:
+        raise FinalDialogueInsertionError(
+            "Definitive Edition dialogue TSV SHA-256 differs from reviewed "
+            "script/dialogue master; do not bypass source authentication"
+        )
+    result: list[FinalDialogueRow] = []
+    seen: set[str] = set()
+    for row in load_definitive_script_tsv(path):
+        if row.category not in DIALOGUE_CATEGORIES:
+            continue
+        if row.entry_id in seen:
+            raise FinalDialogueInsertionError(
+                f"duplicate Definitive Edition dialogue ID: {row.entry_id}"
+            )
+        seen.add(row.entry_id)
+        result.append(
+            FinalDialogueRow(
+                entry_id=row.entry_id,
+                bank=row.bank,
+                category=row.category,
+                resource=row.resource,
+                offset=row.offset,
+                japanese_source=row.japanese_source,
+                english=row.english,
+                quality=row.quality,
+                occurrences=row.occurrences,
+            )
+        )
+    if not result:
+        raise FinalDialogueInsertionError(
+            "Definitive Edition master contains no spoken/narration dialogue"
+        )
+    return tuple(result)
+
 
 def audit_row(payload: bytes, row: FinalDialogueRow, dictionary: PackedEnglishDictionary) -> DialogueInsertionAudit:
     marker = payload[row.offset:row.offset + len(DIALOGUE_MARKER)]

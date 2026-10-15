@@ -185,10 +185,17 @@ The normal path leaves the existing menu untouched. Use
 `--menu-audio-track N` only when the chosen audio track is present.
 
 The legacy 2026-09-24 `export-final-dialogue` SHA pins remain intentionally
-frozen for archival reproducibility; they do **not** authenticate the revised
-second-pass translation. The Definitive Edition source path is the separate
-`definitive_script_compiler.py` TSV workflow with its own updated hashes.
-Do not replace a legacy workbook hash with an unverified second-pass hash.
+frozen for archival reproducibility. The historical packed builder now accepts
+`--master-edition definitive` for the **already-pinned** Definitive Edition
+full-script or dialogue-only TSV (`DEFINITIVE_SCRIPT_TSV_SHA256` /
+`DEFINITIVE_DIALOGUE_TSV_SHA256` in
+`cyber_oedo.text.definitive_script_compiler`). That path authenticates the
+original TSV bytes, selects only spoken/narration rows, and retains the
+independent M0-B runtime-evidence gate. It does not turn a synthetic English
+build into a certified release. Use `--master-edition legacy` for the archived
+September-24 TSV (the default). Do not replace a legacy workbook hash with
+an unverified second-pass hash. The revised workbook itself is authenticated by
+`DEFINITIVE_WORKBOOK_SHA256` and must produce its separately approved TSV.
 
 The build is fail-closed:
 

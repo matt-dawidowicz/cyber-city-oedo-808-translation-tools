@@ -83,6 +83,15 @@ class PackedDialogueProofGateTests(unittest.TestCase):
             )
             mocked.assert_called_once_with(b"input", audio_track=3)
 
+    def test_cli_exposes_explicit_reviewed_master_edition(self) -> None:
+        from cyber_oedo.build.packed_dialogue_test import build_parser
+
+        flags = build_parser().parse_args([
+            "source.ccd", "out", "reviewed.tsv", "font.ttf",
+            "--master-edition", "definitive", "--mission0b-evidence", "proof.json",
+        ])
+        self.assertEqual(flags.master_edition, "definitive")
+
     def test_source_patch_overlap_fails_closed(self) -> None:
         a = PayloadPatch(5, b"abc", b"ABC", "renderer")
         b = PayloadPatch(7, b"xy", b"XY", "menu")

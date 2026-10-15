@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from cyber_oedo.text.final_dialogue_insertion import (
@@ -9,6 +10,7 @@ from cyber_oedo.text.final_dialogue_insertion import (
     audit_row,
     build_in_place_patches,
     load_final_dialogue_tsv,
+    load_authenticated_dialogue_master,
     summarize_audit,
 )
 from cyber_oedo.text.packed_english import PackedEnglishDictionary
@@ -49,6 +51,39 @@ class FinalDialogueInsertionTests(unittest.TestCase):
             )),
             1,
         )
+
+    def test_definitive_master_is_authenticated_and_normalized(self) -> None:
+        content = (
+            "ID\tBank\tCategory\tResource\tOffset\tJapanese Source"
+            "\tDefinitive Localization\tQuality\n"
+            "T1\tMISSION_0\tSpoken dialogue\tBAR\t0x0\tあ\tLatest English\tverified\n"
+            "T2\tMISSION_1\tCommand UI\tUI\t0x10\tい\tMenu\tverified\n"
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "definitive.tsv"
+            path.write_text(content, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                load_authenticated_dialogue_master(path, edition="definitive")
+            import hashlib
+
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            with patch(
+                "cyber_oedo.text.final_dialogue_insertion.DEFINITIVE_SCRIPT_TSV_SHA256",
+                digest,
+            ):
+                rows = load_authenticated_dialogue_master(path, edition="definitive")
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0].entry_id, "T1")
+            self.assertEqual(rows[0].english, "Latest English")
+
+    def test_legacy_and_definitive_hashes_are_independent(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "unreviewed.tsv"
+            path.write_text("arbitrary text", encoding="utf-8")
+            for edition in ("legacy", "definitive"):
+                with self.subTest(edition=edition):
+                    with self.assertRaisesRegex(ValueError, "SHA-256"):
+                        load_authenticated_dialogue_master(path, edition=edition)
 
     def test_growth_is_explicitly_relocation_required(self) -> None:
         row = FinalDialogueRow("T2","MISSION_0","Narration / description","TEST",0,"あ","Longer")

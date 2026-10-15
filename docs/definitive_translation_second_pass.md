@@ -49,3 +49,21 @@ Continue mission-by-mission through the remaining review queue with special atte
 - dialogue whose speaker was assigned only a generic voice;
 - exposition compressed enough to lose causal or investigative logic;
 - mid-line timing/control records that need explicit English anchors.
+
+
+## Reproducible second-pass input gate
+
+The reviewed Definitive Edition workbook, full-script TSV, and dialogue-only
+TSV have separate, source-pinned SHA-256 values in
+`cyber_oedo.text.definitive_script_compiler`. The archived September-24
+`Final Localization` exporter is not re-keyed to the second-pass revisions.
+
+For historical experimentation only, pass `--master-edition definitive`
+to `python -m cyber_oedo.build.packed_dialogue_test`, using a TSV whose digest
+matches the pinned Definitive full-script or spoken/narration digest. Its
+`Definitive Localization` column is mapped into the packed proof's English
+row model; only rows with independently supplied Mission-0-B overlay evidence
+are eligible for insertion. Unreviewed or regenerated TSVs fail closed.
+
+This source integration is independent of the unimplemented external-pool
+runtime and does not certify the release text engine.
