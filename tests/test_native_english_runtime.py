@@ -14,8 +14,9 @@ from cyber_oedo.text.font_atlas import RasterConfig, RasterizedAtlas
 
 
 class NativeEnglishRuntimeTests(unittest.TestCase):
-    def _fixture(self) -> tuple[EnglishGlyphTable, RasterizedAtlas]:
-        text = " ?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:;!'"
+    def _fixture(
+        self, text: str = " ?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:;!'"
+    ) -> tuple[EnglishGlyphTable, RasterizedAtlas]:
         glyphs = EnglishGlyphTable(text)
         bitmaps = tuple(
             bytes(((index + row) & 0xFF for row in range(16)))
@@ -32,6 +33,21 @@ class NativeEnglishRuntimeTests(unittest.TestCase):
     def test_repertoire_fits_compact_stock_grid_codes(self) -> None:
         glyphs, _ = self._fixture()
         self.assertLessEqual(len(glyphs.characters), STORAGE_CODE_CAPACITY)
+
+    def test_full_95_glyph_repertoire_respects_all_overlay_storage(self) -> None:
+        glyphs, atlas = self._fixture("".join(chr(x) for x in range(0x20, 0x7F)))
+        self.assertEqual(len(glyphs.characters), STORAGE_CODE_CAPACITY)
+        for layout in TEXT_NATIVE_LAYOUTS:
+            with self.subTest(overlay=layout.label):
+                runtime = build_overlay_runtime(layout, glyphs, atlas)
+                code_end = layout.code_cpu + len(runtime.code)
+                self.assertLessEqual(code_end, 0x10000)
+                for region in layout.font_regions:
+                    region_end = region.cpu_address + region.row_count * len(glyphs.characters)
+                    self.assertLessEqual(region_end, 0x10000)
+                    self.assertFalse(
+                        layout.code_cpu < region_end and code_end > region.cpu_address
+                    )
 
     def test_both_mission0_overlays_build_without_storage_overlap(self) -> None:
         glyphs, atlas = self._fixture()
