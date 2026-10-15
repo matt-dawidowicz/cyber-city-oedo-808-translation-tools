@@ -96,7 +96,7 @@ class EnglishDialogueEngineTests(unittest.TestCase):
             + "犬".encode("shift_jis")
             + bytes((0x00,))
         )
-        table = EnglishGlyphTable.from_texts(("Wait...go!?",))
+        table = EnglishGlyphTable.from_texts(("Wait... go!?",))
         compiled = compile_anchored_record(
             source,
             ("Wait...", "go!"),
