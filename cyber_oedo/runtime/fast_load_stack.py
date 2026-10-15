@@ -196,7 +196,7 @@ def build_bar_fast_load_stack() -> dict[str, object]:
             "prove VRAM->Card-RAM snapshot path byte-for-byte against pre-dialogue VRAM",
             "prove Card-RAM->VRAM return image byte-for-byte against stock return",
             "run combined module/speaker/portrait/ADPCM cache timing in one build",
-            "classify the $7B7C setup VSync gate before shortening it",
+            "classify the $7B7D setup VSync gate before shortening it",
             "validate fast audio teardown with subsequent voice/CD-DA playback",
             "repeat dirty-range/cache validation for every room/NPC before generalizing",
         ],

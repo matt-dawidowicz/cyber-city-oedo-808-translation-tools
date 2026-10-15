@@ -62,7 +62,7 @@ final assault and collapse of the project
 | Presented identity | True identity / role | Reveal boundary |
 |---|---|---|
 | Asuka | **Tomomi Fuwa**, Dr. Fuwa's eldest daughter | Final mission |
-| Blue Eyes | Asuka / Tomomi; Westanican Intelligence | Missions 5-6 identity layer |
+| Blue Eyes | Asuka; Westanican Intelligence | Missions 5-6 identity layer (Tomomi identity remains hidden) |
 | Redhead | **Rudolf**, Westanican Intelligence | Missions 5-6 identity layer |
 | Kunihiko | **Kunihiko Takiguchi**, Fuwa test subject / beast-man | Missions 6-7 |
 | Dr. Fuwa | **Raizo Fuwa**, geneticist and origin of the beast-man project | Missions 4-8 |
@@ -177,7 +177,7 @@ Gogul tails Takiguchi. Takiguchi is connected to Asuka personally as well as to
 Fuwa's research. The team investigates Fuwa's transformation drug.
 
 Takiguchi ultimately transforms into a beast-man. Rudolf dies protecting
-Tomomi/Asuka, Gogul is badly injured, and Takiguchi is left dying but conscious
+Asuka, Gogul is badly injured, and Takiguchi is left dying but conscious
 long enough for the next mission's confession.
 
 ### Mission 7 — Kidnapping
@@ -192,7 +192,7 @@ Takiguchi also admits that he killed Isaka while transformed and barely aware of
 his actions. Once the transformation starts, he loses rational control and sees
 everyone around him as an enemy.
 
-He says Fuwa completed a "perfect" beast-man and gives Tomomi the location of
+He says Fuwa completed a "perfect" beast-man and gives Asuka the location of
 the Isterian hideout, asking her to destroy Fuwa's research.
 
 Isterian operatives then begin eliminating witnesses and associates. Dr. Chang

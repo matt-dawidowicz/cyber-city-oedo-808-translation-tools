@@ -209,7 +209,7 @@ def build_short_exploration_wait_benchmark(frames: int = 8) -> LoadBenchmarkSet:
 
 
 def build_dialogue_setup_vsync_benchmark() -> LoadBenchmarkSet:
-    """Remove the guarded $7B7C EX_VSYNC call for one timing experiment.
+    """Remove the guarded $7B7D EX_VSYNC call for one timing experiment.
 
     Live profiling observed 64 calls returning through this setup path during a
     bartender load. Static code shows this is a counter-gated pacing call, not

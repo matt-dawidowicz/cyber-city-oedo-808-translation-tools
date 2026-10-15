@@ -75,6 +75,26 @@ class EnglishDialogueEngineTests(unittest.TestCase):
             compiled,
         )
 
+    def test_legacy_pacing_wrap_carries_column_across_wait(self) -> None:
+        source = (
+            bytes.fromhex("27 28")
+            + "猫".encode("shift_jis")
+            + bytes((0x2F,))
+            + "犬".encode("shift_jis")
+            + bytes((0x00,))
+        )
+        english = "ABCDEFGHIJ KLMNOPQRSTUVWXYZabcd"
+        glyphs = EnglishGlyphTable.from_texts((english,))
+        compiled = compile_paced_record(source, english, glyphs)
+        # The 20-character second phrase starts on a new line; the pause
+        # itself must not be mistaken for a cursor or page advance.
+        self.assertEqual(compiled.count(bytes((0x2F,))), 1)
+        self.assertEqual(compiled.count(bytes((0x40,))), 1)
+        self.assertIn(
+            bytes((ENGLISH_SEGMENT_END, 0x2F, 0x40)) + ENGLISH_MODE_SIGNATURE,
+            compiled,
+        )
+
     def test_mid_timed_wait_requires_explicit_anchor(self) -> None:
         source = (
             bytes.fromhex("27 28")

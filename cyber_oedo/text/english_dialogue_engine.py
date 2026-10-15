@@ -459,11 +459,13 @@ def compile_paced_record(
         raise EnglishDialogueCompileError("pacing split produced an empty final fragment")
     fragments.append(tail)
 
+    # The timed wait does not reset the stock cursor. Wrap the COMPLETE
+    # visible English line before inserting the original pause bytes so
+    # partial fragments cannot independently overflow the current column.
     body = bytearray(leading)
-    for index, fragment in enumerate(fragments):
-        body.extend(_compile_wrapped_text(fragment, glyphs, width=width))
-        if index < len(mids):
-            body.extend(mids[index].raw)
+    body.extend(
+        _compile_anchored_visible_text(tuple(fragments), mids, glyphs, width=width)
+    )
     body.extend(trailing)
     body.append(0)
     return DIALOGUE_MARKER + bytes(body)

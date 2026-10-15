@@ -506,10 +506,36 @@ local function onCdRead()
   ))
 end
 
+-- The movement instructions are tied to an authenticated MPR2 overlay,
+-- not to their reused logical addresses. Verify independent source signatures
+-- before accumulating transition-order evidence.
+local MOVEMENT_SIGNATURES = {
+  [0x4000] = {0x20, 0x99, 0xE0},
+  [0x40E9] = {0x20, 0xF9, 0x40},
+  [0x402B] = {0x20, 0xB1, 0x40},
+  [0x40DB] = {0xA9, 0x0C, 0x20, 0x2D, 0xE0},
+  [0x403C] = {0x60},
+}
+
+local function movementMappedAt(address, expectedPage)
+  local m = mprs()
+  if expectedPage ~= nil and m[2] ~= expectedPage then return false end
+  for _,site in ipairs({0x4000, 0x40E9, address}) do
+    local sig = MOVEMENT_SIGNATURES[site]
+    if not sig then return false end
+    for offset,value in ipairs(sig) do
+      if r8(site + offset - 1) ~= value then return false end
+    end
+  end
+  return true
+end
+
 local function beginOrderProof()
+  if not movementMappedAt(0x402B, nil) then return end
   orderProofOrdinal = orderProofOrdinal + 1
   orderProof = {
     ordinal=orderProofOrdinal,
+    mpr2=mprs()[2],
     exitFrame=frame,
     waitFrame=nil,
     returnFrame=nil,
@@ -524,7 +550,7 @@ local function beginOrderProof()
 end
 
 local function markOrderWait()
-  if not orderProof then return end
+  if not orderProof or not movementMappedAt(0x40DB, orderProof.mpr2) then return end
   if orderProof.waitFrame then return end
   orderProof.waitFrame = frame
   log(string.format(
@@ -534,7 +560,7 @@ local function markOrderWait()
 end
 
 local function markOrderReturn()
-  if not orderProof then return end
+  if not orderProof or not movementMappedAt(0x403C, orderProof.mpr2) then return end
   if orderProof.returnFrame then return end
   orderProof.returnFrame = frame
   orderProof.returnTarget = stackReturnTarget()
@@ -585,7 +611,7 @@ local function onByteLoader()
   local lba = (r8(0x2002) << 16) | (r8(0x2005) << 8) | r8(0x2004)
   local length = r16(0x2006)
   if lba == 0x1425 then
-    if orderProof then
+    if orderProof and orderProof.returnFrame then
       orderProof.loaderFrame = frame
       log(string.format(
         "[ORDER_PROOF_1425 %03d] frame=%d pc=$6EA0 delta_from_exit=%d " ..

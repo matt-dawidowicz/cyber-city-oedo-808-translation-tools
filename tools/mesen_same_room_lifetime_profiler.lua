@@ -123,13 +123,31 @@ local function log(line)
   end
 end
 
-local function movementMappedAt(address)
+-- A 3-byte hit alone does not identify an overlay: CPU addresses are reused.
+-- Pin MPR2 on the first verified movement entry and require TWO independent
+-- instruction signatures before attributing any later logical address to it.
+local verifiedMovementMpr2 = nil
+local function signatureMatches(address)
   local sig = MOVEMENT_SIGNATURES[address]
   if not sig then return false end
   for index,value in ipairs(sig) do
     if r8(address + index - 1) ~= value then return false end
   end
   return true
+end
+
+local function movementMappedAt(address)
+  if not signatureMatches(address) then return false end
+  if not signatureMatches(0x4000) or not signatureMatches(0x40E9) then
+    return false
+  end
+  local page = mprs()[2]
+  if verifiedMovementMpr2 == nil then
+    if address ~= 0x4000 then return false end
+    verifiedMovementMpr2 = page
+    log(string.format("[MOVEMENT_OVERLAY_LOCK] frame=%d MPR2=$%02X", frame, page))
+  end
+  return page == verifiedMovementMpr2
 end
 
 local function logLandmark(name)
@@ -175,6 +193,7 @@ local function onCdRead()
   local lba = (r8(0x20FC) << 16) | (r8(0x20FD) << 8) | r8(0x20FE)
   local destination = r16(0x20FA)
   if lba ~= 0x22DE or destination ~= 0x9000 then return end
+  if not movementMappedAt(0x4000) then return end
 
   readOrdinal = readOrdinal + 1
   local target = stackReturnTarget()
