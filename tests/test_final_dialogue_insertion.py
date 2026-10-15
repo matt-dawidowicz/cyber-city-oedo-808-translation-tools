@@ -30,6 +30,26 @@ class FinalDialogueInsertionTests(unittest.TestCase):
         self.assertEqual(patches[0].offset, 2)
         self.assertEqual(patches[0].expected, bytes.fromhex("82 A0"))
 
+    def test_overlay_evidence_allowlist_excludes_unproven_entries(self) -> None:
+        row = FinalDialogueRow("T1", "MISSION_0", "Spoken dialogue", "TEST", 0, "あ", "Hi")
+        payload = bytes.fromhex("27 28 82 A0 00")
+        dictionary = self._dictionary("Hi")
+        self.assertEqual(
+            build_in_place_patches(
+                payload, (row,), dictionary,
+                allowed_entry_ids=frozenset(),
+            ),
+            (),
+        )
+        self.assertEqual(
+            len(build_in_place_patches(
+                payload, (row,), dictionary,
+                allowed_banks=frozenset({"MISSION_0"}),
+                allowed_entry_ids=frozenset({"T1"}),
+            )),
+            1,
+        )
+
     def test_growth_is_explicitly_relocation_required(self) -> None:
         row = FinalDialogueRow("T2","MISSION_0","Narration / description","TEST",0,"あ","Longer")
         payload = bytes.fromhex("27 28 82 A0 00")

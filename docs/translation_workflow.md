@@ -164,8 +164,31 @@ python -m cyber_oedo.build.packed_dialogue_test \
   "Cyber City Oedo 808 - Kemono no Alignment (Japan).ccd" \
   packed-dialogue-test \
   final_dialogue_2026-09-24.tsv \
-  /path/to/user-supplied-font.ttf
+  /path/to/user-supplied-font.ttf \
+  --mission0b-evidence /path/to/verified_m0b.json
 ```
+
+The archived packed-dialogue builder now additionally requires an explicit
+`--mission0b-evidence /path/to/verified_m0b.json` argument before it can replace
+any text. The workbook's `MISSION_0` bank does **not** distinguish overlays A
+and B, while this historical renderer is installed only into B. The evidence
+JSON must name the authenticated source digest, runtime overlay
+`MISSION_0_B`, a nonempty array of entry IDs, and a corresponding
+`runtime_traces` object with per-ID Mesen trace references. These are
+operator-reviewed claims and are **not automatically certified** by the file
+format. The build refuses missing/unlisted IDs. Run this builder only for
+verified M0-B records, not the full Mission 0 bank.
+
+An optional `--definitive-menu` flag now inserts the separately authenticated
+opening-menu and CD-DA hooks into this **historical experimental** image.
+The normal path leaves the existing menu untouched. Use
+`--menu-audio-track N` only when the chosen audio track is present.
+
+The legacy 2026-09-24 `export-final-dialogue` SHA pins remain intentionally
+frozen for archival reproducibility; they do **not** authenticate the revised
+second-pass translation. The Definitive Edition source path is the separate
+`definitive_script_compiler.py` TSV workflow with its own updated hashes.
+Do not replace a legacy workbook hash with an unverified second-pass hash.
 
 The build is fail-closed:
 
@@ -177,8 +200,8 @@ The build is fail-closed:
   than shortened;
 - rows whose workbook representation is not one contiguous binary span are
   reported for record-aware mapping;
-- only Mission 0 is activated today because later overlay font-hook residency
-  has not yet been certified.
+- only Mesen-evidenced Mission 0-B dialogue IDs may be activated because
+  Mission 0-A and later renderer paths have not yet been certified.
 
 The test profile emits both a build manifest and a Mission 0 relocation queue.
 

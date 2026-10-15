@@ -158,11 +158,14 @@ def build_in_place_patches(
     dictionary: PackedEnglishDictionary,
     *,
     allowed_banks: frozenset[str] | None = None,
+    allowed_entry_ids: frozenset[str] | None = None,
     allow_padding_candidates: bool = False,
 ) -> tuple[PayloadPatch, ...]:
     patches: list[PayloadPatch] = []
     for row in rows:
         if allowed_banks is not None and row.bank not in allowed_banks:
+            continue
+        if allowed_entry_ids is not None and row.entry_id not in allowed_entry_ids:
             continue
         audit = audit_row(payload, row, dictionary)
         if not audit.can_patch_exactly and not (
