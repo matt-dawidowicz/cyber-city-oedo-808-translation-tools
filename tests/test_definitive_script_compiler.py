@@ -36,12 +36,35 @@ class DefinitiveScriptCompilerTests(unittest.TestCase):
             resource="BILL4",
             offset=0,
             japanese_source="あいう",
-            english="ignored because frozen reviewed fragments are authoritative",
+            english=" ".join(DEFINITIVE_CONTROL_ANCHORS["T00381"]),
         )
         compiled = compile_direct_row(source, row, self._glyphs("T00381"))
         self.assertEqual(compiled.status, "anchored")
         self.assertIsNotNone(compiled.compiled_record)
         self.assertEqual(compiled.compiled_record.count(bytes((0x2F,))), 2)
+
+    def test_changed_english_cannot_silently_use_stale_anchors(self) -> None:
+        source = (
+            bytes.fromhex("27 28")
+            + "あ".encode("shift_jis")
+            + bytes((0x2F,))
+            + "い".encode("shift_jis")
+            + bytes((0x2F,))
+            + "う".encode("shift_jis")
+            + bytes((0x00,))
+        )
+        row = DefinitiveScriptRow(
+            entry_id="T00381",
+            bank="MISSION_0",
+            category="Spoken dialogue",
+            resource="BILL4",
+            offset=0,
+            japanese_source="あいう",
+            english="This is a new translation, not the frozen old version.",
+        )
+        compiled = compile_direct_row(source, row, self._glyphs("T00381"))
+        self.assertEqual(compiled.status, "anchor_text_mismatch")
+        self.assertIsNone(compiled.compiled_record)
 
     def test_t00604_and_t00605_compile_as_one_physical_record(self) -> None:
         owner_text = "俺は少し待ってみることにした……。"

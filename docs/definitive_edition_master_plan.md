@@ -19,7 +19,7 @@ The project goal is to build the best English-language version of Cyber City OED
 
 Use the existing Voice Bible, Translation Audit, story/continuity guide, original Japanese, and runtime scene order as controlling references.
 
-Canonical terminology includes OEDO 808, Oriental Electric Darwinism Oasis, Cyber Police, Security Force, Special Investigations Bureau, Cyber Police Security Plan, Mobile Detective, Cyber Skyscraper, cyberoid, Old City, Public Terminal, Police ID, Cash Card, computer raid, system destruction, media-jacking, mech-jacking, and Tin Bastard.
+Canonical terminology includes OEDO 808, Oriental Electric Darwinism Oasis, Cyber Police, Security Force, Special Investigations Bureau, Cyber Security Plan, Mobile Detective, Cyber Skyscraper, cyberoid, Old City, Public Terminal, Police ID, Cash Card, computer raid, system destruction, media-jacking, mech-jacking, and Tin Bastard.
 
 Character targets remain: Sengoku hardboiled/abrasive with concern disguised as irritation; Gogul laconic and technical; Benten poised and dryly theatrical; Varsus hyperliteral and analytical; Hasegawa clipped institutional menace; Okyo warm and capable; Maya mature and cool; Makze cultivated authoritarian menace; Rudolf cocky field-agent charm; Tomomi controlled until late emotional exposure; Chang expert without caricature; Security Force crude and territorial; old broker sly and economical.
 

@@ -157,6 +157,12 @@ def compile_direct_row(
                     "mid-text control has no frozen reviewed English fragment anchor",
                     controls,
                 )
+            if " ".join(fragments) != row.english:
+                return CompiledDialogueRow(
+                    row, source, None, "anchor_text_mismatch",
+                    "reviewed anchors do not reconstruct current English localization",
+                    controls,
+                )
             compiled = compile_anchored_record(source, fragments, glyphs)
             mode = "anchored"
     except EnglishDialogueCompileError as error:
@@ -221,6 +227,12 @@ def _compile_composite_row(
         return CompiledDialogueRow(
             owner, source, None, "anchor_required",
             "composite record has no frozen reviewed fragment anchor",
+            _mid_controls(record),
+        )
+    if " ".join(fragments) != f"{owner.english} {continuation.english}":
+        return CompiledDialogueRow(
+            owner, source, None, "anchor_text_mismatch",
+            "reviewed composite anchors do not reconstruct current English rows",
             _mid_controls(record),
         )
     try:
