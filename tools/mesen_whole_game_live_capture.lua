@@ -17,7 +17,7 @@ local targets = {
   {name="exploration_loop", address=0x4000},
   {name="transition_promote", address=0x403D},
   {name="interaction_scan", address=0x4B20},
-  {name="interaction_payload_copy", address=0x4BD8},
+  {name="interaction_copy_entry_pre_write", address=0x4BD8},
   {name="object_init", address=0x5519},
   {name="object_frame_update", address=0x55E9},
 
@@ -105,12 +105,22 @@ end
 local function hit(target)
   local c = cpu()
   hitCounts[target.name] = (hitCounts[target.name] or 0) + 1
+  -- Exec hooks fire before an instruction. Copy entry and BIOS calls are
+  -- deliberately named pre-write/pre-return so stale buffers are not
+  -- mistaken for completed interaction or save data.
+  local phase = "instruction_entry"
+  if target.name == "interaction_copy_entry_pre_write" then
+    phase = "before_interaction_copy"
+  elseif target.name == "bios_bm_read" then
+    phase = "before_bios_read"
+  end
   log(string.format(
-    "[%s #%d] frame=%d PC=$%04X A=$%02X X=$%02X Y=$%02X SP=$%02X " ..
+    "[%s #%d] phase=%s frame=%d PC=$%04X A=$%02X X=$%02X Y=$%02X SP=$%02X " ..
     "progress=$%02X scene=%02X/%02X/%02X interaction=[%s] " ..
-    "save=[%s] voice=$%02X %s",
+    "mission_save_buffer=[%s] voice=$%02X %s",
     target.name,
     hitCounts[target.name],
+    phase,
     frame,
     c.pc,
     c.a,
@@ -126,6 +136,28 @@ local function hit(target)
     r8(0x37F1),
     mpr_string()
   ))
+  if target.name == "outer_event_entry" then
+    -- Capture the actual mapped 64-byte controller window, not just the PC.
+    -- The MPR log is required to authenticate this against the expected bank.
+    log(string.format("[outer_event_code] D800=[%s] %s",
+      bytes_string(0xD800, 64), mpr_string()))
+  end
+  if target.name == "object_init" or target.name == "object_frame_update" then
+    -- A bounded sample plus count: these are instruction-entry snapshots,
+    -- not claims that the current object update has finished.
+    log(string.format(
+      "[object_snapshot] count=$%02X first_live_2783=[%s] scratch_2823=[%s]",
+      r8(0x277D), bytes_string(0x2783, 16), bytes_string(0x2823, 16)
+    ))
+  end
+  if target.name == "bios_bm_read" or target.name == "bios_bm_write" then
+    -- $2E91 is the startup reader's destination; $268F is the mission
+    -- reader's buffer. A BIOS entry callback cannot prove completed I/O.
+    log(string.format(
+      "[bram_call_entry] boot_buffer_2E91=[%s] mission_buffer_268F=[%s]",
+      bytes_string(0x2E91, 4), bytes_string(0x268F, 4)
+    ))
+  end
 end
 
 open_log()

@@ -31,6 +31,13 @@ The existing `mission0-stock-renderer` build remains a guarded vertical slice,
 not a full translation. It uses the game's stock fullwidth Shift-JIS renderer
 and does not activate the failed Stage-1 wide-text experiment.
 
+A new **non-activated** English-font architecture is now under review. It keeps
+the parser's proven two-byte-glyph contract, reserves collision-free private
+Shift-JIS tokens, and composes two readable 8x16 English glyphs inside each
+existing 16x16 staging cell. It does not revive the unsafe global escape-marker
+scheme. See
+[`docs/english_font_architecture.md`](docs/english_font_architecture.md).
+
 ## What is confirmed
 
 - Track 2 contains 41,199 Mode 1 data sectors.
@@ -63,6 +70,13 @@ OVA, and the English OVA is the most familiar English-language reference for
 many players. The translation therefore uses established franchise names and
 terminology where they fit the game, while treating the Japanese game text as
 the primary source.
+
+The final contextual pass also treats Mission 0 as the cast's origin-story
+phase: Sengoku begins as an independent bounty hunter and Benten/Gogul are
+wanted rivals, so later coworker familiarity is not back-projected into the
+opening. See
+[`docs/localization_style_guide.md`](docs/localization_style_guide.md) for the
+full voice, continuity, UI, profanity, and terminology rules.
 
 In practice:
 
@@ -204,6 +218,13 @@ cyber-oedo prove-text-engine-completion track02_mode1_2048.bin \
   --output text_engine_completion.json
 ```
 
+Dialogue residency, audio-transition state, voice extent, and VRAM overlap:
+
+```bash
+cyber-oedo analyze-dialogue-residency track02_mode1_2048.bin \
+  --output dialogue_residency.json
+```
+
 Whole-game save, ADPCM, object, interaction, and event-boundary proof:
 
 ```bash
@@ -215,10 +236,11 @@ For later-mission and ENDING runtime certification, load
 `tools/mesen_text_engine_live_capture.lua` in Mesen. The script is read-only
 and records parser/renderer hits together with all eight MPR values.
 
-For whole-game event/save/ADPCM/object certification, use
-`tools/mesen_whole_game_live_capture.lua`. It records the $D800 event boundary,
-scene/interaction state, save bytes, voice state, and all eight MPRs without
-modifying emulated state.
+For whole-game diagnostics use `tools/mesen_whole_game_live_capture.lua`.
+It records event-code bytes, bounded object snapshots, both save buffers, and
+all eight MPRs. Execution callbacks observe instruction entry: interaction
+copy and BIOS read snapshots are **pre-operation** observations and must not
+be treated as completed writes or reads.
 
 The state differ reports logical changes together with both MPR mappings; it is
 a candidate generator for breakpoint/disassembly work, not by itself proof of
@@ -313,3 +335,9 @@ Further documentation:
 - [`docs/text_engine_coverage.md`](docs/text_engine_coverage.md)
 - [`docs/text_engine_completion.md`](docs/text_engine_completion.md)
 - [`docs/whole_game_reverse_engineering.md`](docs/whole_game_reverse_engineering.md)
+- [`docs/localization_style_guide.md`](docs/localization_style_guide.md)
+- [`docs/english_font_architecture.md`](docs/english_font_architecture.md)
+- [`docs/packed_english_m0_runtime.md`](docs/packed_english_m0_runtime.md)
+- [`docs/cd_load_optimization.md`](docs/cd_load_optimization.md)
+- [`docs/fast_load_architecture.md`](docs/fast_load_architecture.md)
+- [`docs/dialogue_residency_fastpath.md`](docs/dialogue_residency_fastpath.md)
