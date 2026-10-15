@@ -31,6 +31,22 @@ class DefinitiveVwfCompilerTests(unittest.TestCase):
             tuple(bitmaps[c] for c in characters),
         )
 
+    def test_mission_promotes_long_narrow_pixel_line_with_cell_safe_wrap(self) -> None:
+        characters = "A ?"
+        fat_a = bytes((0xFF,)) * 16
+        glyphs = EnglishGlyphTable(characters)
+        font = derive_vwf_font(characters, (fat_a, bytes(16), fat_a))
+        source = bytes.fromhex("27 28") + "あ".encode("shift_jis") + b"\x00"
+        row = DefinitiveScriptRow(
+            "T90003", "MISSION_TEST", "Spoken dialogue", "TEST", 0,
+            "あ", "AAAAAA AAAAAA",
+        )
+        result = compile_definitive_vwf_mission(source, (row,), font, glyphs)
+        self.assertEqual(result.vwf_records, 1)
+        self.assertEqual(result.rows[0].status, "vwf_automatic")
+        self.assertIsNotNone(result.rows[0].compiled_record)
+        self.assertIn(b"\x40", result.rows[0].compiled_record)
+
     def test_control_safe_rows_are_promoted_with_one_mission_dictionary(self) -> None:
         first = bytes.fromhex("27 28") + "あ".encode("shift_jis") + b"\x00"
         second = bytes.fromhex("27 28") + "い".encode("shift_jis") + b"\x00"

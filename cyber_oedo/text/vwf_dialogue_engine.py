@@ -15,13 +15,15 @@ from cyber_oedo.text.english_dialogue_engine import EnglishGlyphTable
 from cyber_oedo.text.vwf_cells import (
     VWF_MODE_SIGNATURE,
     VWF_SEGMENT_END_TOKEN,
+    VwfCellCompileError,
     VwfCellDictionary,
     VwfDictionaryBuilder,
     encode_vwf_token,
     pack_vwf_line,
     render_vwf_dictionary,
+    wrap_vwf_cells,
 )
-from cyber_oedo.text.vwf_text import LINE_PIXELS, VwfFont, VwfTextError, wrap_vwf
+from cyber_oedo.text.vwf_text import VwfFont, VwfTextError
 
 
 class VwfDialogueCompileError(ValueError):
@@ -91,15 +93,14 @@ class VwfMissionDialogueCompiler:
                 "mid-text semantic controls must use the frozen fixed-renderer path"
             )
         try:
-            lines = wrap_vwf(english, self.font, max_pixels=LINE_PIXELS)
-        except VwfTextError as error:
+            lines = wrap_vwf_cells(english, self.font)
+            body = bytearray(leading)
+            for index, line in enumerate(lines):
+                body.extend(self._encode_line(line))
+                if index < len(lines) - 1:
+                    body.append(int(DialogueOpcode.PAGE_BREAK))
+        except (VwfTextError, VwfCellCompileError) as error:
             raise VwfDialogueCompileError(str(error)) from error
-
-        body = bytearray(leading)
-        for index, line in enumerate(lines):
-            body.extend(self._encode_line(line))
-            if index < len(lines) - 1:
-                body.append(int(DialogueOpcode.PAGE_BREAK))
         body.extend(trailing)
         body.append(0)
         return DIALOGUE_MARKER + bytes(body)

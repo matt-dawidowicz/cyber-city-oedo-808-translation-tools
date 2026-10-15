@@ -158,6 +158,64 @@ def _cell_width(text: str, font: VwfFont) -> int:
     return measure_text(text, font)
 
 
+def _split_vwf_cells(text: str, font: VwfFont) -> tuple[str, ...]:
+    """Split one line into stock 16-pixel cells without allocating tokens."""
+    if not text:
+        raise VwfCellCompileError("VWF line must not be empty")
+    cells: list[str] = []
+    current = ""
+    for character in text:
+        candidate = current + character
+        if current and (
+            len(candidate) > MAX_CELL_GLYPHS
+            or _cell_width(candidate, font) > VWF_CELL_PIXELS
+        ):
+            # Carry overflow whitespace into the following cell unchanged.
+            cells.append(current)
+            current = character
+        else:
+            current = candidate
+        if _cell_width(current, font) > VWF_CELL_PIXELS:
+            raise VwfCellCompileError(
+                f"single VWF glyph/cluster exceeds {VWF_CELL_PIXELS}px: {current!r}"
+            )
+    if current:
+        cells.append(current)
+    return tuple(cells)
+
+
+def wrap_vwf_cells(text: str, font: VwfFont) -> tuple[str, ...]:
+    """Wrap authored dialogue against BOTH pixels and stock redraw cells.
+
+    A 176-pixel line may still exceed the 11-cell stock grid if many glyphs
+    cannot share a cell. Avoid emitting a wider stream that fails only after
+    partially allocating its mission dictionary.
+    """
+    # Delegate whitespace, font-repertoire, and unbreakable-pixel validation
+    # to the canonical proportional wrapper.
+    wrap_vwf(text, font, max_pixels=LINE_PIXELS)
+    words = text.split(" ")
+    lines: list[str] = []
+    current = words[0]
+    for word in words:
+        if len(_split_vwf_cells(word, font)) > VWF_CELLS_PER_LINE:
+            raise VwfCellCompileError(
+                f"word exceeds the {VWF_CELLS_PER_LINE}-cell stock grid: {word!r}"
+            )
+    for word in words[1:]:
+        candidate = current + " " + word
+        if (
+            measure_text(candidate, font) <= LINE_PIXELS
+            and len(_split_vwf_cells(candidate, font)) <= VWF_CELLS_PER_LINE
+        ):
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+    return tuple(lines)
+
+
 def pack_vwf_line(
     text: str,
     font: VwfFont,
@@ -166,40 +224,7 @@ def pack_vwf_line(
 ) -> VwfCompiledLine:
     """Pack one already-wrapped line into <=11 proportional 16-pixel cells."""
 
-    if not text:
-        raise VwfCellCompileError("VWF line must not be empty")
-    mapping = glyphs.char_to_byte
-    cells: list[str] = []
-    current = ""
-
-    for character in text:
-        if character not in mapping:
-            raise VwfCellCompileError(f"character {character!r} is absent from glyph table")
-        candidate = current + character
-        if (
-            current
-            and (
-                len(candidate) > MAX_CELL_GLYPHS
-                or _cell_width(candidate, font) > VWF_CELL_PIXELS
-            )
-        ):
-            # Preserve the exact visible character stream. If the character
-            # that overflows is a space, carry that space into the next cell;
-            # dropping it can visually concatenate adjacent words when the
-            # preceding cell is full.
-            cells.append(current)
-            current = character
-        else:
-            current = candidate
-
-        if _cell_width(current, font) > VWF_CELL_PIXELS:
-            raise VwfCellCompileError(
-                f"single VWF glyph/cluster exceeds {VWF_CELL_PIXELS}px: {current!r}"
-            )
-
-    if current:
-        cells.append(current)
-
+    cells = _split_vwf_cells(text, font)
     if len(cells) > VWF_CELLS_PER_LINE:
         raise VwfCellCompileError(
             f"VWF line needs {len(cells)} cells; stock grid owns {VWF_CELLS_PER_LINE}"
@@ -228,7 +253,7 @@ def _compile_vwf_lines(
         raise VwfCellCompileError(
             "VWF font and one-byte English glyph table must share character order"
         )
-    lines = wrap_vwf(text, font, max_pixels=LINE_PIXELS)
+    lines = wrap_vwf_cells(text, font)
     return tuple(pack_vwf_line(line, font, glyphs, dictionary) for line in lines)
 
 
@@ -359,5 +384,6 @@ __all__ = [
     "render_vwf_cell",
     "render_vwf_dictionary",
     "pack_vwf_line",
+    "wrap_vwf_cells",
     "vwf_advance_table",
 ]

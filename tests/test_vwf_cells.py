@@ -72,6 +72,15 @@ class VwfCellTests(unittest.TestCase):
             all(len(line.tokens) <= VWF_CELLS_PER_LINE for line in result.lines)
         )
 
+    def test_wrap_respects_eleven_stock_cells_not_just_pixels(self) -> None:
+        characters = "A ?"
+        fat_a = bytes((0xFF,)) * 16
+        font = derive_vwf_font(characters, (fat_a, bytes(16), fat_a))
+        glyphs = EnglishGlyphTable(characters)
+        result = compile_vwf_text("AAAAAA AAAAAA", font, glyphs)
+        self.assertEqual(tuple(line.text for line in result.lines), ("AAAAAA", "AAAAAA"))
+        self.assertTrue(all(len(line.tokens) <= 11 for line in result.lines))
+
     def test_stream_uses_vwf_signature_and_ffff_terminator(self) -> None:
         result = compile_vwf_text("AI AI", self.font, self.table)
         stream = result.stream
