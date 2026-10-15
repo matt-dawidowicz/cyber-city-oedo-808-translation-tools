@@ -67,3 +67,19 @@ resumption semantics.
 
 Until that trace exists, the pool runtime remains **structurally verified,
 runtime pending** rather than release-certified.
+
+## Build-time pool contract verifier
+
+`cyber_oedo.runtime.external_english_pool` now statically checks a **proposed**
+`27 28 7B offset_lo offset_hi 00` redirect footprint, four 8 KiB Card-RAM
+banks `$7C-$7F`, bank/page rollover, native `7D 45` fixed and `7D 56`
+VWF framing, valid stock controls with nonterminating zero-valued operands,
+and bounds. Its synthetic tests cover crossing `$7FFF` to the next bank's
+`$6000` window, truncated text, missing terminators and malformed tokens.
+
+**This does not mean the HuC6280 loader exists**: none of these checks hooks the
+parser or CD_READ, changes MPRs in the emulator, loads real mission pools,
+or validates source image offsets. The six-byte redirect contract is
+provisional until its format is confirmed against an authenticated built
+image. The `$7B` P1 review remains open pending implementation and normal
+gameplay certification.
