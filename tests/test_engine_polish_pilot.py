@@ -10,6 +10,7 @@ from cyber_oedo.runtime.combined_fast_load_benchmark import (
 )
 from cyber_oedo.runtime.engine_polish_pilot import (
     compose_polish_patches,
+    build_intro_smoke_polish_patches,
     CACHE_BANKS,
     ENGLISH_POOL_BANKS,
 )
@@ -94,7 +95,7 @@ class EnginePolishCompositionTests(unittest.TestCase):
 
     def test_corrupt_core_source_refused(self):
         original = SparseAuthenticatedSource()
-        first = build_combined_bar_benchmark().patches[0]
+        first = build_intro_smoke_polish_patches()[0]
         original.slices[(first.offset, len(first.expected))] = bytes(
             len(first.expected)
         )
