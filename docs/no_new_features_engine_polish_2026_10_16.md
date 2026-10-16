@@ -126,3 +126,19 @@ proves the intro survives that particular input path.
 **Source tests passing, disjoint patches and a successful boot are necessary
 but do not constitute release certification.** Keep independent opt-in
 build layers; never merge experimental code as a finished edition.
+
+## Replay the recorded intro A/B locally (no user-facing feature)
+
+Use `tools/mesen_polish_intro_smoke.lua` with a local MesenCE 2.2.1,
+Japanese Super CD-ROM System 3.0 BIOS, generated CUE and:
+`--testRunner --enableStdout --pcEngine.port1.type=PceController`.
+The script presses Run at frames 90–194, then Button I at 700–734,
+and prints status at frames 600, 4200, and 4600. It modifies **no game
+memory**, and includes no proprietary ROM/BIOS bytes or screenshots.
+
+For a diagnostic English disc only, expected control evidence is one
+`NATIVE_7B` around frame 4122; the seven-patch build gave one around
+frame 4127. Inspect the emulator SCSI output separately for **invalid
+sector** messages and compare actual screenshots and audio behavior.
+Passing this intro test is not sufficient to certify the bar cache
+or normal gameplay. The old nine-patch build must not be re-enabled.
