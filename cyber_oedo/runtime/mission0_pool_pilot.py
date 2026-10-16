@@ -585,11 +585,12 @@ end, emu.eventType.scriptEnded)
 def build_m0b_pilot_disc(
     ccd: pathlib.Path,
     output_directory: pathlib.Path,
-    font: pathlib.Path,
+    font: pathlib.Path | None,
     *,
     english: str = DEFAULT_PILOT_TEXT,
     point_size: int = 13,
     diagnostic_intro_redirect: bool = False,
+    authored_pixel_font: bool = False,
 ) -> pathlib.Path:
     """Create a separate EXPERIMENTAL CloneCD copy. Never edit original media."""
     from cyber_oedo.build.profiles import mission0_stock
@@ -597,10 +598,28 @@ def build_m0b_pilot_disc(
     from cyber_oedo.disc.extract_track2_mode1 import extract_mode1_payload
 
     glyphs = EnglishGlyphTable.from_texts((english, " ?"))
-    atlas = rasterize_atlas(
-        font, glyphs.characters,
-        config=RasterConfig(point_size=point_size),
-    )
+    if authored_pixel_font:
+        # Original, source-authored 8x16 glyphs with shared baseline.
+        # Live pilot remains fixed-cell; VWF metrics are for staged integration.
+        from cyber_oedo.text.oedo_pixel_font import authored_atlas, authored_vwf
+
+        atlas = authored_atlas(glyphs.characters)
+        metrics = authored_vwf(glyphs.characters)
+        glyph_metrics = {
+            ch: {
+                "ink_width": metrics.metric(ch).width,
+                "advance": metrics.metric(ch).advance,
+            }
+            for ch in glyphs.characters
+        }
+    else:
+        if font is None:
+            raise ValueError("font path required unless --authored-pixel-font is set")
+        atlas = rasterize_atlas(
+            font, glyphs.characters,
+            config=RasterConfig(point_size=point_size),
+        )
+        glyph_metrics = None
     output_directory = output_directory.resolve()
     if output_directory.exists():
         raise ValueError("output destination already exists")
@@ -640,6 +659,9 @@ def build_m0b_pilot_disc(
                 if x.before_sha256 != x.after_sha256
             }),
             "font_sha256": atlas.source_sha256,
+            "font_style": "authored_pixel" if authored_pixel_font else "external_ttf",
+            "proportional_metrics": glyph_metrics,
+            "proportional_runtime_certified": False,
             "patches": [x.label for x in patches],
             "runtime_labels": {
                 key: f"0x{value:04X}"
@@ -681,9 +703,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("source_ccd", type=pathlib.Path)
     parser.add_argument("output_directory", type=pathlib.Path)
-    parser.add_argument("font", type=pathlib.Path)
+    parser.add_argument(
+        "font", type=pathlib.Path, nargs="?",
+        help="External TTF/OTF path; omit with --authored-pixel-font",
+    )
     parser.add_argument("--english", default=DEFAULT_PILOT_TEXT)
     parser.add_argument("--point-size", type=int, default=13)
+    parser.add_argument(
+        "--authored-pixel-font", action="store_true",
+        help="NON-RELEASE: source-authored 8x16 glyphs and VWF metric manifest",
+    )
     parser.add_argument(
         "--diagnostic-intro-redirect", action="store_true",
         help="NON-RELEASE: run $7B from the authenticated opening narration",
@@ -693,6 +722,7 @@ def main(argv: list[str] | None = None) -> int:
         args.source_ccd, args.output_directory, args.font,
         english=args.english, point_size=args.point_size,
         diagnostic_intro_redirect=args.diagnostic_intro_redirect,
+        authored_pixel_font=args.authored_pixel_font,
     )
     print("output_ccd=" + str(result))
     print("release_enabled=false")
