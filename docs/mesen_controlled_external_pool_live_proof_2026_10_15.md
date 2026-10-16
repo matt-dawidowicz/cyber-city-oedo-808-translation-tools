@@ -69,3 +69,39 @@ the intro diagnostic reaches $7B around emulated frame 5,008; frame timing
 depends on controller events and emulator configuration. This is a
 **diagnostic runtime path**, not proof that the true in-game bartender
 conversation is navigable or completely translated.
+
+## Independent artifact-to-emulator reproduction
+
+After adding the explicit `--diagnostic-intro-redirect` builder flag, GitHub
+Actions run [#38839669077](https://github.com/matt-dawidowicz/cyber-city-oedo-808-translation-tools/actions/runs/38839669077)
+passed Python 3.11 and 3.13 tests and published a source distribution from
+commit `e28898d166d24d942c5317b052ed9abb4115c1a2`.
+
+An independent local rebuild extracted **that exact CI-published sdist**,
+invoked the new builder on the authenticated user's original CloneCD image
+with the same locally installed DejaVu Sans font, and generated a full 88-track
+output image. The new IMG SHA-256 was:
+
+```text
+419b89eb435c37f338c8d9222ee50f60dc6cc0c7c45d621c37ebd15f0c7fd553
+```
+
+The independently constructed output was **byte-for-byte identical** to the
+original, manually source-guarded diagnostic image used for the first live proof
+(587,614,272 bytes each). Exactly nine Track-2 sector indexes changed:
+`621, 623, 629, 630, 631, 632, 651, 747, 41049`.
+
+That new CI-source-built image was loaded into MesenCE 2.2.1 with the same
+Japanese System Card 3.0 BIOS and input replay. It independently repeated:
+- $7B native dispatch and pool load at emulator frame 5,008;
+- BIOS CD_READ at absolute LBAs $AE5F, $AE63, $AE67, $AE6B;
+- stock renderer output of `Bartender: Welcome.` over the intro;
+- original-source pointer restoration at frame 5,199;
+- 11 dispatch entries, 82 pool-byte reader callbacks, 19 stock-cell render
+  entries, one redirect, one load, and one restoration by frame 6,158.
+
+The second frame-5,328 PNG screenshot file is **byte-for-byte identical** to
+the first. Together, these results establish a reproducible end-to-end
+**controlled English runtime proof** from checked-in source, the authenticated
+original disc and a local font. They still **do not establish natural bartender
+execution, later game scenes, save/load correctness, or a complete translation**.
