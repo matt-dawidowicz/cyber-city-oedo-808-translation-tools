@@ -435,6 +435,122 @@ def build_m0b_pilot_patches(
     return patches
 
 
+
+def render_pilot_mesen_trace(labels: dict[str, int]) -> str:
+    """Generate a read-only trace using the exact assembled pilot addresses."""
+    for key in ("pool_dispatch", "pool_redirect", "pool_read", "pool_load",
+                "pool_advance", "active", "pool_bank", "source_lo", "source_hi"):
+        if key not in labels or not 0xB000 <= labels[key] < 0xC000:
+            raise ValueError("missing/out-of-range pool-runtime label: " + key)
+    lua = r"""-- Read-only Mission 0-B experimental external-pool trace.
+-- The generated values are the assembler's actual logical CPU addresses.
+-- Instruction-entry hooks do not prove an operation completed.
+local CPU = emu.cpuType.pce
+local MEM = emu.memType.pceMemory
+local hits = {redirect=0, load=0, read=0, render=0, source_return=0}
+local triggered = false
+local function r8(address) return emu.read(address, MEM) end
+local function dp8(address) return r8(0x2000 + address) end
+local function mprs()
+  local s = emu.getState()
+  local t = {}
+  for i=0,7 do
+    t[#t+1] = string.format("MPR%d=$%02X", i,
+      s["memoryManager.mpr[" .. i .. "]"] or 0)
+  end
+  return table.concat(t, " ")
+end
+local function info(tag)
+  local lo, hi = dp8(0x7F), dp8(0x80)
+  local active = r8(0x__ACTIVE__)
+  print(string.format(
+    "[%s] frame=%d ptr=$%04X active=%d bank=$%02X "
+      .. "source_return=$%02X%02X %s",
+    tag, emu.getState()["frameCount"] or 0, lo | (hi << 8),
+    active, r8(0x__BANK__), r8(0x__SRC_HI__), r8(0x__SRC_LO__),
+    mprs()
+  ))
+  return active
+end
+local function on_pc(address, callback)
+  emu.addMemoryCallback(callback, emu.callbackType.exec,
+    address, address, CPU, MEM)
+end
+on_pc(0x__DISPATCH__, function()
+  local c = emu.getCpuState(CPU)
+  if c.a == 0x7B then
+    hits.redirect = hits.redirect + 1
+    triggered = true
+    info("REDIRECT_OPCODE_BEFORE_EXEC")
+  end
+end)
+on_pc(0x__LOAD__, function()
+  if triggered then
+    hits.load = hits.load + 1
+    info("LOAD_ENTRY_BEFORE_CD")
+  end
+end)
+on_pc(0x__READ__, function()
+  if triggered then
+    hits.read = hits.read + 1
+    if hits.read <= 40 then info("BANKED_STREAM_READ_ENTRY") end
+  end
+end)
+on_pc(0x__ADVANCE__, function()
+  if triggered and hits.read <= 40 then info("STREAM_ADVANCE_ENTRY") end
+end)
+on_pc(0xE009, function()
+  if not triggered then return end
+  local lba = (dp8(0xFC) << 16) | (dp8(0xFD) << 8) | dp8(0xFE)
+  if lba >= 0x__FIRST_LBA__ and lba <= 0x__LAST_LBA__ then
+    print(string.format(
+      "[POOL_BIOS_READ_BEFORE_EXEC] lba=$%06X blocks=$%02X "
+        .. "destination=$%02X%02X mode=$%02X %s",
+      lba, dp8(0xF8), dp8(0xFB), dp8(0xFA), dp8(0xFF), mprs()
+    ))
+  end
+end)
+on_pc(0x5915, function()
+  if triggered then
+    hits.render = hits.render + 1
+    if hits.render <= 40 then info("RENDER_CELL_ENTRY") end
+  end
+end)
+on_pc(0x9543, function()
+  if triggered then
+    local active = info("PARSER_ENTRY")
+    if active == 0 then
+      hits.source_return = hits.source_return + 1
+    end
+  end
+end)
+emu.addEventCallback(function()
+  print(string.format(
+    "=== PILOT TRACE SUMMARY: redirects=%d loads=%d reads=%d renders=%d "
+      .. "inactive_parser_entries=%d ===",
+    hits.redirect, hits.load, hits.read, hits.render, hits.source_return
+  ))
+  print("EMULATOR_CERTIFIED=false (inspect sequence, CD errors, state, "
+    .. "and natural continuation manually)")
+end, emu.eventType.scriptEnded)
+"""
+    replacements = {
+        "__DISPATCH__": f"{labels['pool_dispatch']:04X}",
+        "__LOAD__": f"{labels['pool_load']:04X}",
+        "__READ__": f"{labels['pool_read']:04X}",
+        "__ADVANCE__": f"{labels['pool_advance']:04X}",
+        "__ACTIVE__": f"{labels['active']:04X}",
+        "__BANK__": f"{labels['pool_bank']:04X}",
+        "__SRC_HI__": f"{labels['source_hi']:04X}",
+        "__SRC_LO__": f"{labels['source_lo']:04X}",
+        "__FIRST_LBA__": f"{POOL_START_ABSOLUTE_LBA:06X}",
+        "__LAST_LBA__": f"{POOL_START_ABSOLUTE_LBA + 12:06X}",
+    }
+    for key, value in replacements.items():
+        lua = lua.replace(key, value)
+    return lua
+
+
 def build_m0b_pilot_disc(
     ccd: pathlib.Path,
     output_directory: pathlib.Path,
@@ -476,6 +592,7 @@ def build_m0b_pilot_disc(
         patches = build_m0b_pilot_patches(
             payload_path.read_bytes(), glyphs, atlas, english=english
         )
+        runtime = _make_runtime(glyphs, atlas)
         reports = apply_payload_patches(
             output_paths[".img"], patches,
             start_lba=TRACK2_START_LBA,
@@ -491,11 +608,24 @@ def build_m0b_pilot_disc(
             }),
             "font_sha256": atlas.source_sha256,
             "patches": [x.label for x in patches],
+            "runtime_labels": {
+                key: f"0x{value:04X}"
+                for key, value in sorted(runtime.labels.items())
+            },
+            "runtime_code_sha256": hashlib.sha256(
+                runtime.full_code
+            ).hexdigest(),
+            "source_record_terminator_offset": (
+                f"0x{BARTENDER_MARKER_OFFSET + 2 + len(BARTENDER_SOURCE_TEXT.encode('shift_jis')):08X}"
+            ),
             "release_enabled": False,
             "emulator_certified": False,
         }
         (temp / "m0b_pool_pilot_manifest.json").write_text(
             json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+        )
+        (temp / "mesen_m0b_pool_pilot_trace.lua").write_text(
+            render_pilot_mesen_trace(runtime.labels), encoding="utf-8"
         )
         payload_path.unlink()
         temp.replace(output_directory)
