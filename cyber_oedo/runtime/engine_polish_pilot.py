@@ -1,8 +1,13 @@
 """Make a source-authenticated non-release engine-polish A/B disc.
 
-This deliberately composes *existing* nine source-guarded Mission-0
-fast-load benchmark patches, not a new mechanic: resident module reuse,
-portrait/ADPCM Card-RAM read-through and selective bar VRAM restoration.
+This deliberately composes *existing* source-guarded Mission-0
+fast-load benchmark patches, not a new mechanic: portrait/ADPCM
+Card-RAM read-through and selective bar VRAM restoration.
+
+An earlier nine-patch combination including resident-module reuse
+FAILED an actual Mesen prologue replay (invalid-sector reads). Excluding
+that two-patch module shortcut restored the original $7B intro path.
+The suspect shortcut is NOT part of this build.
 
 A separately opt-in English pilot can share the disc. Aggressive audio
 hard cuts and unproved VSync shortcuts are NEVER included.
@@ -23,14 +28,33 @@ from cyber_oedo.disc.clonecd_cue import build_cue
 from cyber_oedo.disc.extract_track2_mode1 import extract_mode1_payload
 from cyber_oedo.disc.game_layout import TRACK2_SECTOR_COUNT, TRACK2_START_LBA
 from cyber_oedo.disc.patching import apply_payload_patches
-from cyber_oedo.runtime.combined_fast_load_benchmark import (
-    build_combined_bar_benchmark,
+from cyber_oedo.runtime.card_ram_portrait_cache import (
+    build_portrait_cache_benchmark,
+)
+from cyber_oedo.runtime.card_ram_adpcm_cache import (
+    build_speaker_adpcm_cache_benchmark,
+)
+from cyber_oedo.runtime.load_time_benchmarks import (
+    build_selective_bar_vram_restore_benchmark,
 )
 from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
 
 OUTPUT_STEM = "Cyber City Oedo 808 [M0 Engine Polish Experimental]"
 ENGLISH_POOL_BANKS = "$7C-$7F"
 CACHE_BANKS = "$68-$6C"
+
+
+def build_intro_smoke_polish_patches():
+    """Source-pinned independent candidates; excludes failing resident hook."""
+    return tuple(
+        patch
+        for benchmark in (
+            build_portrait_cache_benchmark(),
+            build_speaker_adpcm_cache_benchmark(),
+            build_selective_bar_vram_restore_benchmark(),
+        )
+        for patch in benchmark.patches
+    )
 
 
 def compose_polish_patches(
@@ -47,8 +71,7 @@ def compose_polish_patches(
     """
     if diagnostic_intro and not english_pilot:
         raise ValueError("diagnostic intro requires --english-pilot")
-    core = build_combined_bar_benchmark()
-    patches = list(core.patches)
+    patches = list(build_intro_smoke_polish_patches())
     runtime = None
     atlas = None
     if english_pilot:
@@ -129,7 +152,15 @@ def build_polish_disc(
             "audio_policy": "unchanged: no hard cut or fade-time bypass",
             "gameplay_policy": "unchanged: no casefile/saves/new interactions",
             "added_features": [],
-            "core_patch_count": len(build_combined_bar_benchmark().patches),
+            "core_patch_count": len(build_intro_smoke_polish_patches()),
+            "excluded_regression": (
+                "resident-module shortcut: combined Mesen intro produced "
+                "invalid-sector retry loop; omitted from safe smoke variant"
+            ),
+            "observed_scope": (
+                "M0B opening boot and $7B diagnostic only; "
+                "not yet certified in bar, other rooms or later missions"
+            ),
             "patch_count": len(patches),
             "changed_sectors": sorted(
                 r.relative_sector for r in reports
