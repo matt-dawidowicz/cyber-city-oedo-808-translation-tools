@@ -55,12 +55,22 @@ class EnglishGlyphTable:
 
     @classmethod
     def from_texts(cls, texts: Iterable[str]) -> "EnglishGlyphTable":
-        used = set("".join(texts))
+        # Preserve the actual corpus for error reporting. A revised
+        # translation must not silently substitute missing characters.
+        values = tuple(texts)
+        used = set("".join(values))
         unsupported = used.difference(DEFAULT_DISPLAY_CHARACTERS)
         if unsupported:
-            rendered = ", ".join(repr(x) for x in sorted(unsupported))
+            from cyber_oedo.text.oedo_pixel_font import audit_glyphs
+
+            report = audit_glyphs(values, supported=DEFAULT_DISPLAY_CHARACTERS)
+            details = ", ".join(
+                f"{item['character']!r} {item['codepoint']} "
+                f"({item['name']}, {item['occurrences']} occurrences)"
+                for item in report.missing
+            )
             raise EnglishDialogueCompileError(
-                f"unsupported English display characters: {rendered}"
+                "unsupported English display characters: " + details
             )
         ordered = "".join(c for c in DEFAULT_DISPLAY_CHARACTERS if c in used)
         return cls(ordered)
