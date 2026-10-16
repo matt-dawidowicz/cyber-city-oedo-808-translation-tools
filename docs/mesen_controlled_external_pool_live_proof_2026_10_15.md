@@ -42,3 +42,30 @@ These observations provide live proof that the generated **$7B -> four-bank CD l
 - A real Mesen trace of the **last** unread consumer through the source terminator and independent examination of BIOS error-return paths.
 
 **Release gate remains closed.** Keep PR #42's original $7B P1 review thread unresolved until a natural bartender encounter and subsequent clean continuation are demonstrated. Do not distribute the diagnostic disc.
+
+## Reproduce the controlled intro test without manual disc editing
+
+From this branch, with the authenticated original CloneCD set, an installed
+8×16 rasterization font, and Python 3.11+:
+
+```bash
+python -m cyber_oedo.runtime.mission0_pool_pilot \
+  /path/to/original.ccd /path/to/new-diagnostic-output /path/to/font.ttf \
+  --diagnostic-intro-redirect
+```
+
+The new **explicit opt-in** flag adds the proven early intro redirect to the
+existing M0-B bartender pilot, but does **not** replace the normal bartender
+redirect or enable it in release mode. It requires the original full Track 2
+SHA-256, the exact recorded intro marker/record SHA-256 and untouched source
+terminator. This modifies only a **fresh output disc copy**, never source files.
+
+The generated manifest has `diagnostic_intro_redirect=true`,
+`natural_bartender_certified=false`, and `release_enabled=false`.
+Without the flag, the normal single-bartender pilot is unchanged.
+
+Run the generated read-only Mesen Lua trace. Under the documented automation,
+the intro diagnostic reaches $7B around emulated frame 5,008; frame timing
+depends on controller events and emulator configuration. This is a
+**diagnostic runtime path**, not proof that the true in-game bartender
+conversation is navigable or completely translated.
