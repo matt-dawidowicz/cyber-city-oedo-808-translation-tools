@@ -77,6 +77,18 @@ class OedoPixelTests(unittest.TestCase):
         self.assertFalse(audit.would_fit_native)
         self.assertTrue(audit_glyphs(["“Where’s Benten?” — ¥500… ■"]).would_fit_native)
 
+    def test_native_compiler_reports_exact_missing_glyphs_and_counts(self) -> None:
+        from cyber_oedo.text.english_dialogue_engine import (
+            EnglishDialogueCompileError,
+        )
+
+        with self.assertRaises(EnglishDialogueCompileError) as caught:
+            EnglishGlyphTable.from_texts(["Café", "Café!"])
+        message = str(caught.exception)
+        self.assertIn("U+00E9", message)
+        self.assertIn("2 occurrences", message)
+        self.assertIn("LATIN SMALL LETTER E WITH ACUTE", message)
+
     def test_empty_or_over_capacity_unsupported_fails_closed(self) -> None:
         self.assertFalse(audit_glyphs([]).would_fit_native)
         with self.assertRaisesRegex(OedoPixelFontError, "95-slot"):
