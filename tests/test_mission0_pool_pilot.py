@@ -16,6 +16,7 @@ from cyber_oedo.runtime.mission0_pool_pilot import (
     SOURCE_REDIRECT_BYTES,
     _make_runtime,
     build_m0b_pilot_patches,
+    render_pilot_mesen_trace,
 )
 from cyber_oedo.text.english_dialogue_engine import EnglishGlyphTable
 from cyber_oedo.text.font_atlas import RasterConfig, RasterizedAtlas
@@ -119,6 +120,19 @@ class Mission0PoolPilotTests(unittest.TestCase):
         pool = next(item for item in patches if "16 tail sectors" in item.label)
         self.assertEqual(pool.replacement[:2], bytes.fromhex("7D 45"))
         self.assertEqual(len(pool.replacement), 0x8000)
+
+    def test_mesen_trace_uses_actual_compiled_labels_and_is_read_only(self) -> None:
+        glyphs, atlas = self._fixture()
+        runtime = _make_runtime(glyphs, atlas)
+        lua = render_pilot_mesen_trace(runtime.labels)
+        self.assertIn(f"on_pc(0x{runtime.labels['pool_read']:04X}", lua)
+        self.assertIn(f"on_pc(0x{runtime.labels['pool_load']:04X}", lua)
+        self.assertIn("EMULATOR_CERTIFIED=false", lua)
+        self.assertNotIn("emu.write(", lua)
+        self.assertNotIn("__POOL_", lua)
+        self.assertNotIn("__DISPATCH__", lua)
+        with self.assertRaisesRegex(ValueError, "missing/out-of-range"):
+            render_pilot_mesen_trace({"pool_dispatch": 0x1000})
 
     def test_missing_original_bytes_are_refused(self) -> None:
         glyphs, atlas = self._fixture()
