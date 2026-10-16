@@ -66,13 +66,16 @@ class EnginePolishCompositionTests(unittest.TestCase):
     def test_core_uses_only_existing_nonaggressive_safe_fallback_edits(self):
         original = SparseAuthenticatedSource()
         items, runtime, atlas = compose_polish_patches(original)
-        self.assertEqual(len(items), 9)
+        self.assertEqual(len(items), 7)
         self.assertIsNone(runtime)
         self.assertIsNone(atlas)
         self.assertTrue(all(original[p.offset:p.end_offset] == p.expected
                             for p in items))
         labels = " ".join(p.label.lower() for p in items)
-        for prohibited in ("hard audio", "fade", "120-frame", "speaker cache selector"):
+        for prohibited in (
+            "hard audio", "fade", "120-frame", "speaker cache selector",
+            "resident-module", "jmp entrypoints",
+        ):
             self.assertNotIn(prohibited, labels)
 
     def test_english_pilot_can_be_composed_with_fastload_no_overlap(self):
@@ -81,7 +84,7 @@ class EnginePolishCompositionTests(unittest.TestCase):
             items, runtime, atlas = compose_polish_patches(
                 original, english_pilot=True
             )
-        self.assertEqual(len(items), 19)
+        self.assertEqual(len(items), 17)
         self.assertIsNotNone(runtime)
         self.assertIsNotNone(atlas)
         self.assertEqual(CACHE_BANKS, "$68-$6C")
