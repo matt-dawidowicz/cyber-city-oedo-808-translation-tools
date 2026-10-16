@@ -242,7 +242,7 @@ class PilotCPU:
 
     def subroutine(self, label: str) -> int:
         # JSR would push the last operand address, RTS adds one.
-        self.push(0xFE)
+        self.push(0xFF)  # high byte of synthetic JSR return ($FFFD)
         self.push(0xFD)
         self.pc = self.labels[label]
         self.until(0xFFFE)
@@ -322,7 +322,12 @@ class Mission0PoolCpuTests(unittest.TestCase):
         cpu = self._cpu(offset=0x1FFF)
         cpu.pc = cpu.labels["pool_dispatch"]
         cpu.until(0x9549)
-        self.assertEqual(cpu.script_ptr(), 0x7FFF)
+        # Parser-entry has *already* read the byte at $7FFF and
+        # advanced across the bank boundary before reaching $9549.
+        self.assertEqual(cpu.script_ptr(), 0x6000)
+        self.assertEqual(cpu.memory[cpu.labels["pool_bank"]], 0x7D)
+        cpu.dp[0x7F], cpu.dp[0x80] = 0xFF, 0x7F
+        cpu.memory[cpu.labels["pool_bank"]] = 0x7C
         self.assertEqual(cpu.subroutine("pool_read"), 0x7D)
         a_before = cpu.a
         cpu.subroutine("pool_advance")
