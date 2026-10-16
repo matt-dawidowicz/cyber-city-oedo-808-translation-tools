@@ -37,6 +37,13 @@ class PilotCPU:
         self.banks = {bank: bytearray(0x2000) for bank in range(0x7C, 0x80)}
         self.source_pool = pool
         self.cd_reads: list[tuple[int, int, int, int]] = []
+        self.rendered_cells: list[tuple[int, int]] = []
+        for address, name in ((0x9543, "pool_parser_entry"),
+                              (0x95D4, "pool_dispatch")):
+            target = labels[name]
+            self.memory[address:address + 3] = bytes(
+                (0x4C, target & 255, target >> 8)
+            )
         self.bios_failure_index = bios_failure_index
         # Physically install the 3- and 6-byte stock helper trampolines.
         for at, name, count in (
@@ -117,6 +124,14 @@ class PilotCPU:
     def step(self) -> None:
         if self.pc == 0xE009:
             self._bios_cd_read()
+            return
+        if self.pc in (0x8CFC, 0x5915):
+            # The stock delay and cell-writer are modeled as opaque leaves.
+            # A real Mesen run is still required to prove their side effects.
+            if self.pc == 0x5915:
+                self.rendered_cells.append((self.dp[0x03], self.dp[0x02]))
+            low = self.pop()
+            self.pc = (((self.pop() << 8) | low) + 1) & 0xFFFF
             return
         op_at = self.pc
         op = self.fetch()
@@ -208,6 +223,13 @@ class PilotCPU:
             self.mpr3 = self.a
         elif op == 0x18:
             self.c = 0
+        elif op == 0x38:
+            self.c = 1
+        elif op == 0xE9:
+            v = self.fetch()
+            x = self.a - v - (1 - self.c)
+            self.c = int(x >= 0)
+            self.a = self.nz(x)
         elif op == 0x69:
             x = self.a + self.fetch() + self.c
             self.c = int(x > 255)
@@ -335,6 +357,18 @@ class Mission0PoolCpuTests(unittest.TestCase):
         self.assertEqual(cpu.script_ptr(), 0x6000)
         self.assertEqual(cpu.memory[cpu.labels["pool_bank"]], 0x7D)
         self.assertEqual(cpu.subroutine("pool_read"), 0x45)
+        self.assertEqual(cpu.mpr3, 0x81)
+
+    def test_native_english_segment_reaches_stock_renderer_and_returns(self) -> None:
+        cpu = self._cpu()
+        cpu.pc = cpu.labels["pool_dispatch"]
+        cpu.until(0x9549)
+        self.assertEqual(cpu.a, 0x7D)
+        cpu.pc = cpu.labels["parser_dispatch"]
+        cpu.until(0x9549)
+        self.assertEqual(cpu.rendered_cells, [(0x20, 0x21)])
+        self.assertEqual(cpu.active(), 0)
+        self.assertEqual(cpu.script_ptr(), 0x801C)
         self.assertEqual(cpu.mpr3, 0x81)
 
     def test_bios_error_fails_closed_at_original_terminator(self) -> None:
