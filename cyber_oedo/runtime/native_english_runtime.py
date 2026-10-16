@@ -267,6 +267,7 @@ def _emit_runtime(
     space_glyph_id: int,
     question_glyph_id: int,
     font_row_cpus: tuple[int, ...],
+    pool_safe_read: bool = False,
 ) -> tuple[bytes, dict[str, int]]:
     if not 0 < glyph_count <= STORAGE_CODE_CAPACITY:
         raise NativeEnglishRuntimeError("glyph count must fit $20-$7E storage codes")
@@ -287,7 +288,12 @@ def _emit_runtime(
     assembler.label("parser_dispatch")
     assembler.immediate(0xC9, ENGLISH_MODE_SIGNATURE[0])
     assembler.branch(0xD0, "normal_compare")
-    assembler.emit(0xB2, 0x7F)  # LDA ($7F): signature byte 2.
+    if pool_safe_read:
+        # A banked stream is mapped only for the duration of stream_read;
+        # dereferencing ($7F) here would see the restored stock MPR3 bank.
+        assembler.absolute(0x20, stream_read)
+    else:
+        assembler.emit(0xB2, 0x7F)  # LDA ($7F): signature byte 2.
     assembler.immediate(0xC9, ENGLISH_MODE_SIGNATURE[1])
     assembler.branch(0xF0, "fixed_signature")
     assembler.immediate(0xC9, VWF_MODE_SIGNATURE[1])
@@ -508,6 +514,8 @@ def build_overlay_runtime(
     layout: NativeOverlayLayout,
     glyphs: EnglishGlyphTable,
     atlas: RasterizedAtlas,
+    *,
+    pool_safe_read: bool = False,
 ) -> NativeOverlayRuntime:
     if atlas.characters != glyphs.characters:
         raise NativeEnglishRuntimeError(
@@ -528,6 +536,7 @@ def build_overlay_runtime(
         space_glyph_id=space_id,
         question_glyph_id=question_id,
         font_row_cpus=row_cpus,
+        pool_safe_read=pool_safe_read,
     )
     font_rows = _font_rows(atlas)
 
