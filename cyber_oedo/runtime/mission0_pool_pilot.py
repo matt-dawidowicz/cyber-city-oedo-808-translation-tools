@@ -65,6 +65,12 @@ BARTENDER_MARKER_OFFSET = 0x00145890
 BARTENDER_SOURCE_TEXT = "バーテン「いらっしゃいませ」"
 DEFAULT_PILOT_TEXT = "Bartender: Welcome."
 SOURCE_REDIRECT_BYTES = 5  # 7B pool_u16le source_skip_u16le; NO early 00.
+DIAGNOSTIC_INTRO_MARKER_OFFSET = 0x00175828
+DIAGNOSTIC_INTRO_TERMINATOR_OFFSET = 0x00175ADF
+DIAGNOSTIC_INTRO_RECORD_SHA256 = (
+    "93afb245ad8ee5bf0ac1f1e8c712e6c35a4dd3b910725f88df3bb58145dbdc71"
+)
+
 
 # LBA $107D loads source [base+$A000, base+$BC00) into RAM $A400-$BFFF.
 M0B_POOL_LAYOUT = NativeOverlayLayout(
@@ -339,12 +345,35 @@ def _verify_original(payload: bytes) -> None:
         raise ValueError("English pool allocation is not authenticated empty tail")
 
 
+def build_m0b_intro_diagnostic_patch(payload: bytes) -> PayloadPatch:
+    """Source-guarded opening-narration redirect for NON-RELEASE tests only."""
+    start = DIAGNOSTIC_INTRO_MARKER_OFFSET
+    stop = DIAGNOSTIC_INTRO_TERMINATOR_OFFSET
+    record = payload[start:stop + 1]
+    if (
+        len(record) != stop + 1 - start
+        or not record.startswith(bytes.fromhex("27 28 81 75 89 B4 82"))
+        or record[-1] != 0
+        or 0 in record[2:-1]
+        or hashlib.sha256(record).hexdigest() != DIAGNOSTIC_INTRO_RECORD_SHA256
+    ):
+        raise ValueError("intro diagnostic record does not match authenticated bytes")
+    body_at = start + 2
+    remaining = stop - (body_at + SOURCE_REDIRECT_BYTES)
+    redirect = bytes.fromhex("7B 00 00") + remaining.to_bytes(2, "little")
+    return PayloadPatch(
+        body_at, record[2:2 + SOURCE_REDIRECT_BYTES], redirect,
+        "DIAGNOSTIC-ONLY intro narration uses shared $7B pool renderer",
+    )
+
+
 def build_m0b_pilot_patches(
     payload: bytes,
     glyphs: EnglishGlyphTable,
     atlas: RasterizedAtlas,
     *,
     english: str = DEFAULT_PILOT_TEXT,
+    diagnostic_intro_redirect: bool = False,
 ) -> tuple[PayloadPatch, ...]:
     """Produce guarded modifications only; callers must supply a COPY of IMG."""
     _verify_original(payload)
@@ -422,6 +451,8 @@ def build_m0b_pilot_patches(
             "M0-B bartender dialogue relocated without moving original terminator",
         ),
     )
+    if diagnostic_intro_redirect:
+        patches += (build_m0b_intro_diagnostic_patch(payload),)
     spans = sorted(
         (patch.offset, patch.offset + len(patch.expected), patch.label)
         for patch in patches
@@ -558,6 +589,7 @@ def build_m0b_pilot_disc(
     *,
     english: str = DEFAULT_PILOT_TEXT,
     point_size: int = 13,
+    diagnostic_intro_redirect: bool = False,
 ) -> pathlib.Path:
     """Create a separate EXPERIMENTAL CloneCD copy. Never edit original media."""
     from cyber_oedo.build.profiles import mission0_stock
@@ -590,7 +622,8 @@ def build_m0b_pilot_disc(
         if size != TRACK2_SECTOR_COUNT * 2048 or digest != TRACK2_SHA256:
             raise ValueError("extracted disc payload is not authenticated")
         patches = build_m0b_pilot_patches(
-            payload_path.read_bytes(), glyphs, atlas, english=english
+            payload_path.read_bytes(), glyphs, atlas, english=english,
+            diagnostic_intro_redirect=diagnostic_intro_redirect,
         )
         runtime = _make_runtime(glyphs, atlas)
         reports = apply_payload_patches(
@@ -620,6 +653,13 @@ def build_m0b_pilot_disc(
             ),
             "release_enabled": False,
             "emulator_certified": False,
+            "diagnostic_intro_redirect": diagnostic_intro_redirect,
+            "natural_bartender_certified": False,
+            "diagnostic_warning": (
+                "Opening narration is substituted ONLY to test the $7B loader, "
+                "not as game translation or natural bartender certification."
+                if diagnostic_intro_redirect else None
+            ),
         }
         (temp / "m0b_pool_pilot_manifest.json").write_text(
             json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
@@ -644,10 +684,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("font", type=pathlib.Path)
     parser.add_argument("--english", default=DEFAULT_PILOT_TEXT)
     parser.add_argument("--point-size", type=int, default=13)
+    parser.add_argument(
+        "--diagnostic-intro-redirect", action="store_true",
+        help="NON-RELEASE: run $7B from the authenticated opening narration",
+    )
     args = parser.parse_args(argv)
     result = build_m0b_pilot_disc(
         args.source_ccd, args.output_directory, args.font,
         english=args.english, point_size=args.point_size,
+        diagnostic_intro_redirect=args.diagnostic_intro_redirect,
     )
     print("output_ccd=" + str(result))
     print("release_enabled=false")
