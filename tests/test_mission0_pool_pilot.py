@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import unittest
+import hashlib
 from unittest.mock import patch
 
 from cyber_oedo.runtime.mission0_pool_pilot import (
     BARTENDER_MARKER_OFFSET,
     BARTENDER_SOURCE_TEXT,
+    DIAGNOSTIC_INTRO_MARKER_OFFSET,
+    DIAGNOSTIC_INTRO_TERMINATOR_OFFSET,
     DEFAULT_PILOT_TEXT,
     M0B_POOL_LAYOUT,
     M0B_SOURCE_BASE,
@@ -16,6 +19,7 @@ from cyber_oedo.runtime.mission0_pool_pilot import (
     SOURCE_REDIRECT_BYTES,
     _make_runtime,
     build_m0b_pilot_patches,
+    build_m0b_intro_diagnostic_patch,
     render_pilot_mesen_trace,
 )
 from cyber_oedo.text.english_dialogue_engine import EnglishGlyphTable
@@ -133,6 +137,49 @@ class Mission0PoolPilotTests(unittest.TestCase):
         self.assertNotIn("__DISPATCH__", lua)
         with self.assertRaisesRegex(ValueError, "missing/out-of-range"):
             render_pilot_mesen_trace({"pool_dispatch": 0x1000})
+
+    def test_source_guarded_diagnostic_intro_preserves_original_terminator(self) -> None:
+        start = DIAGNOSTIC_INTRO_MARKER_OFFSET
+        stop = DIAGNOSTIC_INTRO_TERMINATOR_OFFSET
+        record = (
+            bytes.fromhex("27 28 81 75 89 B4 82")
+            + bytes((0x82,)) * (stop - start - 7)
+            + bytes((0,))
+        )
+        payload = bytearray(stop + 1)
+        payload[start:stop + 1] = record
+        with patch(
+            "cyber_oedo.runtime.mission0_pool_pilot.DIAGNOSTIC_INTRO_RECORD_SHA256",
+            hashlib.sha256(record).hexdigest(),
+        ):
+            result = build_m0b_intro_diagnostic_patch(bytes(payload))
+            self.assertEqual(result.offset, start + 2)
+            self.assertEqual(result.replacement, bytes.fromhex("7B 00 00 B0 02"))
+            skip = int.from_bytes(result.replacement[3:5], "little")
+            self.assertEqual(result.offset + len(result.replacement) + skip, stop)
+            self.assertEqual(payload[stop], 0)
+            self.assertIn("DIAGNOSTIC-ONLY", result.label)
+            payload[start + 2] ^= 1
+            with self.assertRaisesRegex(ValueError, "authenticated bytes"):
+                build_m0b_intro_diagnostic_patch(bytes(payload))
+
+    def test_diagnostic_intro_requires_explicit_opt_in(self) -> None:
+        # All standard builder tests still generate exactly ten source patches.
+        import inspect
+
+        from cyber_oedo.runtime.mission0_pool_pilot import (
+            build_m0b_pilot_disc,
+            build_m0b_pilot_patches,
+        )
+
+        self.assertIs(
+            inspect.signature(build_m0b_pilot_patches)
+            .parameters["diagnostic_intro_redirect"].default, False
+        )
+        self.assertIs(
+            inspect.signature(build_m0b_pilot_disc)
+            .parameters["diagnostic_intro_redirect"].default, False
+        )
 
     def test_missing_original_bytes_are_refused(self) -> None:
         glyphs, atlas = self._fixture()
