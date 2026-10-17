@@ -100,6 +100,38 @@ class ExactVwfTests(unittest.TestCase):
                     sparse, glyphs, atlas, english=english, vwf_pilot=True
                 )
 
+    def test_native_pool_audits_each_vwf_line_not_one_total(self) -> None:
+        from cyber_oedo.runtime.external_english_pool import (
+            inspect_native_pool_record,
+        )
+
+        cases = (
+            ("Bartender: Welcome.", 1),
+            ("Bartender: Welcome. Do you know the Old City?", 2),
+            (
+                "Bartender: Welcome. You look like trouble. "
+                "This bar is no place to make enemies.",
+                3,
+            ),
+        )
+        for english, expected in cases:
+            with self.subTest(line_count=expected):
+                glyphs = EnglishGlyphTable.from_texts((english, " ?"))
+                atlas = authored_atlas(glyphs.characters)
+                runtime = _make_runtime(glyphs, atlas, vwf_loader=True)
+                sparse = SourceCodeView(len(runtime.font), len(runtime.full_code))
+                sparse.slices[(VWF_SECTOR_RELATIVE * 2048, VWF_BANK_BYTES)] = bytes(
+                    VWF_BANK_BYTES
+                )
+                with patch("cyber_oedo.runtime.mission0_pool_pilot._verify_original"):
+                    edits = build_m0b_pilot_patches(
+                        sparse, glyphs, atlas, english=english, vwf_pilot=True
+                    )
+                pool = next(x for x in edits if "four Card RAM banks" in x.label)
+                audit = inspect_native_pool_record(pool.replacement, 0)
+                self.assertEqual(audit.vwf_segments, expected)
+                self.assertEqual(audit.fixed_segments, 0)
+
     def test_vwf_opt_in_requires_authored_pixel_source(self):
         with self.assertRaisesRegex(ValueError, "requires"):
             build_m0b_pilot_disc(
