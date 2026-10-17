@@ -1,13 +1,16 @@
 """Make a source-authenticated non-release engine-polish A/B disc.
 
-This deliberately composes *existing* source-guarded Mission-0
-fast-load benchmark patches, not a new mechanic: portrait/ADPCM
-Card-RAM read-through and selective bar VRAM restoration.
+By default, no performance-altering gameplay patches are installed.
+All existing source-guarded Mission-0 cache/restore optimizations remain
+explicit, acknowledged UNVERIFIED experiments, never automatic polish.
 
-An earlier nine-patch combination including resident-module reuse
-FAILED an actual Mesen prologue replay (invalid-sector reads). Excluding
-that two-patch module shortcut restored the original $7B intro path.
-The suspect shortcut is NOT part of this build.
+On a clean-boot Mission-0 NPC, the previous seven-patch combination
+failed to reach dialogue; portrait plus ADPCM caching also failed, while
+the selective bar restore alone reached the parser. The earlier nine-
+patch resident-module shortcut failed in the opening. All are gated.
+
+The optional original authored English VWF diagnostic may be compiled
+without enabling ANY of the failing performance candidates.
 
 A separately opt-in English pilot can share the disc. Aggressive audio
 hard cuts and unproved VSync shortcuts are NEVER included.
@@ -44,17 +47,36 @@ ENGLISH_POOL_BANKS = "$7C-$7F"
 CACHE_BANKS = "$68-$6C"
 
 
-def build_intro_smoke_polish_patches():
-    """Source-pinned independent candidates; excludes failing resident hook."""
-    return tuple(
-        patch
-        for benchmark in (
-            build_portrait_cache_benchmark(),
-            build_speaker_adpcm_cache_benchmark(),
-            build_selective_bar_vram_restore_benchmark(),
+PERFORMANCE_EXPERIMENTS = (
+    "none", "portrait", "adpcm", "portrait-adpcm",
+    "selective-restore", "all-seven",
+)
+
+
+def build_intro_smoke_polish_patches(performance_experiment: str = "none"):
+    """Make an explicitly selected, *uncertified* source-guarded patch set.
+
+    The default remains byte-identical to stock outside independent English
+    VWF experimental edits. The six legacy cache/restore candidates are never
+    silently promoted after Mesen's clean-boot NPC regression.
+    """
+    if performance_experiment not in PERFORMANCE_EXPERIMENTS:
+        raise ValueError(
+            "unknown performance experiment: " + performance_experiment
         )
-        for patch in benchmark.patches
-    )
+    if performance_experiment == "none":
+        return ()
+    portrait = build_portrait_cache_benchmark().patches
+    adpcm = build_speaker_adpcm_cache_benchmark().patches
+    restore = build_selective_bar_vram_restore_benchmark().patches
+    options = {
+        "portrait": portrait,
+        "adpcm": adpcm,
+        "portrait-adpcm": portrait + adpcm,
+        "selective-restore": restore,
+        "all-seven": portrait + adpcm + restore,
+    }
+    return options[performance_experiment]
 
 
 def compose_polish_patches(
@@ -64,6 +86,8 @@ def compose_polish_patches(
     diagnostic_intro: bool = False,
     english: str = "Bartender: Welcome.",
     vwf_pilot: bool = False,
+    performance_experiment: str = "none",
+    acknowledge_unsafe_performance: bool = False,
 ):
     """Return nonoverlapping source-matched edits and optional renderer data.
 
@@ -74,7 +98,12 @@ def compose_polish_patches(
         raise ValueError("diagnostic intro requires --english-pilot")
     if vwf_pilot and not english_pilot:
         raise ValueError("VWF pilot requires --english-pilot")
-    patches = list(build_intro_smoke_polish_patches())
+    if performance_experiment != "none" and not acknowledge_unsafe_performance:
+        raise ValueError(
+            "untested performance profile requires "
+            "--acknowledge-unsafe-performance; see the Mesen NPC regression"
+        )
+    patches = list(build_intro_smoke_polish_patches(performance_experiment))
     runtime = None
     atlas = None
     if english_pilot:
@@ -116,6 +145,8 @@ def build_polish_disc(
     diagnostic_intro: bool = False,
     english: str = "Bartender: Welcome.",
     vwf_pilot: bool = False,
+    performance_experiment: str = "none",
+    acknowledge_unsafe_performance: bool = False,
 ) -> pathlib.Path:
     """Create a fresh authenticated 88-track test copy, never a release build."""
     output_directory = output_directory.resolve()
@@ -145,6 +176,8 @@ def build_polish_disc(
             diagnostic_intro=diagnostic_intro,
             english=english,
             vwf_pilot=vwf_pilot,
+            performance_experiment=performance_experiment,
+            acknowledge_unsafe_performance=acknowledge_unsafe_performance,
         )
         reports = apply_payload_patches(
             destinations[".img"], patches,
@@ -158,14 +191,26 @@ def build_polish_disc(
             "audio_policy": "unchanged: no hard cut or fade-time bypass",
             "gameplay_policy": "unchanged: no casefile/saves/new interactions",
             "added_features": [],
-            "core_patch_count": len(build_intro_smoke_polish_patches()),
+            "core_patch_count": len(build_intro_smoke_polish_patches(
+                performance_experiment
+            )),
+            "performance_experiment": performance_experiment,
+            "performance_runtime_certified": False,
+            "performance_regression": (
+                "Clean-boot real NPC dialogue failed with all-seven and "
+                "portrait-adpcm experiments; never enable automatically"
+            ),
+            "unsafe_experiment_acknowledged": (
+                performance_experiment != "none"
+                and acknowledge_unsafe_performance
+            ),
             "excluded_regression": (
                 "resident-module shortcut: combined Mesen intro produced "
                 "invalid-sector retry loop; omitted from safe smoke variant"
             ),
             "observed_scope": (
-                "M0B opening boot and $7B diagnostic only; "
-                "not yet certified in bar, other rooms or later missions"
+                "M0B opening VWF and one pre-bartender NPC entry only; "
+                "no certified cache/restore performance improvements yet"
             ),
             "patch_count": len(patches),
             "changed_sectors": sorted(
@@ -221,6 +266,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="Include existing opt-in English bartender proof")
     parser.add_argument("--vwf-pilot", action="store_true",
                         help="Opt-in VWF cells with --english-pilot")
+    parser.add_argument(
+        "--performance-experiment", choices=PERFORMANCE_EXPERIMENTS,
+        default="none", help="UNSAFE A/B only; default none",
+    )
+    parser.add_argument(
+        "--acknowledge-unsafe-performance", action="store_true",
+        help="Required to enable unverified cache/restore mutations",
+    )
     parser.add_argument("--diagnostic-intro", action="store_true",
                         help="NON-RELEASE: substitute intro for renderer smoke test")
     args = parser.parse_args(argv)
@@ -229,6 +282,8 @@ def main(argv: list[str] | None = None) -> int:
         english_pilot=args.english_pilot,
         diagnostic_intro=args.diagnostic_intro,
         vwf_pilot=args.vwf_pilot,
+        performance_experiment=args.performance_experiment,
+        acknowledge_unsafe_performance=args.acknowledge_unsafe_performance,
     )
     print("output_ccd=" + str(ccd))
     print("release_enabled=false; combined_runtime_certified=false")
