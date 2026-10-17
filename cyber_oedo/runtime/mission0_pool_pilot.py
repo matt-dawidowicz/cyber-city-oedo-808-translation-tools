@@ -428,8 +428,12 @@ def build_m0b_pilot_patches(
         raise ValueError("pilot English text does not fit Card RAM")
     pool = compiled + bytes(POOL_CAPACITY - len(compiled))
     audit = inspect_native_pool_record(pool, 0)
-    if audit.vwf_segments != int(vwf_pilot):
-        raise ValueError("pool VWF stream audit disagrees with compiler")
+    expected_vwf_segments = len(vwf_cells.line_texts) if vwf_cells else 0
+    if (
+        audit.vwf_segments != expected_vwf_segments
+        or audit.fixed_segments != int(not vwf_pilot)
+    ):
+        raise ValueError("pool English stream audit disagrees with compiler")
     runtime = _make_runtime(glyphs, atlas, vwf_loader=vwf_pilot)
     labels = runtime.labels
     b = M0B_SOURCE_BASE
