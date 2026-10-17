@@ -63,6 +63,7 @@ def compose_polish_patches(
     english_pilot: bool = False,
     diagnostic_intro: bool = False,
     english: str = "Bartender: Welcome.",
+    vwf_pilot: bool = False,
 ):
     """Return nonoverlapping source-matched edits and optional renderer data.
 
@@ -71,6 +72,8 @@ def compose_polish_patches(
     """
     if diagnostic_intro and not english_pilot:
         raise ValueError("diagnostic intro requires --english-pilot")
+    if vwf_pilot and not english_pilot:
+        raise ValueError("VWF pilot requires --english-pilot")
     patches = list(build_intro_smoke_polish_patches())
     runtime = None
     atlas = None
@@ -83,10 +86,11 @@ def compose_polish_patches(
 
         glyphs = EnglishGlyphTable.from_texts((english, " ?"))
         atlas = authored_atlas(glyphs.characters)
-        runtime = _make_runtime(glyphs, atlas)
+        runtime = _make_runtime(glyphs, atlas, vwf_loader=vwf_pilot)
         patches.extend(build_m0b_pilot_patches(
             original_payload, glyphs, atlas, english=english,
             diagnostic_intro_redirect=diagnostic_intro,
+            vwf_pilot=vwf_pilot,
         ))
 
     patches.sort(key=lambda x: x.offset)
@@ -111,6 +115,7 @@ def build_polish_disc(
     english_pilot: bool = False,
     diagnostic_intro: bool = False,
     english: str = "Bartender: Welcome.",
+    vwf_pilot: bool = False,
 ) -> pathlib.Path:
     """Create a fresh authenticated 88-track test copy, never a release build."""
     output_directory = output_directory.resolve()
@@ -139,6 +144,7 @@ def build_polish_disc(
             english_pilot=english_pilot,
             diagnostic_intro=diagnostic_intro,
             english=english,
+            vwf_pilot=vwf_pilot,
         )
         reports = apply_payload_patches(
             destinations[".img"], patches,
@@ -174,6 +180,10 @@ def build_polish_disc(
                 "replacement_sha256": hashlib.sha256(p.replacement).hexdigest(),
             } for p in patches],
             "english_pilot": english_pilot,
+            "vwf_pilot": vwf_pilot,
+            "vwf_authoring": (
+                "seamless whole-line 16px cells" if vwf_pilot else None
+            ),
             "english_font_sha256": atlas.source_sha256 if atlas else None,
             "diagnostic_intro": diagnostic_intro,
             "card_ram_core": CACHE_BANKS,
@@ -209,6 +219,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("output_directory", type=pathlib.Path)
     parser.add_argument("--english-pilot", action="store_true",
                         help="Include existing opt-in English bartender proof")
+    parser.add_argument("--vwf-pilot", action="store_true",
+                        help="Opt-in VWF cells with --english-pilot")
     parser.add_argument("--diagnostic-intro", action="store_true",
                         help="NON-RELEASE: substitute intro for renderer smoke test")
     args = parser.parse_args(argv)
@@ -216,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
         args.source_ccd, args.output_directory,
         english_pilot=args.english_pilot,
         diagnostic_intro=args.diagnostic_intro,
+        vwf_pilot=args.vwf_pilot,
     )
     print("output_ccd=" + str(ccd))
     print("release_enabled=false; combined_runtime_certified=false")
