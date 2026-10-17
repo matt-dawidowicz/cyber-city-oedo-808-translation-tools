@@ -60,6 +60,12 @@ M0B_TABLE_LOADER_REPLACEMENT = bytes.fromhex("A9 00 85 06 A9 1C 85 07")
 POOL_START_RELATIVE_SECTOR = 0xA059
 POOL_START_ABSOLUTE_LBA = TRACK2_START_LBA + POOL_START_RELATIVE_SECTOR
 POOL_SECTORS = POOL_CAPACITY // 2048
+# Extra authenticated all-zero tail sectors hold pre-rendered proportional
+# bitmap cells. Never collide with the $7C-$7F four-bank stream pool.
+VWF_SECTOR_RELATIVE = POOL_START_RELATIVE_SECTOR + POOL_SECTORS
+VWF_SECTOR_ABSOLUTE = POOL_START_ABSOLUTE_LBA + POOL_SECTORS
+VWF_BANK = 0x73
+VWF_BANK_BYTES = 0x2000
 # Exact source marker is at $00145890; Japanese text follows at $00145892.
 BARTENDER_MARKER_OFFSET = 0x00145890
 BARTENDER_SOURCE_TEXT = "バーテン「いらっしゃいませ」"
@@ -90,6 +96,8 @@ class PilotRuntime:
 def _make_runtime(
     glyphs: EnglishGlyphTable,
     atlas: RasterizedAtlas,
+    *,
+    vwf_loader: bool = False,
 ) -> PilotRuntime:
     """Emit fixed/VWF English code followed by an experimental pool dispatcher."""
     native = build_overlay_runtime(
@@ -287,6 +295,28 @@ def _make_runtime(
     asm.immediate(0xC9, 4)
     asm.branch(0xD0, "pool_load_loop")
 
+    if vwf_loader:
+        # Load the extra four VWF sectors into Super Card RAM bank $73 only
+        # after all original pool reads complete. Existing pool_load cleanup
+        # still restores MPR3 and all eight BIOS argument bytes on failure.
+        immediate(VWF_BANK)
+        asm.emit(0x53, 0x08)  # TAM #$08
+        immediate(0)
+        for zp in (0xFC, 0xF9, 0xFA):
+            asm.zero_page(0x85, zp)
+        immediate((VWF_SECTOR_ABSOLUTE >> 8) & 0xFF)
+        asm.zero_page(0x85, 0xFD)
+        immediate(VWF_SECTOR_ABSOLUTE & 0xFF)
+        asm.zero_page(0x85, 0xFE)
+        immediate(4)
+        asm.zero_page(0x85, 0xF8)
+        immediate(0x60)
+        asm.zero_page(0x85, 0xFB)
+        immediate(1)
+        asm.zero_page(0x85, 0xFF)
+        asm.absolute(0x20, 0xE009)  # BIOS CD_READ
+        sta("load_error")
+
     asm.label("pool_load_cleanup")
     lda("old_mpr3")
     asm.emit(0x53, 0x08)
@@ -374,17 +404,33 @@ def build_m0b_pilot_patches(
     *,
     english: str = DEFAULT_PILOT_TEXT,
     diagnostic_intro_redirect: bool = False,
+    vwf_pilot: bool = False,
 ) -> tuple[PayloadPatch, ...]:
     """Produce guarded modifications only; callers must supply a COPY of IMG."""
     _verify_original(payload)
-    if len(wrap_english(english)) != 1:
-        raise ValueError("pilot must fit in one 22-column fixed English line")
-    compiled = encode_english_segment(english, glyphs) + b"\x00"
+    vwf_cells = None
+    if vwf_pilot:
+        from cyber_oedo.text.vwf_exact_cells import compile_exact_vwf
+        from cyber_oedo.text.vwf_text import derive_vwf_font
+
+        if atlas.characters != glyphs.characters:
+            raise ValueError("VWF and native glyph maps have different order")
+        font = derive_vwf_font(atlas.characters, atlas.glyphs)
+        vwf_cells = compile_exact_vwf(english, font)
+        if len(vwf_cells.staged_cells) > VWF_BANK_BYTES:
+            raise ValueError("pilot VWF cells exceed owned 8 KiB Card RAM bank")
+        compiled = vwf_cells.stream
+    else:
+        if len(wrap_english(english)) != 1:
+            raise ValueError("pilot must fit in one 22-column fixed English line")
+        compiled = encode_english_segment(english, glyphs) + b"\x00"
     if len(compiled) > POOL_CAPACITY:
         raise ValueError("pilot English text does not fit Card RAM")
     pool = compiled + bytes(POOL_CAPACITY - len(compiled))
-    inspect_native_pool_record(pool, 0)
-    runtime = _make_runtime(glyphs, atlas)
+    audit = inspect_native_pool_record(pool, 0)
+    if audit.vwf_segments != int(vwf_pilot):
+        raise ValueError("pool VWF stream audit disagrees with compiler")
+    runtime = _make_runtime(glyphs, atlas, vwf_loader=vwf_pilot)
     labels = runtime.labels
     b = M0B_SOURCE_BASE
     original = BARTENDER_SOURCE_TEXT.encode("shift_jis")
@@ -451,6 +497,13 @@ def build_m0b_pilot_patches(
             "M0-B bartender dialogue relocated without moving original terminator",
         ),
     )
+    if vwf_cells is not None:
+        dictionary = vwf_cells.staged_cells.ljust(VWF_BANK_BYTES, b"\x00")
+        patches += (PayloadPatch(
+            VWF_SECTOR_RELATIVE * 2048,
+            bytes(VWF_BANK_BYTES), dictionary,
+            "M0-B VWF exact 16px cell dictionary in source-guarded disc tail",
+        ),)
     if diagnostic_intro_redirect:
         patches += (build_m0b_intro_diagnostic_patch(payload),)
     spans = sorted(
@@ -591,12 +644,15 @@ def build_m0b_pilot_disc(
     point_size: int = 13,
     diagnostic_intro_redirect: bool = False,
     authored_pixel_font: bool = False,
+    vwf_pilot: bool = False,
 ) -> pathlib.Path:
     """Create a separate EXPERIMENTAL CloneCD copy. Never edit original media."""
     from cyber_oedo.build.profiles import mission0_stock
     from cyber_oedo.build.source import copy_authenticated_source_set
     from cyber_oedo.disc.extract_track2_mode1 import extract_mode1_payload
 
+    if vwf_pilot and not authored_pixel_font:
+        raise ValueError("VWF live pilot requires the source-authored pixel font")
     glyphs = EnglishGlyphTable.from_texts((english, " ?"))
     if authored_pixel_font:
         # Original, source-authored 8x16 glyphs with shared baseline.
@@ -643,8 +699,9 @@ def build_m0b_pilot_disc(
         patches = build_m0b_pilot_patches(
             payload_path.read_bytes(), glyphs, atlas, english=english,
             diagnostic_intro_redirect=diagnostic_intro_redirect,
+            vwf_pilot=vwf_pilot,
         )
-        runtime = _make_runtime(glyphs, atlas)
+        runtime = _make_runtime(glyphs, atlas, vwf_loader=vwf_pilot)
         reports = apply_payload_patches(
             output_paths[".img"], patches,
             start_lba=TRACK2_START_LBA,
@@ -662,6 +719,11 @@ def build_m0b_pilot_disc(
             "font_style": "authored_pixel" if authored_pixel_font else "external_ttf",
             "proportional_metrics": glyph_metrics,
             "proportional_runtime_certified": False,
+            "vwf_pilot_enabled": vwf_pilot,
+            "vwf_card_ram_bank": ("$73" if vwf_pilot else None),
+            "vwf_disc_relative_sector": (
+                VWF_SECTOR_RELATIVE if vwf_pilot else None
+            ),
             "patches": [x.label for x in patches],
             "runtime_labels": {
                 key: f"0x{value:04X}"
@@ -714,6 +776,10 @@ def main(argv: list[str] | None = None) -> int:
         help="NON-RELEASE: source-authored 8x16 glyphs and VWF metric manifest",
     )
     parser.add_argument(
+        "--vwf-pilot", action="store_true",
+        help="NON-RELEASE: render exact VWF cells through Card RAM bank $73",
+    )
+    parser.add_argument(
         "--diagnostic-intro-redirect", action="store_true",
         help="NON-RELEASE: run $7B from the authenticated opening narration",
     )
@@ -723,6 +789,7 @@ def main(argv: list[str] | None = None) -> int:
         english=args.english, point_size=args.point_size,
         diagnostic_intro_redirect=args.diagnostic_intro_redirect,
         authored_pixel_font=args.authored_pixel_font,
+        vwf_pilot=args.vwf_pilot,
     )
     print("output_ccd=" + str(result))
     print("release_enabled=false")
