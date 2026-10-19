@@ -17,7 +17,7 @@ from cyber_oedo.runtime.engine_polish_pilot import (
     build_intro_smoke_polish_patches,
     CACHE_BANKS,
     ENGLISH_POOL_BANKS,
-    PERFORMANCE_EXPERIMENTS,
+    PERFORMANCE_EXPERIMENTS, QUARANTINED_ADPCM_PROFILES,
 )
 from cyber_oedo.runtime.mission0_pool_pilot import (
     BARTENDER_MARKER_OFFSET, BARTENDER_SOURCE_TEXT,
@@ -88,23 +88,32 @@ class EnginePolishCompositionTests(unittest.TestCase):
                         performance_experiment=profile,
                     )
 
-    def test_unsafe_all_seven_uses_only_existing_guarded_edits(self):
-        original = SparseAuthenticatedSource()
-        items, runtime, atlas = compose_polish_patches(
-            original, performance_experiment="all-seven",
-            acknowledge_unsafe_performance=True,
-        )
-        self.assertEqual(len(items), 7)
-        self.assertIsNone(runtime)
-        self.assertIsNone(atlas)
-        self.assertTrue(all(original[p.offset:p.end_offset] == p.expected
-                            for p in items))
-        labels = " ".join(p.label.lower() for p in items)
-        for prohibited in (
-            "hard audio", "fade", "120-frame", "speaker cache selector",
-            "resident-module", "jmp entrypoints",
-        ):
-            self.assertNotIn(prohibited, labels)
+    def test_shared_dialogue_adpcm_hook_is_quarantined(self):
+        # The common $1425 module is also used while Mission-0-B's
+        # outer-overlay cave $4CFA is not present. Source-guarded writes
+        # do not protect a mismapped cross-bank JSR at runtime.
+        for profile in QUARANTINED_ADPCM_PROFILES:
+            with self.subTest(profile=profile):
+                with self.assertRaisesRegex(ValueError, "cross-overlay ADPCM"):
+                    build_intro_smoke_polish_patches(profile)
+                with self.assertRaisesRegex(ValueError, "cross-overlay ADPCM"):
+                    compose_polish_patches(
+                        SparseAuthenticatedSource(),
+                        performance_experiment=profile,
+                        acknowledge_unsafe_performance=True,
+                    )
+
+    def test_narrow_experiments_remain_available_but_acknowledged(self):
+        for profile, size in (("portrait", 2), ("selective-restore", 3)):
+            with self.subTest(profile=profile):
+                items, runtime, atlas = compose_polish_patches(
+                    SparseAuthenticatedSource(),
+                    performance_experiment=profile,
+                    acknowledge_unsafe_performance=True,
+                )
+                self.assertEqual(len(items), size)
+                self.assertIsNone(runtime)
+                self.assertIsNone(atlas)
 
     def test_english_pilot_defaults_to_no_performance_patches(self):
         original = SparseAuthenticatedSource(include_english=True)
@@ -115,37 +124,46 @@ class EnginePolishCompositionTests(unittest.TestCase):
         self.assertEqual(len(items), 10)
         self.assertIsNotNone(runtime)
         self.assertIsNotNone(atlas)
-        performance_patches = build_intro_smoke_polish_patches("all-seven")
+        performance_patches = (
+            build_intro_smoke_polish_patches("portrait") +
+            build_intro_smoke_polish_patches("selective-restore")
+        )
         self.assertTrue(all(
             left.end_offset <= right.offset or right.end_offset <= left.offset
             for left in items for right in performance_patches
         ))
 
-    def test_english_pilot_composes_with_unsafe_all_seven_no_overlap(self):
-        original = SparseAuthenticatedSource(include_english=True)
-        with patch("cyber_oedo.runtime.mission0_pool_pilot._verify_original"):
-            items, runtime, atlas = compose_polish_patches(
-                original, english_pilot=True,
-                performance_experiment="all-seven",
-                acknowledge_unsafe_performance=True,
-            )
-        self.assertEqual(len(items), 17)
-        self.assertIsNotNone(runtime)
-        self.assertIsNotNone(atlas)
-        self.assertEqual(CACHE_BANKS, "$68-$6C")
-        self.assertEqual(ENGLISH_POOL_BANKS, "$7C-$7F")
-        self.assertTrue(all(left.end_offset <= right.offset
-                            for left, right in zip(items, items[1:])))
+    def test_english_pilot_composes_with_nonquarantined_experiments(self):
+        for profile, extra in (("portrait", 2), ("selective-restore", 3)):
+            with self.subTest(profile=profile):
+                original = SparseAuthenticatedSource(include_english=True)
+                with patch("cyber_oedo.runtime.mission0_pool_pilot._verify_original"):
+                    items, runtime, atlas = compose_polish_patches(
+                        original, english_pilot=True,
+                        performance_experiment=profile,
+                        acknowledge_unsafe_performance=True,
+                    )
+                self.assertEqual(len(items), 10 + extra)
+                self.assertIsNotNone(runtime)
+                self.assertIsNotNone(atlas)
+                self.assertEqual(CACHE_BANKS, "$68-$6C")
+                self.assertEqual(ENGLISH_POOL_BANKS, "$7C-$7F")
+                self.assertTrue(all(left.end_offset <= right.offset
+                                    for left, right in zip(items, items[1:])))
 
     def test_corrupt_core_source_refused(self):
-        for item in build_intro_smoke_polish_patches("all-seven"):
+        for item in (build_intro_smoke_polish_patches("portrait") +
+                     build_intro_smoke_polish_patches("selective-restore")):
             with self.subTest(label=item.label, offset=item.offset):
                 original = SparseAuthenticatedSource()
                 corrupt = bytes((item.expected[0] ^ 0xFF,)) + item.expected[1:]
                 original.slices[(item.offset, len(item.expected))] = corrupt
                 with self.assertRaisesRegex(ValueError, "signature mismatch"):
                     compose_polish_patches(
-                        original, performance_experiment="all-seven",
+                        original, performance_experiment=(
+                            "portrait" if "portrait" in item.label.lower()
+                            else "selective-restore"
+                        ),
                         acknowledge_unsafe_performance=True,
                     )
 
