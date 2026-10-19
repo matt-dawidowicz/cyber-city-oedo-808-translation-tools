@@ -6,6 +6,9 @@
 -- --english-pilot --vwf-pilot disc with performance_experiment=none.
 -- The comparison is a control for #46, not Mission-0-B certification (#45).
 --
+-- The zero bytes at $4CFA in an UNPATCHED run are only a baseline check;
+-- they do NOT prove a cache-patched image maps zero bytes there. Run
+-- separate legacy-patched comparisons to assess actual code residency.
 -- Requires Mesen --testRunner with Lua file I/O enabled for PNG screenshots.
 -- Run separately for each disc from separate empty work directories.
 
@@ -15,7 +18,7 @@ local frame = 0
 local hits = {}
 local late_adpcm = 0
 local late_portrait = 0
-local hazardous_mapping_confirmed = false
+local unpatched_baseline_confirmed = false
 
 local function byte(address)
   return emu.read(address, DEBUG)
@@ -61,7 +64,7 @@ for _, address in ipairs(hooks) do
         late_adpcm = late_adpcm + 1
         if call == "20 33 E0"
            and target == "00 00 00 00 00 00 00 00 00 00 00 00" then
-          hazardous_mapping_confirmed = true
+          unpatched_baseline_confirmed = true
         end
         trace("shared_ADPCM_call", "call=["..call.."] 4CFA=["..target.."]")
       end
@@ -87,10 +90,10 @@ emu.addEventCallback(function()
   end
   if frame == 17900 then
     local good = late_adpcm > 0 and late_portrait > 0
-      and hazardous_mapping_confirmed
+      and unpatched_baseline_confirmed
     trace("result",string.format(
-      "late_ADPCM=%d natural_portrait=%d hazardous_mapping=%s success=%s",
-      late_adpcm, late_portrait, tostring(hazardous_mapping_confirmed),
+      "late_ADPCM=%d natural_portrait=%d unpatched_baseline=%s success=%s",
+      late_adpcm, late_portrait, tostring(unpatched_baseline_confirmed),
       tostring(good)
     ))
     emu.stop(good and 0 or 9)
