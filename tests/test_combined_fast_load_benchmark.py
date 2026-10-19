@@ -12,7 +12,7 @@ class CombinedFastLoadBenchmarkTests(unittest.TestCase):
         result = build_combined_bar_benchmark()
         result.assert_non_overlapping()
         self.assertFalse(result.aggressive)
-        self.assertGreaterEqual(len(result.patches), 9)
+        self.assertGreaterEqual(len(result.patches), 7)
         self.assertGreater(result.changed_bytes, 0)
 
     def test_aggressive_stack_adds_two_independent_experiments(self) -> None:
@@ -30,6 +30,10 @@ class CombinedFastLoadBenchmarkTests(unittest.TestCase):
         self.assertEqual(len(with_speaker.patches), len(core.patches) + 2)
         labels = " ".join(patch.label.lower() for patch in core.patches)
         self.assertNotIn("speaker cache selector", labels)
+
+    def test_archived_adpcm_cave_collision_fails_closed(self) -> None:
+        with self.assertRaisesRegex(ValueError, "both occupy"):
+            build_combined_bar_benchmark(include_adpcm_cache=True)
 
     def test_other_overlay_120_frame_patch_is_not_composed(self) -> None:
         result = build_combined_bar_benchmark(aggressive=True)

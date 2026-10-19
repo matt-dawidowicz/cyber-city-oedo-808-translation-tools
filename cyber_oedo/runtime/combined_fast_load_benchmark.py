@@ -5,9 +5,13 @@ stock fallback:
 * fail-closed resident dialogue-module reuse;
 * speaker-local retention is deliberately NOT in the default core because its
   physical lifetime across the $22DE exploration load is still unresolved;
-* portrait Card-RAM read-through;
-* speaker ADPCM Card-RAM read-through;
+* portrait Card-RAM read-through (relocated into $4CFA-$4D60);
 * native two-span bar VRAM restore.
+
+The historic speaker ADPCM cave also starts at $4CFA and is therefore
+NOT physically composable with the relocated portrait cave. The default
+benchmark omits the old ADPCM cache; explicit inclusion raises an error.
+These performance benchmarks are not release-certified.
 
 The counter-gated setup-VSync bypass and hard audio teardown remain optional
 aggressive A/B experiments and are not included by default.
@@ -74,12 +78,17 @@ def build_combined_bar_benchmark(
     *,
     aggressive: bool = False,
     include_lifetime_sensitive_speaker_retention: bool = False,
+    include_adpcm_cache: bool = False,
 ) -> CombinedBarBenchmark:
+    if include_adpcm_cache:
+        raise ValueError(
+            "ADPCM+portrait experiments cannot be composed: both occupy the "
+            "source-guarded $4CFA cave; redesign audio cache residency first"
+        )
     rows: list[PayloadPatch] = []
     for benchmark in (
         build_resident_module_benchmark(),
         build_portrait_cache_benchmark(),
-        build_speaker_adpcm_cache_benchmark(),
         build_selective_bar_vram_restore_benchmark(),
     ):
         _extend(rows, benchmark)
@@ -109,6 +118,7 @@ def validate_combined_bar_sources(
     *,
     aggressive: bool = False,
     include_lifetime_sensitive_speaker_retention: bool = False,
+    include_adpcm_cache: bool = False,
 ) -> dict[str, object]:
     """Validate the authenticated payload and every composed source guard."""
 
@@ -117,6 +127,7 @@ def validate_combined_bar_sources(
         include_lifetime_sensitive_speaker_retention=(
             include_lifetime_sensitive_speaker_retention
         ),
+        include_adpcm_cache=include_adpcm_cache,
     )
     digest = hashlib.sha256(payload).hexdigest()
     rows = []

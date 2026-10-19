@@ -24,6 +24,11 @@ class CardRamPortraitCacheTests(unittest.TestCase):
     def test_cave_fits_authenticated_zero_run(self) -> None:
         self.assertEqual(len(PORTRAIT_CACHE_CAVE_REPLACEMENT), 103)
         self.assertEqual(PORTRAIT_CACHE_CAVE_EXPECTED, bytes(103))
+        self.assertEqual(PORTRAIT_CACHE_CAVE_CPU, 0x4CFA)
+        self.assertEqual(PORTRAIT_CACHE_CAVE_REPLACEMENT[:9],
+                         bytes.fromhex("43 01 48 43 20 48 43 40 48"))
+        # The complete cave must avoid the runtime-mutated $4C93-$4CF9.
+        self.assertGreaterEqual(PORTRAIT_CACHE_CAVE_CPU, 0x4CFA)
         self.assertLess(PORTRAIT_CACHE_CAVE_CPU + len(PORTRAIT_CACHE_CAVE_REPLACEMENT), 0x4D6C)
 
     def test_cave_contains_real_cd_read_and_tia(self) -> None:

@@ -80,8 +80,9 @@ def build_intro_smoke_polish_patches(performance_experiment: str = "none"):
         raise ValueError(
             "cross-overlay ADPCM residency unverified: the shared LBA $1425 "
             "dialogue module redirects $80E0 into Mission-0-B-only "
-            "$4CFA; unsafe opt-in does not prove residency in "
-            "another room or mission"
+            "$4CFA, now reserved by the portrait-cache repair. These "
+            "profiles also overlap the portrait patch; unsafe opt-in does "
+            "not establish alternate-bank residency or compatibility"
         )
     portrait = build_portrait_cache_benchmark().patches
     adpcm = build_speaker_adpcm_cache_benchmark().patches

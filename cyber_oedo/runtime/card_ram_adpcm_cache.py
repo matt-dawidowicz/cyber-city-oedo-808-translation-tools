@@ -11,9 +11,11 @@ speaker-local image in bank $6C.  A hit is keyed by the Mission-0 speaker
 selector at $8FDD.  Misses use ordinary local CD_READ and therefore fail back
 onto real optical I/O rather than trusting stale cache bytes.
 
-The benchmark depends on the Mission 0 B outer overlay remaining mapped at the
-$4CFA cave while the dialogue module runs.  That mapping must be runtime-proven
-before release promotion.
+The benchmark depends on the Mission 0 B outer overlay remaining mapped at
+$4CFA. This historical placement now overlaps with the experimentally
+repaired portrait cache, and these two legacy benchmarks must not be combined.
+The natural watcher confirms the old ADPCM-only cave was present there, but
+later-scene residency and overall runtime behavior remain unverified.
 """
 
 from __future__ import annotations

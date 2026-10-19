@@ -2,8 +2,12 @@
 
 The stock portrait loader has already decoded the portrait LBA into $FC/$FE/$FD
 and the VRAM word destination into $343B/$343C before JSR $E009 at $8405.
-This benchmark redirects only that call to a cave in the same Mission 0 B
-overlay.
+The original cave at $4C93-$4CF9 was overwritten during normal Mission-0
+gameplay, corrupting both the entry and the body. Moving only the MPR-save
+entry did not fix the BRK-filled body. Put the entire source-guarded 103-byte
+routine at $4CFA-$4D60, which remained resident on the reproducible watcher
+NPC path. It conflicts with the legacy speaker ADPCM cave and must never
+be composed with that separate historical experiment.
 
 On a cache miss the cave maps Super System Card banks $68/$69 contiguously at
 $A000/$C000, uses the ordinary local-memory CD_READ mode to fetch all five
@@ -26,7 +30,7 @@ PORTRAIT_CD_READ_CPU = 0x8405
 PORTRAIT_CD_READ_OFFSET = MISSION0_B_PAYLOAD_BASE + PORTRAIT_CD_READ_CPU
 PORTRAIT_CD_READ_EXPECTED = bytes.fromhex("20 09 E0")
 
-PORTRAIT_CACHE_CAVE_CPU = 0x4C93
+PORTRAIT_CACHE_CAVE_CPU = 0x4CFA
 PORTRAIT_CACHE_CAVE_OFFSET = MISSION0_B_PAYLOAD_BASE + PORTRAIT_CACHE_CAVE_CPU
 
 PORTRAIT_BANK0 = 0x68
