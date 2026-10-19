@@ -51,6 +51,15 @@ PERFORMANCE_EXPERIMENTS = (
     "none", "portrait", "adpcm", "portrait-adpcm",
     "selective-restore", "all-seven",
 )
+# The $80E0 hook is in the shared $1425 dialogue module, but its $4CFA
+# destination exists only in the Mission-0-B outer overlay. Other missions
+# or the pre-bar encounter can execute this shared call with a different
+# overlay mapped at $4000-$5FFF. Opt-in cannot establish code residency.
+# Keep archived profile names recognizable, but reject builds containing the
+# global jump until a bank-independent trampoline / scoped dispatcher exists.
+QUARANTINED_ADPCM_PROFILES = frozenset({
+    "adpcm", "portrait-adpcm", "all-seven",
+})
 
 
 def build_intro_smoke_polish_patches(performance_experiment: str = "none"):
@@ -66,6 +75,13 @@ def build_intro_smoke_polish_patches(performance_experiment: str = "none"):
         )
     if performance_experiment == "none":
         return ()
+    if performance_experiment in QUARANTINED_ADPCM_PROFILES:
+        raise ValueError(
+            "cross-overlay ADPCM hook quarantined: the shared LBA $1425 "
+            "dialogue module redirects $80E0 into Mission-0-B-only "
+            "$4CFA; an acknowledgment cannot make this valid in "
+            "another room or mission"
+        )
     portrait = build_portrait_cache_benchmark().patches
     adpcm = build_speaker_adpcm_cache_benchmark().patches
     restore = build_selective_bar_vram_restore_benchmark().patches
