@@ -36,16 +36,39 @@ No forced PC, arbitrary RAM writes, savestate shortcut, or changed inputs betwee
 At frames 16500 and 17000 the screenshot SHA-256 is the same for both discs:
 2116612962b3c18c9c956b3d8ba7e9750fc436a0bd4863595639837b0f847a8e.
 
-**Limit:** the 70-pixel frame-17800 divergence was NOT explained or waived, and there is no scripted proof of subsequent dialogue completion, second interaction, later missions, or normal bartender. This is an NPC reachability and callsite proof, not full visual/runtime parity.
+**Limit:** the 70-pixel frame-17800 difference is localized to one Japanese dialogue glyph in the x160-173, y161-175 text area, consistent with a small dialogue timing difference. This was NOT waived as equivalence, and there is no scripted proof of subsequent dialogue completion, second interaction, later missions, or normal bartender. This is an NPC reachability and callsite proof, not full visual/runtime parity.
 
-## Root cause and containment
+## Important correction: residency risk, not demonstrated root cause
 
-At frame 15955 of the natural NPC encounter, stock executes the shared dialogue module's $80E0 JSR $E033 with MPR2=$80 and MPR4=$85. The former speaker-cache experiment rewrote this to JSR $4CFA, but $4CFA is a zero-filled location in the then-mapped overlay. Its injected cave exists only in the Mission-0-B outer-overlay source. An apparently successful isolated bar test cannot validate such a cross-overlay call in the rest of the game.
+A **third** controlled cold-boot replay used a throwaway disc built with the
+**historical ADPCM-only experiment** (the checked-in builder deliberately
+rejects making this legacy profile now).
 
-PR #42 now **refuses** the adpcm, portrait-adpcm, and all-seven experimental build profiles, even with the unsafe opt-in. This eliminates the known unsafe global transfer from generated discs but does NOT implement a new production-safe ADPCM cache.
+- At intro frame 2647, the historic callsite is 20 FA 4C (JSR $4CFA), and
+  the mapped $4CFA bytes are the installed cache routine: 43 20 48 43 40 48.
+- At the **natural watcher frame 15955**, the same patched call and the same
+  installed cave bytes are present. The watcher conversation was reached,
+  with two total ADPCM callsite hits and one portrait-loader hit. The
+  ADPCM-only variant did **not** crash at this encounter.
+- In the two *unpatched-ADPCM* stock and English/VWF runs, $4CFA was zero-filled
+  at that frame, but that comparison does not imply a patched disc would jump
+  into zeros. The earlier root-cause statement inferred a patched memory map
+  from unpatched bytes and was incorrect.
+
+The dialogue module is shared while the cave is injected into Mission-0-B
+outer-overlay source. That is still an **unverified cross-mission residency
+risk**, not a demonstrated explanation of the earlier all-seven and
+portrait+ADPCM combined-profile failures. We have not reproduced their
+failure cause or proven cache/overlay safety across later missions.
+
+As a conservative build safeguard, PR #42 currently refuses adpcm,
+portrait-adpcm and all-seven profiles even with the unsafe acknowledgment.
+It does not remove the stand-alone benchmark code, supply a bank-independent
+replacement, or establish that ADPCM alone caused the earlier regression.
+Do not characterize this gate as a completed #46 root-cause fix.
 
 ## Remaining P0 release gates
 
 - #45: Reach the actual bar naturally, confirm $7B English pool and VWF dispatch, reads, continuation, portraits/voice, timing, and street/second-interaction return.
-- #46: Design a safely resident trampoline or overlay-local cache hook, prove it by natural cold-boot A/B including later scenes, and investigate the 70-pixel discrepancy.
+- #46: Reproduce the **combined** portrait+ADPCM and seven-patch failures against matched cold-boot traces, isolate the actual first divergence, validate overlay residency across later missions, and revisit the unexplained dialogue timing offset. Only then decide if a trampoline or overlay-local cache hook is necessary.
 - Do not turn on experimental performance or release certification based on this narrow test.
