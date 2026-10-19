@@ -52,11 +52,12 @@ PERFORMANCE_EXPERIMENTS = (
     "selective-restore", "all-seven",
 )
 # The $80E0 hook is in the shared $1425 dialogue module, but its $4CFA
-# destination exists only in the Mission-0-B outer overlay. Other missions
-# or the pre-bar encounter can execute this shared call with a different
-# overlay mapped at $4000-$5FFF. Opt-in cannot establish code residency.
-# Keep archived profile names recognizable, but reject builds containing the
-# global jump until a bank-independent trampoline / scoped dispatcher exists.
+# destination is injected only into the Mission-0-B outer-overlay source.
+# A cold-boot watcher NPC replay actually retains this cave and the ADPCM-only
+# legacy experiment reaches the watcher; that run DOES NOT establish the
+# earlier combined-profile failure's root cause. Other missions' overlay
+# residency remains unverified. Quarantine these unverified global redirects
+# until a source-guarded bank-safe design and cross-mission live tests exist.
 QUARANTINED_ADPCM_PROFILES = frozenset({
     "adpcm", "portrait-adpcm", "all-seven",
 })
@@ -77,9 +78,9 @@ def build_intro_smoke_polish_patches(performance_experiment: str = "none"):
         return ()
     if performance_experiment in QUARANTINED_ADPCM_PROFILES:
         raise ValueError(
-            "cross-overlay ADPCM hook quarantined: the shared LBA $1425 "
+            "cross-overlay ADPCM residency unverified: the shared LBA $1425 "
             "dialogue module redirects $80E0 into Mission-0-B-only "
-            "$4CFA; an acknowledgment cannot make this valid in "
+            "$4CFA; unsafe opt-in does not prove residency in "
             "another room or mission"
         )
     portrait = build_portrait_cache_benchmark().patches
