@@ -1,4 +1,8 @@
-"""Regress engine polish composition without requiring any copyrighted media."""
+"""Synthetic composition checks, not Mesen gameplay or release certification.
+
+The historical seven-patch performance profile has known Mesen regressions;
+exercise it only with explicit unsafe opt-in and keep normal execution inert.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +17,7 @@ from cyber_oedo.runtime.engine_polish_pilot import (
     build_intro_smoke_polish_patches,
     CACHE_BANKS,
     ENGLISH_POOL_BANKS,
+    PERFORMANCE_EXPERIMENTS,
 )
 from cyber_oedo.runtime.mission0_pool_pilot import (
     BARTENDER_MARKER_OFFSET, BARTENDER_SOURCE_TEXT,
@@ -64,9 +69,31 @@ class SparseAuthenticatedSource:
 
 
 class EnginePolishCompositionTests(unittest.TestCase):
-    def test_core_uses_only_existing_nonaggressive_safe_fallback_edits(self):
+    def test_default_enables_no_experimental_performance_patches(self):
+        self.assertEqual(build_intro_smoke_polish_patches(), ())
+        items, runtime, atlas = compose_polish_patches(SparseAuthenticatedSource())
+        self.assertEqual(items, ())
+        self.assertIsNone(runtime)
+        self.assertIsNone(atlas)
+
+    def test_performance_experiments_require_unsafe_acknowledgment(self):
+        for profile in PERFORMANCE_EXPERIMENTS:
+            if profile == "none":
+                continue
+            with self.subTest(profile=profile):
+                with self.assertRaisesRegex(ValueError,
+                                            "--acknowledge-unsafe-performance"):
+                    compose_polish_patches(
+                        SparseAuthenticatedSource(),
+                        performance_experiment=profile,
+                    )
+
+    def test_unsafe_all_seven_uses_only_existing_guarded_edits(self):
         original = SparseAuthenticatedSource()
-        items, runtime, atlas = compose_polish_patches(original)
+        items, runtime, atlas = compose_polish_patches(
+            original, performance_experiment="all-seven",
+            acknowledge_unsafe_performance=True,
+        )
         self.assertEqual(len(items), 7)
         self.assertIsNone(runtime)
         self.assertIsNone(atlas)
@@ -79,11 +106,28 @@ class EnginePolishCompositionTests(unittest.TestCase):
         ):
             self.assertNotIn(prohibited, labels)
 
-    def test_english_pilot_can_be_composed_with_fastload_no_overlap(self):
+    def test_english_pilot_defaults_to_no_performance_patches(self):
         original = SparseAuthenticatedSource(include_english=True)
         with patch("cyber_oedo.runtime.mission0_pool_pilot._verify_original"):
             items, runtime, atlas = compose_polish_patches(
                 original, english_pilot=True
+            )
+        self.assertEqual(len(items), 10)
+        self.assertIsNotNone(runtime)
+        self.assertIsNotNone(atlas)
+        performance_patches = build_intro_smoke_polish_patches("all-seven")
+        self.assertTrue(all(
+            left.end_offset <= right.offset or right.end_offset <= left.offset
+            for left in items for right in performance_patches
+        ))
+
+    def test_english_pilot_composes_with_unsafe_all_seven_no_overlap(self):
+        original = SparseAuthenticatedSource(include_english=True)
+        with patch("cyber_oedo.runtime.mission0_pool_pilot._verify_original"):
+            items, runtime, atlas = compose_polish_patches(
+                original, english_pilot=True,
+                performance_experiment="all-seven",
+                acknowledge_unsafe_performance=True,
             )
         self.assertEqual(len(items), 17)
         self.assertIsNotNone(runtime)
@@ -94,13 +138,16 @@ class EnginePolishCompositionTests(unittest.TestCase):
                             for left, right in zip(items, items[1:])))
 
     def test_corrupt_core_source_refused(self):
-        original = SparseAuthenticatedSource()
-        first = build_intro_smoke_polish_patches()[0]
-        original.slices[(first.offset, len(first.expected))] = bytes(
-            len(first.expected)
-        )
-        with self.assertRaisesRegex(ValueError, "signature mismatch"):
-            compose_polish_patches(original)
+        for item in build_intro_smoke_polish_patches("all-seven"):
+            with self.subTest(label=item.label, offset=item.offset):
+                original = SparseAuthenticatedSource()
+                corrupt = bytes((item.expected[0] ^ 0xFF,)) + item.expected[1:]
+                original.slices[(item.offset, len(item.expected))] = corrupt
+                with self.assertRaisesRegex(ValueError, "signature mismatch"):
+                    compose_polish_patches(
+                        original, performance_experiment="all-seven",
+                        acknowledge_unsafe_performance=True,
+                    )
 
     def test_no_diagnostic_text_without_english(self):
         with self.assertRaisesRegex(ValueError, "requires --english-pilot"):
