@@ -60,7 +60,7 @@ jobs:
         run: python -m build --outdir dist
 
       - name: Retain built distributions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-distributions-${{ matrix.python-version }}
           path: dist/*
