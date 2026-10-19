@@ -14,27 +14,37 @@ local hitCounts = {}
 local rejectedHits = {}
 
 local targets = {
+  {name="boot_status_classified_0", address=0x67D6, guard={address=0x67D1, bytes={0xA9,0x00,0x8D,0x90,0x2E,0x60}}},
+  {name="boot_status_classified_3", address=0x67DC, guard={address=0x67D7, bytes={0xA9,0x03,0x8D,0x90,0x2E,0x60}}},
+  {name="boot_status_classified_4", address=0x67E2, guard={address=0x67DD, bytes={0xA9,0x04,0x8D,0x90,0x2E,0x60}}},
+  {name="boot_status_classified_1", address=0x67F5, guard={address=0x67F0, bytes={0xA9,0x01,0x8D,0x90,0x2E,0x60}}},
+  {name="boot_status_classified_2", address=0x67FB, guard={address=0x67F6, bytes={0xA9,0x02,0x8D,0x90,0x2E,0x60}}},
+  {name="mission_status_classified_0", address=0x6062, guard={address=0x605D, bytes={0xA9,0x00,0x8D,0x8E,0x26,0x60}}},
+  {name="mission_status_classified_3", address=0x6068, guard={address=0x6063, bytes={0xA9,0x03,0x8D,0x8E,0x26,0x60}}},
+  {name="mission_status_classified_4", address=0x606E, guard={address=0x6069, bytes={0xA9,0x04,0x8D,0x8E,0x26,0x60}}},
+  {name="mission_status_classified_1", address=0x6081, guard={address=0x607C, bytes={0xA9,0x01,0x8D,0x8E,0x26,0x60}}},
+  {name="mission_status_classified_2", address=0x6087, guard={address=0x6082, bytes={0xA9,0x02,0x8D,0x8E,0x26,0x60}}},
   {name="outer_event_entry", address=0xD800, guard={address=0xD800, bytes={0x4C,0x4B,0xD8}}},
-  {name="exploration_loop", address=0x4000},
-  {name="transition_promote", address=0x403D},
-  {name="interaction_scan", address=0x4B20},
+  {name="exploration_loop", address=0x4000, guard={address=0x4000, bytes={0x20,0x99,0xE0,0x20,0xE9,0x40,0x9C,0x49,0x26,0x20,0x52,0x40,0x20,0x89,0x40,0x20}}},
+  {name="transition_promote", address=0x403D, guard={address=0x403D, bytes={0xAD,0x04,0x37,0x8D,0x00,0x37,0xAD,0x05,0x37,0x8D,0x01,0x37,0xAD,0x06,0x37,0x8D}}},
+  {name="interaction_scan", address=0x4B20, guard={address=0x4B20, bytes={0xA5,0x1C,0x48,0xA5,0x1D,0x48,0xA5,0x1E,0x48,0xA5,0x1F,0x48,0xA5,0x20,0x48,0xA5}}},
   {name="interaction_copy_entry_pre_write", address=0x4BD8,
-   guard={address=0x4BD8, bytes={0x82,0xB1,0x24,0x9D,0x03,0x37}}},
-  {name="interaction_copy_completed", address=0x4BE4,
-   guard={address=0x4BD8, bytes={0x82,0xB1,0x24,0x9D,0x03,0x37}}},
+   guard={address=0x4BD8, bytes={0x82,0xB1,0x24,0x9D,0x03,0x37,0xC8,0xE8,0xE0,0x09,0xD0,0xF5,0x60}}},
+  {name="interaction_copy_completed", post_rts=true, address=0x4BE4,
+   guard={address=0x4BD8, bytes={0x82,0xB1,0x24,0x9D,0x03,0x37,0xC8,0xE8,0xE0,0x09,0xD0,0xF5,0x60}}},
   {name="object_init", address=0x5519,
    guard={address=0x5519, bytes={0x9C,0x80,0x27,0x20,0x3B,0x55}}},
-  {name="object_init_completed", address=0x553A,
+  {name="object_init_completed", post_rts=true, address=0x553A,
    guard={address=0x5519, bytes={0x9C,0x80,0x27,0x20,0x3B,0x55}}},
   {name="object_frame_update", address=0x55E9,
    guard={address=0x55E9, bytes={0xAD,0x7D,0x27,0x8D,0x80,0x27}}},
-  {name="object_frame_update_completed", address=0x5602,
+  {name="object_frame_update_completed", post_rts=true, address=0x5602,
    guard={address=0x55E9, bytes={0xAD,0x7D,0x27,0x8D,0x80,0x27}}},
 
   -- Reusable ADPCM driver.
-  {name="adpcm_voice_start", address=0x8108},
-  {name="adpcm_completion_poll", address=0x837A},
-  {name="adpcm_record_lookup", address=0x8471},
+  {name="adpcm_voice_start", address=0x8108, guard={address=0x8108, bytes={0xA9,0x01,0x8D,0x9B,0x8F,0xA9,0x03,0x8D,0x82,0x8F,0x20,0x42,0xE0,0xAD,0x80,0x8F}},
+  {name="adpcm_completion_poll", address=0x837A, guard={address=0x837A, bytes={0xAD,0x9B,0x8F,0xD0,0x14,0x20,0x45,0xE0,0xAA,0xD0,0x0E,0x9C,0x82,0x8F,0xAD,0x9C}},
+  {name="adpcm_record_lookup", address=0x8471, guard={address=0x8471, bytes={0x8D,0x97,0x8F,0xA5,0x00,0x48,0xA5,0x01,0x48,0x9C,0x98,0x8F,0xAD,0x97,0x8F,0x8D}},
 
   -- System Card entry points used by this game.
   {name="bios_cd_read", address=0xE009},
@@ -49,7 +59,7 @@ local targets = {
 }
 
 local function r8(address)
-  return emu.read(address, MEM)
+  return emu.read(address, emu.memType.pceDebug)
 end
 
 -- Code-address overlap between overlays is common. Validate mapped opcode
@@ -57,14 +67,11 @@ end
 -- These signatures were read directly from the authenticated original IMG.
 local function guard_matches(target)
   if not target.guard then return true end
+  if target.post_rts and r8(target.address) ~= 0x60 then return false end
   for offset, expected in ipairs(target.guard.bytes) do
     if r8(target.guard.address + offset - 1) ~= expected then return false end
   end
   return true
-end
-
-local function r16(address)
-  return emu.read16(address, MEM, false)
 end
 
 local function cpu()
@@ -83,7 +90,7 @@ local function mprs()
   local state = emu.getState()
   local result = {}
   for i=0,7 do
-    result[i] = state["memoryManager.mpr[" .. i .. "]"] or 0
+    result[i] = assert(state["memoryManager.mpr[" .. i .. "]"], "missing MPR state")
   end
   return result
 end
@@ -139,6 +146,9 @@ local function hit(target)
   -- deliberately named pre-write/pre-return so stale buffers are not
   -- mistaken for completed interaction or save data.
   local phase = "instruction_entry"
+  if string.find(target.name, "status_classified") then
+    log(string.format("[classified_status] site=%s boot=$%02X mission=$%02X", target.name, r8(0x2E90), r8(0x268E)))
+  end
   if target.name == "interaction_copy_entry_pre_write" then
     phase = "before_interaction_copy"
   elseif target.name == "interaction_copy_completed" then
@@ -154,11 +164,12 @@ local function hit(target)
     phase = "after_bios_read_return"
   end
   log(string.format(
-    "[%s #%d] phase=%s frame=%d PC=$%04X A=$%02X X=$%02X Y=$%02X SP=$%02X " ..
+    "[%s #%d] attribution=%s phase=%s frame=%d PC=$%04X A=$%02X X=$%02X Y=$%02X SP=$%02X " ..
     "progress=$%02X scene=%02X/%02X/%02X interaction=[%s] " ..
     "mission_save_buffer=[%s] voice=$%02X %s",
     target.name,
     hitCounts[target.name],
+    target.guard and "opcode_matched" or "unverified_pc_only",
     phase,
     frame,
     c.pc,
@@ -175,6 +186,9 @@ local function hit(target)
     r8(0x37F1),
     mpr_string()
   ))
+  if target.name == "bios_cd_read" then
+    log(string.format("[cd_read_args] FC_FD_FE=[%s] F8_F9=[%s] FA_FB=[%s] mode_FF=%02X", bytes_string(0x20FC,3), bytes_string(0x20F8,2), bytes_string(0x20FA,2), r8(0x20FF)))
+  end
   if target.name == "outer_event_entry" then
     -- Capture the actual mapped 64-byte controller window, not just the PC.
     -- The MPR log is required to authenticate this against the expected bank.
@@ -203,8 +217,8 @@ local function hit(target)
     -- $2E91 is the startup reader's destination; $268F is the mission
     -- reader's buffer. A BIOS entry callback cannot prove completed I/O.
     log(string.format(
-      "[bram_snapshot] phase=%s boot_status=$%02X boot_2E91=[%s] " ..
-      "mission_status=$%02X mission_268F=[%s] %s",
+      "[bram_snapshot] phase=%s stored_boot_status=$%02X boot_2E91=[%s] " ..
+      "stored_mission_status=$%02X mission_268F=[%s] %s",
       phase, r8(0x2E90), bytes_string(0x2E91, 4),
       r8(0x268E), bytes_string(0x268F, 4), mpr_string()
     ))
