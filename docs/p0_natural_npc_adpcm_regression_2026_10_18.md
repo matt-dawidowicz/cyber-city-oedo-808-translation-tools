@@ -72,3 +72,72 @@ Do not characterize this gate as a completed #46 root-cause fix.
 - #45: Reach the actual bar naturally, confirm $7B English pool and VWF dispatch, reads, continuation, portraits/voice, timing, and street/second-interaction return.
 - #46: Reproduce the **combined** portrait+ADPCM and seven-patch failures against matched cold-boot traces, isolate the actual first divergence, validate overlay residency across later missions, and revisit the unexplained dialogue timing offset. Only then decide if a trampoline or overlay-local cache hook is necessary.
 - Do not turn on experimental performance or release certification based on this narrow test.
+
+## 2026-10-18 follow-up: stable portrait-only cave (commit 0f7c3e9)
+
+### Root cause and repair
+
+A cold-boot natural watcher trace of the initial portrait hook found $4C93-$4CC3
+overwritten at runtime. In the first proposed trampoline experiment, only the
+nine MPR-save instructions moved to $4D59, while the CPU then jumped into a
+partially zeroed body at $4C9C, executing invalid instructions. Correctly
+restoring MPRs at the call return was therefore insufficient.
+
+The confirmed narrow correction relocates **all 103 bytes** of the portrait
+cache from $4C93-$4CF9 to the original-source-zero $4CFA-$4D60 range. The
+source guard still checks every replaced byte. This placement is specifically
+a Mission-0 experimental cave; later mission/scene residency has NOT been
+certified.
+
+The historical ADPCM cache also occupies $4CFA. Both algorithms cannot
+coexist in the same cave. The combined benchmark now omits the old ADPCM
+cache, rejects explicit inclusion with a clear error, and the engine builder
+continues to reject the corresponding ADPCM-containing profiles.
+
+### Deterministic stock-versus-portrait replay
+
+For both source and experimental portrait-only discs, MesenCE 2.2.1 ran from
+cold boot on the authenticated 88-track game with standard controller input
+and Japanese v3 BIOS. Normal street input reached the watcher naturally.
+The critical controller phase change is: **stop sending button I after frame
+16000**, while preserving the original navigation controls. This prevents
+differences in dialogue-button polling from masquerading as graphics
+regressions. Neither replay used forced PC, RAM edits or savestate jumps.
+
+The source disc and the relocated portrait cache disc produced matching
+PNG bytes (not merely a visually similar picture) at seven checkpoints:
+
+| Frame | SHA-256 of each matching screenshot |
+| --- | --- |
+| 6000, 8600 | cf365fae13a5f9790ba99d995dd496ed9ea8977238a3cdf8f07608730c07d0d7 |
+| 13300 | 61e077f610355fc65e112d63495ce0492063ef9bda632056404781496b766632 |
+| 15600 | 9ba5aca460ad76b0367bce4112df44be8430334836199f5ec2052536de1939f9 |
+| 16500, 17000, 17800 | 4c040b913bee5997a46310c5c81969500db13819ef70d999e5e1dd35c8d63e2f |
+
+Both runs observed identical hook counts: common ADPCM $80E0: 2; portrait
+loader $8405: 1; interaction scan $4B20: 14; text parser $9F14: 1639.
+At 17900 both ended in the same dialogue-loop region ($5B80/$5B81),
+with all eight MPRs [FF F8 80 81 82 83 84 00].
+
+This is evidence that the **portrait-only** relocation repairs the specific
+watcher rendering regression, under the supplied input contract. It is not
+an all-missions/full-UI/ADPCM-cache/performance certification.
+
+### Failed alternative discarded
+
+An experimental attempt to move the legacy ADPCM cave into $90D4 of the
+shared dialogue module failed near the intro. Although the source Track-2
+image contains zeros in that apparent gap, **live bank contents are not source
+zeros**: a read-only Mesen probe observed active data in $8F51-$8FC0 and
+$90D4. The game's earlier CD reads do not guarantee those additional source
+bytes stay loaded. Source-zero space cannot be assumed to be code-owned RAM.
+The attempt was **not** committed; the original audio experiment remains
+quarantined.
+
+### Remaining gates
+
+Issue #46 remains open for combined performance optimizations, scene return,
+a second encounter and later-mission cache ownership. Issue #45 remains
+open because the actual Mission-0-B bartender has still not been reached
+through natural gameplay in the English pilot. Nothing here changes any
+release-enabled flag.
