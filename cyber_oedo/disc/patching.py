@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import pathlib
+import shutil
+import tempfile
 from collections import defaultdict
 from collections.abc import Iterable
 
@@ -89,7 +92,7 @@ def _patch_sector(
     return rebuild_mode1_sector(edited), edited_bytes
 
 
-def apply_payload_patches(
+def _apply_payload_patches_in_place(
     image_path: pathlib.Path,
     patches: Iterable[PayloadPatch],
     *,
@@ -153,3 +156,49 @@ def apply_payload_patches(
         image.flush()
 
     return tuple(reports)
+
+
+def apply_payload_patches(
+    image_path: pathlib.Path,
+    patches: Iterable[PayloadPatch],
+    *,
+    start_lba: int,
+    sector_count: int,
+    atomic: bool = True,
+) -> tuple[ModifiedSector, ...]:
+    """Patch a private copy and publish it atomically by default.
+
+    Set atomic=False only for an already disposable, isolated working image,
+    such as the staging directory managed by build_human_test_disc.
+    """
+    if not atomic:
+        return _apply_payload_patches_in_place(
+            image_path, patches, start_lba=start_lba, sector_count=sector_count
+        )
+
+    image_path = pathlib.Path(image_path)
+    # Reject invalid arguments before incurring the cost of a full image copy.
+    ordered = _ordered_patches(patches, sector_count)
+    if start_lba < 0:
+        raise ValueError("start_lba must be non-negative")
+    required_size = (start_lba + sector_count) * RAW_SECTOR_SIZE
+    if image_path.stat().st_size < required_size:
+        raise ValueError("IMG is too short for the requested payload range")
+
+    fd, temporary_name = tempfile.mkstemp(
+        prefix=f".{image_path.name}.", suffix=".tmp", dir=image_path.parent
+    )
+    os.close(fd)
+    temporary = pathlib.Path(temporary_name)
+    try:
+        shutil.copy2(image_path, temporary)
+        reports = _apply_payload_patches_in_place(
+            temporary, ordered, start_lba=start_lba, sector_count=sector_count
+        )
+        # Flush the temporary image to disk before publishing it.
+        with temporary.open("rb") as staged:
+            os.fsync(staged.fileno())
+        os.replace(temporary, image_path)
+        return reports
+    finally:
+        temporary.unlink(missing_ok=True)
