@@ -83,7 +83,7 @@ emu.addEventCallback(function()
      or frame == 15600 or frame == 16500 or frame == 17000
      or frame == 17800 then
     local name = string.format("snapshot_%d.png", frame)
-    local file = assert(io.open(name, "wb"))
+    local file = assert(io.open(emu.getScriptDataFolder() .. "/" .. name, "wb"))
     file:write(emu.takeScreenshot())
     file:close()
     trace("screenshot",name)
@@ -113,7 +113,9 @@ emu.addEventCallback(function()
     input.up = true
   else
     input.right = true
-    input.i = frame % 20 < 3
+    -- Stop advancing text after the initial interaction. Continuing to pulse
+    -- Button I makes text-wait polling a source of false A/B divergences.
+    input.i = frame < 16000 and frame % 20 < 3
   end
   emu.setInput(input, 0)
 end, emu.eventType.inputPolled)
