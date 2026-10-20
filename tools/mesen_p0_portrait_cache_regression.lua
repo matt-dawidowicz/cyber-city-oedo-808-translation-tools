@@ -82,7 +82,7 @@ emu.addEventCallback(function()
      or frame == 15600 or frame == 16500 or frame == 17000
      or frame == 17800 then
     local name = string.format("snapshot_%d.png", frame)
-    local file = assert(io.open(name, "wb"))
+    local file = assert(io.open(emu.getScriptDataFolder() .. "/" .. name, "wb"))
     file:write(emu.takeScreenshot())
     file:close()
     trace("screenshot",name)
