@@ -79,14 +79,19 @@ def copy_authenticated_source_set(
     unauthenticated partial set cannot be mistaken for build input.
     """
 
-    if not output_stem:
-        raise ValueError("output_stem must not be empty")
+    if not output_stem or output_stem in {".", ".."} or pathlib.Path(output_stem).name != output_stem or "/" in output_stem or "\\\\" in output_stem:
+        raise ValueError("output_stem must be a single safe filename component")
     source_paths = resolve_source_paths(source_ccd, source_hashes)
     destination_directory.mkdir(parents=True, exist_ok=True)
     destinations = {
         extension: destination_directory / f"{output_stem}{extension}"
         for extension in source_paths
     }
+    # Check file identity before any destination is opened for writing.
+    for source in source_paths.values():
+        for destination in destinations.values():
+            if destination.exists() and source.samefile(destination):
+                raise ValueError(f"source and destination alias the same file: {destination}")
     existing = [path for path in destinations.values() if path.exists()]
     if existing:
         names = ", ".join(path.name for path in existing)
