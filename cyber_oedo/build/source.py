@@ -79,7 +79,7 @@ def copy_authenticated_source_set(
     unauthenticated partial set cannot be mistaken for build input.
     """
 
-    if not output_stem or output_stem in {".", ".."} or pathlib.Path(output_stem).name != output_stem or "/" in output_stem or "\\\\" in output_stem:
+    if not output_stem or output_stem in {".", ".."} or pathlib.Path(output_stem).name != output_stem or "/" in output_stem or chr(92) in output_stem:
         raise ValueError("output_stem must be a single safe filename component")
     source_paths = resolve_source_paths(source_ccd, source_hashes)
     destination_directory.mkdir(parents=True, exist_ok=True)
