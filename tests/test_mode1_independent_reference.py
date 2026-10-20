@@ -69,7 +69,7 @@ class Mode1IndependentReferenceTests(unittest.TestCase):
     def test_edc_matches_bitwise_reference(self) -> None:
         """Check the CRC algorithm on multiple data patterns and boundaries."""
         for payload in (b"", b"123456789", bytes(range(256)),
-                        bytes(range(256)) * 9, b"\\x00" * 2064):
+                        bytes(range(256)) * 9, bytes(2064)):
             with self.subTest(size=len(payload)):
                 self.assertEqual(compute_edc(payload), reference_edc(payload))
 
