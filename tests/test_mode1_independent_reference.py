@@ -36,9 +36,12 @@ def gf_double(value: int) -> int:
     return result
 
 
-def gf_halve(value: int) -> int:
-    """Find the field element that doubles to the requested value."""
-    return next(candidate for candidate in range(256) if gf_double(candidate) == value)
+def gf_reverse_triple(value: int) -> int:
+    """Invert multiplication by (1 + x) in GF(256)."""
+    return next(
+        candidate for candidate in range(256)
+        if (candidate ^ gf_double(candidate)) == value
+    )
 
 
 def reference_ecc(
@@ -57,7 +60,7 @@ def reference_ecc(
             position = (position + stride) % len(data)
             a = gf_double(a ^ byte)
             b ^= byte
-        a = gf_halve(gf_double(a) ^ b)
+        a = gf_reverse_triple(gf_double(a) ^ b)
         parity_a_out.append(a)
         parity_b_out.append(a ^ b)
     return bytes(parity_a_out + parity_b_out)
