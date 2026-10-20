@@ -59,3 +59,36 @@ ownership is valid.
 Issue #46 remains **OPEN**. Do not enable any combined ADPCM performance
 profile or promote a release until these separate gates are proven. The
 historic `$4CFA` portrait/ADPCM cave collision remains a safety block.
+
+
+## 2026-10-20 follow-up: extended original-versus-portrait replay
+
+A separate read-only input replay uses
+`tools/mesen_p0_extended_watcher_replay.lua`, which reproduces the
+initial 17,900-frame route, stops Button I between frames 16000 and 17999,
+then pulses I on frames 18000-23999 and holds right thereafter. It
+captures all original witness frames plus each 500-frame checkpoint from
+16500 through 26000. This uses the same authenticated original image,
+portrait-only source-guarded experiment, BIOS and MesenCE 2.2.1 Linux.
+Neither emulator run uses a savestate or forced PC.
+
+Both scripts reached frame 26000, exited with code 0, and produced **24
+byte-for-byte identical PNG files** (four intro/navigation frames plus
+20 500-frame checkpoints from 16500 through 26000). At all logged state
+checkpoints both saw the same logical state bytes at `$3700-$3702`,
+MPR mapping, and hook counts. Both final summaries report:
+
+```text
+P0_EXT_RESULT adpcm=2 portrait=1 interact=14 gameLoop=1 transition=1 AD_READ=2600 AD_WRITE=2
+```
+
+The scripted follow-up input **did not demonstrate a completed second
+interaction or a return to free exploration**: the screen still contains
+street-watcher dialogue/choices at frame 26000. The `$E036` callback
+count reflects observed execution entries, *not* 2600 independent audio
+transfers. Do not interpret these counters as evidence of correct sound
+output or a resolved cache-life-cycle regression.
+
+This follow-up improves portrait-only *parity* within the observed NPC
+dialogue sequence; it does not justify lifting ADPCM quarantine or
+closing issue #46.
