@@ -25,6 +25,7 @@ from typing import Any
 from cyber_oedo.disc.game_layout import bank_for_offset
 from cyber_oedo.io import sha256_file
 from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256
+from cyber_oedo.runtime.dialogue_load_architecture import TRACK2_START_LBA
 from cyber_oedo.graphics.title_screen import TITLE_ASSET_BYTES
 from cyber_oedo.runtime.text_engine_coverage import ENDING_OEDONET_STREAM
 
@@ -181,7 +182,10 @@ class ResourceDescriptor:
 
     @property
     def payload_offset(self) -> int:
-        return self.sector * 2048
+        relative_sector = self.sector - TRACK2_START_LBA
+        if relative_sector < 0:
+            raise ValueError("resource descriptor LBA precedes Track 2")
+        return relative_sector * 2048
 
 
 def _sha256(data: bytes) -> str:
@@ -228,7 +232,8 @@ def parse_resource_descriptor_table(
             sector_span == 0
             or byte_length == 0
             or math.ceil(byte_length / 2048) != sector_span
-            or sector * 2048 + byte_length > len(payload)
+            or sector < TRACK2_START_LBA
+            or (sector - TRACK2_START_LBA) * 2048 + byte_length > len(payload)
         ):
             break
 

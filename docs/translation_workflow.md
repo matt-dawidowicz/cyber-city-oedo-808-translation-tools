@@ -11,7 +11,14 @@ analysis tools. It is suitable for:
 - renderer/control reverse engineering; and
 - locating candidate resources and padding.
 
-It is not yet a reinsertion toolchain.
+The repository now contains the first guarded reinsertion path for the final
+dialogue master. The packed-English Mission 0 test builder conservatively inserts reviewed
+spoken/narration rows only when they map exactly to the authenticated payload
+and the packed English exactly fills the existing visible-text footprint.
+Shorter padding-dependent rows are classified separately until final-runtime
+padding behavior is live-certified. Growth, split/control
+records, later-bank renderer activation, and full release QA remain gated.
+See `final_dialogue_insertion_status.md`.
 
 ## Phase 1: establish a stable source baseline
 
@@ -138,6 +145,72 @@ The automated builder proves the address-to-disc rebuild path independently of
 the English font project. The compact-renderer experiment is frozen at commit
 `3abaf64` and is not part of the playable build. Human testing must still prove
 runtime behavior.
+
+## Phase 4b: packed final-dialogue insertion
+
+The final 2026-09-24 localization workbook is now an authenticated editorial
+input rather than an informal external reference.
+
+```bash
+python -m pip install -e ".[dev,editorial]"
+
+cyber-oedo export-final-dialogue \
+  Cyber_City_Oedo_808_Final_Localization_2026-09-24.xlsx \
+  final_dialogue_2026-09-24.tsv
+
+# Historical packed-renderer proof only; this command is intentionally not
+# registered in the public cyber-oedo command table.
+python -m cyber_oedo.build.packed_dialogue_test \
+  "Cyber City Oedo 808 - Kemono no Alignment (Japan).ccd" \
+  packed-dialogue-test \
+  final_dialogue_2026-09-24.tsv \
+  /path/to/user-supplied-font.ttf \
+  --mission0b-evidence /path/to/verified_m0b.json
+```
+
+The archived packed-dialogue builder now additionally requires an explicit
+`--mission0b-evidence /path/to/verified_m0b.json` argument before it can replace
+any text. The workbook's `MISSION_0` bank does **not** distinguish overlays A
+and B, while this historical renderer is installed only into B. The evidence
+JSON must name the authenticated source digest, runtime overlay
+`MISSION_0_B`, a nonempty array of entry IDs, and a corresponding
+`runtime_traces` object with per-ID Mesen trace references. These are
+operator-reviewed claims and are **not automatically certified** by the file
+format. The build refuses missing/unlisted IDs. Run this builder only for
+verified M0-B records, not the full Mission 0 bank.
+
+An optional `--definitive-menu` flag now inserts the separately authenticated
+opening-menu and CD-DA hooks into this **historical experimental** image.
+The normal path leaves the existing menu untouched. Use
+`--menu-audio-track N` only when the chosen audio track is present.
+
+The legacy 2026-09-24 `export-final-dialogue` SHA pins remain intentionally
+frozen for archival reproducibility. The historical packed builder now accepts
+`--master-edition definitive` for the **already-pinned** Definitive Edition
+full-script or dialogue-only TSV (`DEFINITIVE_SCRIPT_TSV_SHA256` /
+`DEFINITIVE_DIALOGUE_TSV_SHA256` in
+`cyber_oedo.text.definitive_script_compiler`). That path authenticates the
+original TSV bytes, selects only spoken/narration rows, and retains the
+independent M0-B runtime-evidence gate. It does not turn a synthetic English
+build into a certified release. Use `--master-edition legacy` for the archived
+September-24 TSV (the default). Do not replace a legacy workbook hash with
+an unverified second-pass hash. The revised workbook itself is authenticated by
+`DEFINITIVE_WORKBOOK_SHA256` and must produce its separately approved TSV.
+
+The build is fail-closed:
+
+- the workbook and exported TSV hashes are fixed;
+- each row must map to an exact `27 28` marker and exact Shift-JIS source span;
+- exact-footprint packed English is enabled immediately; shorter rows are
+  reported as padding candidates until the ignored-padding behavior is certified;
+- packed English that exceeds the owned span is reported for relocation rather
+  than shortened;
+- rows whose workbook representation is not one contiguous binary span are
+  reported for record-aware mapping;
+- only Mesen-evidenced Mission 0-B dialogue IDs may be activated because
+  Mission 0-A and later renderer paths have not yet been certified.
+
+The test profile emits both a build manifest and a Mission 0 relocation queue.
 
 ## Phase 5: stock-renderer page design
 

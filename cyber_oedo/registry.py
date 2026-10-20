@@ -77,6 +77,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Pipeline",
     ),
     CommandSpec(
+        "export-final-dialogue",
+        "cyber_oedo.text.export_final_localization",
+        "Export the reviewed final workbook to deterministic dialogue TSV.",
+        "Pipeline",
+    ),
+    CommandSpec(
         "build-analysis-db",
         "cyber_oedo.analysis.build_analysis_db",
         "Build a local SQLite database from generated evidence.",
@@ -188,6 +194,36 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "analyze-dialogue-residency",
         "cyber_oedo.runtime.dialogue_residency",
         "Map dialogue-bank residency, audio state, voices, and VRAM overlap.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "describe-transition-state-machine",
+        "cyber_oedo.runtime.transition_state_machine",
+        "Describe direction-specific Mission 0 transition latency and gates.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "plan-card-ram-cache",
+        "cyber_oedo.runtime.card_ram_cache_plan",
+        "Plan an AD_WRITE-friendly Mission 0 Super System Card cache layout.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "analyze-resource-lifetime",
+        "cyber_oedo.runtime.resource_lifetime",
+        "Map logical dialogue/exploration overlap and MPR lifetime risks.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "analyze-same-room-reentry",
+        "cyber_oedo.runtime.same_room_reentry",
+        "Map same-room exploration state reinstall and preservation candidates.",
+        "Diagnostics",
+    ),
+    CommandSpec(
+        "analyze-static-vram-bound",
+        "cyber_oedo.runtime.static_vram_restore_bound",
+        "Bound dialogue-owned exploration VRAM damage from static renderer geometry.",
         "Diagnostics",
     ),
     CommandSpec(
