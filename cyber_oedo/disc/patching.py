@@ -195,8 +195,16 @@ def apply_payload_patches(
         reports = _apply_payload_patches_in_place(
             temporary, ordered, start_lba=start_lba, sector_count=sector_count
         )
-        # Flush the temporary image to disk before publishing it.
+        # Read back each affected sector before publishing; a short or corrupt
+        # write must never replace the last good image.
         with temporary.open("rb") as staged:
+            for report in reports:
+                staged.seek(report.absolute_lba * RAW_SECTOR_SIZE)
+                rebuilt = staged.read(RAW_SECTOR_SIZE)
+                if sha256_buffer(rebuilt) != report.after_sha256:
+                    raise OSError(
+                        f"staged sector verification failed at LBA {report.absolute_lba}"
+                    )
             os.fsync(staged.fileno())
         os.replace(temporary, image_path)
         return reports
