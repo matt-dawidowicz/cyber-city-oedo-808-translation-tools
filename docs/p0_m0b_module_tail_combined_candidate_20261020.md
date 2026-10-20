@@ -43,3 +43,13 @@ The new candidate's five patches must not overlap, must use original byte guards
 During experimentation, early long-run Lua scripts contained a syntax error in a dynamic MPR state key; those scripts timed out without executing their checks and **are excluded as regression evidence**. A separate corrected script was compiled against Lua 5.4 and then successfully completed the 26,000-frame emulator route described above. All console/log claims above derive from that completed run.
 
 Issue: https://github.com/matt-dawidowicz/cyber-city-oedo-808-translation-tools/issues/46
+
+## Negative ownership evidence (subsequent source-only probe)
+
+A separate, **original-disc-only** 26,000-frame Lua run monitors CPU `read`, `write`, and `exec` accesses to the whole candidate interval `$8F51-$8FAF` (after frame 2600). At frame 3000 no CPU reads/writes/executions had been observed; by frame **6000, 95 CPU reads** had been observed. This is **positive evidence of another reader of the proposed region**. The debugger's read-only display of the tail showed ordinary noncode bytes `A8 34 A9 A9 85 10 A9 34 ...` at both frames.
+
+The combined-disc visual replay independently shows that the code prefix is valid **at the first audio call (frame 2647)** but at **frame 2700** the same mapped `$8F51` region already contains `A8 34 A9 A9 85 10 A9 34 ...`, not the injected routine. It is also noncode at frames 6000 and 8600. It becomes executable again by the later first and second watcher calls (frames 15955 and 23430), suggesting that some loading/lifetime mechanism reintroduces it, but **no caller-safety proof covers all times when the global hook can be executed**.
+
+**Decision: REJECT `$8F51-$8FAF` as a continuously owned executable code cave.** A 26,000-frame successful call-entry test is insufficient to promote a code location that is overwritten and actively read during normal play. This is not yet a safe ADPCM architecture. Continue to quarantine the old ADPCM-containing profiles, keep issue #46 open, and do not merge this prototype as a fix.
+
+CPU memory callbacks alone may not capture BIOS DMA or all bank-sensitive accesses. For this reason, these observations are negative evidence of active region use, not a complete model of its owner.
