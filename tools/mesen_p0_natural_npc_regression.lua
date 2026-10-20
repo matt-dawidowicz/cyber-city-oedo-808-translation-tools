@@ -113,7 +113,9 @@ emu.addEventCallback(function()
     input.up = true
   else
     input.right = true
-    input.i = frame % 20 < 3
+    -- Stop advancing text after the initial interaction. Continuing to pulse
+    -- Button I makes text-wait polling a source of false A/B divergences.
+    input.i = frame < 16000 and frame % 20 < 3
   end
   emu.setInput(input, 0)
 end, emu.eventType.inputPolled)
