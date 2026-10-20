@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import datetime
 import json
 import pathlib
 import shutil
@@ -66,6 +65,7 @@ def build_human_test_disc(
             payload_patches,
             start_lba=profile.TRACK2_START_LBA,
             sector_count=profile.TRACK2_SECTOR_COUNT,
+            atomic=False,  # The whole output is already staged transactionally.
         )
         verify_output_patches(
             output_paths[".img"],
@@ -102,7 +102,6 @@ def build_human_test_disc(
             "build_profile": recipe.build_profile,
             "title_screen_mode": recipe.title_screen_mode,
             "patch_plan_sha256": plan.sha256(),
-            "created_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "scope": (
                 "Same-size stock-renderer English vertical slice with guarded text, "
                 "layout, profile, Media Mix, and optional title-screen patches; not a "
