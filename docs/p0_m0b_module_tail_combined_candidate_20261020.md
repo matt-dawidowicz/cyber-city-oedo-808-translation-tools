@@ -53,3 +53,11 @@ The combined-disc visual replay independently shows that the code prefix is vali
 **Decision: REJECT `$8F51-$8FAF` as a continuously owned executable code cave.** A 26,000-frame successful call-entry test is insufficient to promote a code location that is overwritten and actively read during normal play. This is not yet a safe ADPCM architecture. Continue to quarantine the old ADPCM-containing profiles, keep issue #46 open, and do not merge this prototype as a fix.
 
 CPU memory callbacks alone may not capture BIOS DMA or all bank-sensitive accesses. For this reason, these observations are negative evidence of active region use, not a complete model of its owner.
+
+### Stronger finding: this BSS interval is *executable live code* in stock
+
+The continuing original-disc ownership replay logged, at **frame 15955**, **281 reads, 95 writes, and 528 execute callbacks** in the proposed `$8F51-$8FAF` range. At frame **16500**, totals had grown to **524 reads, 95 writes, and 1230 execute callbacks**. This is not merely passive scratch or a source-zero tail: the unmodified game **writes and executes instructions there during the watcher sequence**. Mapped contents change dynamically, e.g. `C5 AC 6C 94 ...` at frame 15955 and `A8 34 A9 A9 ...` at frame 16500.
+
+In the combined test, the injected prefix appears at the audio-hook entry but disappears during ordinary gameplay, and may reappear with dialogue-module reloads. Executable ownership is shared with existing stock code, so even full-route screenshot matching cannot make this cave safe.
+
+**This placement must be rejected for future performance-cache implementations**, not just held for further visual testing. The only admissible path forward is independent, proven code ownership (for example an explicitly initialized private bank with a safe mapped-call trampoline), with tested cross-overlay fallback and ADPCM transfer contract. The research constructor remains nonrelease and isolated from the shipping builder.
