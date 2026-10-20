@@ -25,3 +25,19 @@ A separate input schedule moves the player right at frames 23000-23109 and pulse
 ## Follow-up safety obligations
 
 The historical combined portrait/ADPCM caves overlap at source `0x1364FA`; the ADPCM redirect is in a shared dialogue module and its overlay-independent residency remains unproved. Keep all ADPCM-containing build profiles quarantined and issue #46 open. No performance optimization is release-certified by these tests. Repository tests and CI alone cannot establish complete audio fidelity.
+
+## Controlled second-entry parity: I released after re-entry
+
+The refined read-only schedule holds Right only during frames 23000-23109, pulses I during frames 23110-23499, and supplies **no further input**. A full 26,000-frame cold boot was completed separately for both authenticated original and portrait-only builds.
+
+**Final counts are identical** for both games:
+
+```
+ADPCM=3 portrait=2 scan=20 menuI=3 menuII=0 loop=1 transition=1
+AD_READ=3468 AD_WRITE=4
+MPR=[FF F8 80 81 82 83 84 00]
+```
+
+Across the 37 checkpoint screenshots, **34/37 PNG pairs are byte-identical**. Only frames 23400, 23500, and 23600 differ, around the second portrait load. The source at 23500 has not yet drawn the portrait, while the patched portrait path has. **Every recorded screenshot from frame 23700 through 26000 is byte-identical**, with no further button presses. This is strong route-specific visual evidence for restored parity after the portrait-loading speedup and second interaction; it is not proof of audio waveform identity, other scene residency or correctness of the historically overlapping combined ADPCM profile.
+
+The reproducible, fail-closed script is `tools/mesen_p0_watcher_second_interaction.lua`. Run each disc independently, preserve its Lua script-data PNGs after each run, compare source versus patched screenshot names and only treat `P0_SECOND_RESULT success=true` as route-level success. Game assets, emulator and BIOS must be independently user-supplied.
