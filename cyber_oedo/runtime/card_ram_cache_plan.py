@@ -67,7 +67,7 @@ class CacheSlice:
 
 
 def _bank_name(bank: int) -> str:
-    return f"$%02X" % bank
+    return "$%02X" % bank
 
 
 def _slice_json(item: CacheSlice) -> dict[str, object]:

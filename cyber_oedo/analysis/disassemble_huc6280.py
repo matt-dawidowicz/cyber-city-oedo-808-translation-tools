@@ -210,43 +210,43 @@ def _format_operand(mode: str, raw: bytes, cpu_address: int) -> str:
     if mode == "acc":
         return "A"
     if mode == "imm":
-        return f"#$%02X" % raw[1]
+        return "#$%02X" % raw[1]
     if mode == "zpg":
-        return f"$%02X" % raw[1]
+        return "$%02X" % raw[1]
     if mode == "zpx":
-        return f"$%02X,X" % raw[1]
+        return "$%02X,X" % raw[1]
     if mode == "zpy":
-        return f"$%02X,Y" % raw[1]
+        return "$%02X,Y" % raw[1]
     if mode == "zpi":
-        return f"($%02X)" % raw[1]
+        return "($%02X)" % raw[1]
     if mode == "idx":
-        return f"($%02X,X)" % raw[1]
+        return "($%02X,X)" % raw[1]
     if mode == "idy":
-        return f"($%02X),Y" % raw[1]
+        return "($%02X),Y" % raw[1]
     if mode == "abs":
-        return f"$%04X" % _word(raw, 1)
+        return "$%04X" % _word(raw, 1)
     if mode == "abx":
-        return f"$%04X,X" % _word(raw, 1)
+        return "$%04X,X" % _word(raw, 1)
     if mode == "aby":
-        return f"$%04X,Y" % _word(raw, 1)
+        return "$%04X,Y" % _word(raw, 1)
     if mode == "ind":
-        return f"($%04X)" % _word(raw, 1)
+        return "($%04X)" % _word(raw, 1)
     if mode == "iax":
-        return f"($%04X,X)" % _word(raw, 1)
+        return "($%04X,X)" % _word(raw, 1)
     if mode == "rel":
         target = (cpu_address + 2 + _signed_byte(raw[1])) & 0xFFFF
-        return f"$%04X" % target
+        return "$%04X" % target
     if mode == "zrl":
         target = (cpu_address + 3 + _signed_byte(raw[2])) & 0xFFFF
-        return f"$%02X,$%04X" % (raw[1], target)
+        return "$%02X,$%04X" % (raw[1], target)
     if mode == "imz":
-        return f"#$%02X,$%02X" % (raw[1], raw[2])
+        return "#$%02X,$%02X" % (raw[1], raw[2])
     if mode == "izx":
-        return f"#$%02X,$%02X,X" % (raw[1], raw[2])
+        return "#$%02X,$%02X,X" % (raw[1], raw[2])
     if mode == "ima":
-        return f"#$%02X,$%04X" % (raw[1], _word(raw, 2))
+        return "#$%02X,$%04X" % (raw[1], _word(raw, 2))
     if mode == "imx":
-        return f"#$%02X,$%04X,X" % (raw[1], _word(raw, 2))
+        return "#$%02X,$%04X,X" % (raw[1], _word(raw, 2))
     if mode == "blk":
         return "$%04X,$%04X,$%04X" % (
             _word(raw, 1),

@@ -26,7 +26,6 @@ from dataclasses import dataclass
 from cyber_oedo.disc.cdrom_mode1 import PayloadPatch
 from cyber_oedo.disc.game_layout import TRACK2_SECTOR_COUNT, TRACK2_START_LBA
 from cyber_oedo.disc.patching import apply_payload_patches
-from cyber_oedo.io import sha256_file
 from cyber_oedo.runtime.external_english_pool import (
     POOL_CAPACITY,
     POOL_FIRST_BANK,

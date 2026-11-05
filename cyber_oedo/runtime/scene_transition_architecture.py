@@ -120,7 +120,7 @@ def analyze_scene_transition_architecture(payload: bytes) -> dict[str, object]:
             "adjacency_is_not_runtime_ordering": True,
             "wait_to_orchestration_runtime_order_proven": False,
             "scene_orchestration_is_entry_path_not_exit_chain": True,
-            "loader_region_end": f"$%04X" % (SCENE_LOADERS_CPU_END_EXCLUSIVE - 1),
+            "loader_region_end": "$%04X" % (SCENE_LOADERS_CPU_END_EXCLUSIVE - 1),
         },
         "optimization_implication": (
             "The 120-frame routine is proven on the exploration-exit path via "

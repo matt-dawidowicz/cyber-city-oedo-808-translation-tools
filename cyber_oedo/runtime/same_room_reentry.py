@@ -57,9 +57,9 @@ def direct_absolute_calls(
         target = instruction.raw[1] | (instruction.raw[2] << 8)
         rows.append(
             {
-                "cpu": f"$%04X" % instruction.cpu_address,
+                "cpu": "$%04X" % instruction.cpu_address,
                 "operation": instruction.mnemonic.upper(),
-                "target": f"$%04X" % target,
+                "target": "$%04X" % target,
             }
         )
     return tuple(rows)
@@ -95,12 +95,12 @@ def analyze_same_room_reentry(payload: bytes) -> dict[str, object]:
     targets = {row["target"] for row in setup_calls}
     target_proof = {
         name: {
-            "target": f"$%04X" % address,
-            "direct_reference_in_scene_orchestration": f"$%04X" % address in targets,
+            "target": "$%04X" % address,
+            "direct_reference_in_scene_orchestration": "$%04X" % address in targets,
             "call_sites": [
                 row["cpu"]
                 for row in setup_calls
-                if row["target"] == f"$%04X" % address
+                if row["target"] == "$%04X" % address
             ],
         }
         for name, address in REENTRY_TARGETS.items()

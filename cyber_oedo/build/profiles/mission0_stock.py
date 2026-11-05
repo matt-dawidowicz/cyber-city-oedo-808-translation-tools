@@ -6,29 +6,18 @@ import pathlib
 
 from cyber_oedo.io import sha256_buffer
 from cyber_oedo.build.profiles.dossiers import (
-    OPENING_PROFILE_FIELDS,
     OPENING_PROFILE_LAYOUT_PATCHES,
     OPENING_PROFILE_TEXT_PATCHES,
 )
 from cyber_oedo.build.profiles.media_mix import (
-    INFORMATION_HIDDEN_ROW,
     INFORMATION_SCREEN_LAYOUT_PATCHES,
-    INFORMATION_SCREEN_LINES,
     INFORMATION_SCREEN_TEXT_PATCHES,
-)
-from cyber_oedo.build.profiles.models import (
-    InPlaceTextPatch,
-    InformationScreenLine,
-    OpeningProfileField,
-    ascii_to_fullwidth,
-    wrap_ascii_text,
 )
 from cyber_oedo.build.profiles.startup import (
     BOOT_MENU_PATCHES,
     MISSION0_DIALOGUE_PATCHES,
     MISSION0_PROLOGUE_PATCHES,
     MISSION_TITLE_PATCHES,
-    PROLOGUE_WRAP_WIDTH,
     STARTUP_V2_EXTRA_PATCHES,
 )
 from cyber_oedo.disc.cdrom_mode1 import PayloadPatch, read_payload_range
@@ -273,7 +262,7 @@ def build_tester_readme(ccd_name: str, title_screen_mode: str) -> str:
         "",
         "How to boot",
         "-----------",
-        f"1. Keep the CCD, IMG, and SUB together.",
+        "1. Keep the CCD, IMG, and SUB together.",
         f"2. Open this descriptor in a PC Engine CD emulator: {ccd_name}",
         "3. Use a legally obtained Japanese System Card 3.0 BIOS.",
         "4. Do not rename only one member of the CloneCD set.",

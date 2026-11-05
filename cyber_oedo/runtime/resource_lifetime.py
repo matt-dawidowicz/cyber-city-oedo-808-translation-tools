@@ -94,8 +94,8 @@ def logical_page_geometry(start: int, end_exclusive: int) -> tuple[dict[str, obj
         rows.append(
             {
                 "mpr_slot": slot,
-                "logical_start": f"$%04X" % cursor,
-                "logical_end_inclusive": f"$%04X" % (end - 1),
+                "logical_start": "$%04X" % cursor,
+                "logical_end_inclusive": "$%04X" % (end - 1),
                 "page_offset_start": f"0x{cursor & (MPR_WINDOW_BYTES - 1):04X}",
                 "page_offset_end_inclusive": f"0x{(end - 1) & (MPR_WINDOW_BYTES - 1):04X}",
                 "bytes": end - cursor,
@@ -108,8 +108,8 @@ def logical_page_geometry(start: int, end_exclusive: int) -> tuple[dict[str, obj
 def _range_json(item: AddressRange) -> dict[str, object]:
     return {
         "name": item.name,
-        "start": f"$%04X" % item.start,
-        "end_inclusive": f"$%04X" % (item.end_exclusive - 1),
+        "start": "$%04X" % item.start,
+        "end_inclusive": "$%04X" % (item.end_exclusive - 1),
         "bytes": item.bytes,
         "domain": item.domain,
     }
@@ -154,13 +154,13 @@ def analyze_scene_mpr_operations(payload: bytes) -> dict[str, object]:
                     and previous.raw[0] == 0xA9
                     and instruction.mnemonic == "tam"
                 ):
-                    immediate = f"$%02X" % previous.raw[1]
+                    immediate = "$%02X" % previous.raw[1]
                 rows.append(
                     {
                         "region": region.name,
-                        "cpu": f"$%04X" % instruction.cpu_address,
+                        "cpu": "$%04X" % instruction.cpu_address,
                         "operation": instruction.mnemonic.upper(),
-                        "mask": f"$%02X" % instruction.raw[1],
+                        "mask": "$%02X" % instruction.raw[1],
                         "mprs": mprs,
                         "immediate_accumulator_if_adjacent": immediate,
                         "instruction": instruction.format(),

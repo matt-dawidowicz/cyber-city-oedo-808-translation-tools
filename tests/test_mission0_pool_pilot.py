@@ -107,7 +107,6 @@ class Mission0PoolPilotTests(unittest.TestCase):
                 sparse, glyphs, atlas, english=DEFAULT_PILOT_TEXT
             )
         self.assertEqual(len(patches), 10)
-        by_label = {item.label: item for item in patches}
         loader = next(item for item in patches if "indexed table" in item.label)
         self.assertEqual(loader.replacement, M0B_TABLE_LOADER_REPLACEMENT)
         code = next(item for item in patches if "installed at CPU B000" in item.label)

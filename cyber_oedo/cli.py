@@ -48,7 +48,7 @@ def run_command(
     """Import one canonical package command and invoke its argument API."""
 
     module = importlib.import_module(module_name)
-    main_function = getattr(module, "main")
+    main_function = module.main
     result = main_function(list(arguments))
     return 0 if result is None else int(result)
 

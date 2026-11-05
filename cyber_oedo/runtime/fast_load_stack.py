@@ -80,7 +80,7 @@ BAR_CACHE_LAYOUT = (
 
 
 def _bank(bank: int) -> str:
-    return f"$%02X" % bank
+    return "$%02X" % bank
 
 
 def build_bar_fast_load_stack() -> dict[str, object]:

@@ -82,9 +82,9 @@ def _restore_one_chunk(chunk: TransferChunk) -> bytes:
 def build_restore_routines() -> tuple[dict[str, object], ...]:
     return tuple(
         {
-            "bank": f"$%02X" % chunk.bank,
-            "vram_byte_start": f"$%04X" % chunk.vram_byte_start,
-            "vram_word_start": f"$%04X" % chunk.vram_word_start,
+            "bank": "$%02X" % chunk.bank,
+            "vram_byte_start": "$%04X" % chunk.vram_byte_start,
+            "vram_word_start": "$%04X" % chunk.vram_word_start,
             "byte_length": chunk.byte_length,
             "machine_code": _restore_one_chunk(chunk),
             "direction_live_proven": True,
@@ -97,9 +97,9 @@ def build_snapshot_plan() -> dict[str, object]:
     return {
         "chunks": [
             {
-                "bank": f"$%02X" % chunk.bank,
-                "vram_byte_start": f"$%04X" % chunk.vram_byte_start,
-                "vram_word_start": f"$%04X" % chunk.vram_word_start,
+                "bank": "$%02X" % chunk.bank,
+                "vram_byte_start": "$%04X" % chunk.vram_byte_start,
+                "vram_word_start": "$%04X" % chunk.vram_word_start,
                 "byte_length": chunk.byte_length,
                 "candidate_transfer": "TAI $0002,$A000,length after MARR/VRR setup",
             }

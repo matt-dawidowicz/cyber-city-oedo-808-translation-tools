@@ -85,15 +85,15 @@ def build_static_vram_restore_bound() -> dict[str, object]:
     return {
         "full_scene_restore_bytes": SCENE_VRAM_BYTES,
         "portrait": {
-            "start_word": f"$%04X" % PORTRAIT_VRAM_START_WORD,
-            "end_word_inclusive": f"$%04X" % (PORTRAIT_VRAM_END_WORD_EXCLUSIVE - 1),
+            "start_word": "$%04X" % PORTRAIT_VRAM_START_WORD,
+            "end_word_inclusive": "$%04X" % (PORTRAIT_VRAM_END_WORD_EXCLUSIVE - 1),
             "words": portrait_words,
             "bytes": PORTRAIT_VRAM_BYTES,
             "address_range_reused_by_multiple_portraits": True,
         },
         "glyph_patterns": {
             "grid_cells": TEXT_CELLS,
-            "base_word": f"$%04X" % GLYPH_BASE_WORD,
+            "base_word": "$%04X" % GLYPH_BASE_WORD,
             "slot_stride_words": GLYPH_SLOT_STRIDE_WORDS,
             "stream_calls_per_render": GLYPH_STREAM_CALLS,
             "words_per_stream_call": GLYPH_WORDS_PER_STREAM_CALL,
@@ -101,20 +101,20 @@ def build_static_vram_restore_bound() -> dict[str, object]:
             "bytes_written_per_cell": GLYPH_WORDS_WRITTEN_PER_CELL * WORD_BYTES,
             "sparse_dirty_words_all_slots": glyph_dirty_words,
             "sparse_dirty_bytes_all_slots": glyph_dirty_words * WORD_BYTES,
-            "envelope_start_word": f"$%04X" % glyph_envelope_start,
-            "envelope_end_word_inclusive": f"$%04X" % (glyph_envelope_end - 1),
+            "envelope_start_word": "$%04X" % glyph_envelope_start,
+            "envelope_end_word_inclusive": "$%04X" % (glyph_envelope_end - 1),
             "envelope_bytes": (glyph_envelope_end - glyph_envelope_start) * WORD_BYTES,
             "ranges": [
                 {
                     "cell": index,
-                    "start_word": f"$%04X" % start,
-                    "end_word_inclusive": f"$%04X" % (end - 1),
+                    "start_word": "$%04X" % start,
+                    "end_word_inclusive": "$%04X" % (end - 1),
                 }
                 for index, (start, end) in enumerate(glyphs)
             ],
         },
         "bat": {
-            "base_word": f"$%04X" % BAT_BASE_WORD,
+            "base_word": "$%04X" % BAT_BASE_WORD,
             "exact_union_static_bound": None,
             "reason": (
                 "The one-word BAT writer and base are source-guarded, but the "
@@ -158,10 +158,10 @@ def build_static_vram_restore_bound() -> dict[str, object]:
                 "spans": [
                     {
                         **span,
-                        "source_lba": f"$%04X" % span["source_lba"],
-                        "destination_word": f"$%04X" % span["destination_word"],
-                        "start_byte": f"$%04X" % span["start_byte"],
-                        "end_byte_inclusive": f"$%04X" % span["end_byte_inclusive"],
+                        "source_lba": "$%04X" % span["source_lba"],
+                        "destination_word": "$%04X" % span["destination_word"],
+                        "start_byte": "$%04X" % span["start_byte"],
+                        "end_byte_inclusive": "$%04X" % span["end_byte_inclusive"],
                     }
                     for span in LIVE_BAR_SELECTIVE_SPANS
                 ],
