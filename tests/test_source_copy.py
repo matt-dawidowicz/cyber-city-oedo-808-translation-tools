@@ -142,5 +142,30 @@ class AuthenticatedCopyTests(unittest.TestCase):
             )
 
 
+    def test_destination_alias_is_rejected_before_copy(self) -> None:
+        """A hard-linked destination must never truncate the authenticated source."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            ccd, hashes, data = self._source_set(root)
+            alias = root / "copy.ccd"
+            try:
+                alias.hardlink_to(ccd)
+            except OSError:
+                self.skipTest("hard links unavailable")
+            with self.assertRaisesRegex(ValueError, "alias"):
+                copy_authenticated_source_set(ccd, root, "copy", hashes)
+            self.assertEqual(ccd.read_bytes(), data[".ccd"])
+
+    def test_unsafe_output_stems_are_rejected(self) -> None:
+        """Prevent traversal and platform-specific path separators."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            ccd, hashes, _ = self._source_set(root)
+            for stem in ("../escape", "nested/path", "nested\\\\path", ".", "..", ""):
+                with self.subTest(stem=stem):
+                    with self.assertRaises(ValueError):
+                        copy_authenticated_source_set(ccd, root / "output", stem, hashes)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -225,9 +225,22 @@ cyber-oedo analyze-dialogue-residency track02_mode1_2048.bin \
   --output dialogue_residency.json
 ```
 
+Whole-game save, ADPCM, object, interaction, and event-boundary proof:
+
+```bash
+cyber-oedo prove-whole-game-systems track02_mode1_2048.bin \
+  --output whole_game_systems.json
+```
+
 For later-mission and ENDING runtime certification, load
 `tools/mesen_text_engine_live_capture.lua` in Mesen. The script is read-only
 and records parser/renderer hits together with all eight MPR values.
+
+For whole-game diagnostics use `tools/mesen_whole_game_live_capture.lua`.
+It records event-code bytes, bounded object snapshots, both save buffers, and
+all eight MPRs. Execution callbacks observe instruction entry: interaction
+copy and BIOS read snapshots are **pre-operation** observations and must not
+be treated as completed writes or reads.
 
 The state differ reports logical changes together with both MPR mappings; it is
 a candidate generator for breakpoint/disassembly work, not by itself proof of
@@ -321,6 +334,7 @@ Further documentation:
 - [`docs/gamewide_runtime_architecture.md`](docs/gamewide_runtime_architecture.md)
 - [`docs/text_engine_coverage.md`](docs/text_engine_coverage.md)
 - [`docs/text_engine_completion.md`](docs/text_engine_completion.md)
+- [`docs/whole_game_reverse_engineering.md`](docs/whole_game_reverse_engineering.md)
 - [`docs/localization_style_guide.md`](docs/localization_style_guide.md)
 - [`docs/english_font_architecture.md`](docs/english_font_architecture.md)
 - [`docs/packed_english_m0_runtime.md`](docs/packed_english_m0_runtime.md)
