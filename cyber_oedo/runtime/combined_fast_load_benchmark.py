@@ -26,9 +26,6 @@ from dataclasses import dataclass
 import hashlib
 
 from cyber_oedo.disc.cdrom_mode1 import PayloadPatch
-from cyber_oedo.runtime.card_ram_adpcm_cache import (
-    build_speaker_adpcm_cache_benchmark,
-)
 from cyber_oedo.runtime.card_ram_portrait_cache import build_portrait_cache_benchmark
 from cyber_oedo.runtime.fast_fade_benchmark import build_fast_fade_benchmark_patch
 from cyber_oedo.runtime.dialogue_interpreter import TRACK2_PAYLOAD_SHA256

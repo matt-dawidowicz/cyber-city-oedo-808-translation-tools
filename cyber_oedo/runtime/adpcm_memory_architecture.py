@@ -177,7 +177,7 @@ def analyze_adpcm_memory_architecture(payload: bytes) -> dict[str, object]:
         "snapshot": {
             "module_lba": f"0x{DIALOGUE_MODULE_LBA:04X}",
             "region_cpu": (
-                f"$%04X-$%04X" % (
+                "$%04X-$%04X" % (
                     ADPCM_SNAPSHOT_REGION_CPU,
                     ADPCM_SNAPSHOT_REGION_CPU + ADPCM_SNAPSHOT_REGION_LENGTH - 1,
                 )

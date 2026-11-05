@@ -17,7 +17,7 @@ import json
 import math
 import pathlib
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Iterable
 
 SECTOR_BYTES = 2048
