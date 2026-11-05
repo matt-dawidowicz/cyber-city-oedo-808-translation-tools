@@ -1,0 +1,49 @@
+{
+  "status": "relocation_live_tested_opening_only",
+  "supersedes": "kuruzer_relocation_evidence.json",
+  "source_payload_sha256": "0817cfa03fedc7b33c52f9bd9423b41480fa385cff3693262732b8768e7ca223",
+  "descriptor": {
+    "table_payload_offset": "0x0013754B",
+    "table_entries": 48,
+    "table_sha256": "502d5119fc3ab0cf1cd21bef68221f46008f4003868601ab49ca1399bfc4fb1b",
+    "kuruzer_descriptor_offset": "0x001377AB",
+    "absolute_lba": "0x10F1",
+    "span": 1,
+    "byte_length": "0x0320"
+  },
+  "resource": {
+    "bytes": 800,
+    "sha256": "ceef76cd70ea8a2d6a4a334863e2b19ffea54b69382a118f081c13babc42f511",
+    "narration_span": ["0x0028", "0x02E0"],
+    "narration_sha256": "93afb245ad8ee5bf0ac1f1e8c712e6c35a4dd3b910725f88df3bb58145dbdc71"
+  },
+  "loader": {
+    "overlay": "MISSION_0_B",
+    "lookup_cpu": "0x6E36",
+    "load_cpu": "0x6CCB",
+    "call_site_cpu": "0x8F9A",
+    "heap_pointer": "0x2778",
+    "heap_base": "0xC000",
+    "heap_limit_exclusive": "0xD800",
+    "header_bytes_stripped": 16,
+    "fields_read": ["byte9_lba_high", "bytes10_11_lba", "bytes13_14_length"]
+  },
+  "live": {
+    "emulator": "MesenCE 2.2.1",
+    "bios_sha256": "e11527b3b96ce112a037138988ca72fd117a6b0779c2480d9e03eaebece3d9ce",
+    "probe": "tools/mesen_named_resource_heap_probe.lua",
+    "runs": {
+      "original": {"lba": "0x10F1", "length": "0x0320", "load_address": "0xC350", "heap_after": "0xC660", "compactions": 0},
+      "move": {"lba": "0xAEA6", "length": "0x0320", "load_address": "0xC350", "heap_after": "0xC660", "compactions": 0,
+               "screens_identical_to_original_from_frame": 5000},
+      "grow": {"lba": "0xAEA6", "length": "0x05D6", "load_address": "0xC350", "heap_after": "0xC916", "compactions": 0,
+               "screens_identical_to_original_from_frame": 8000}
+    }
+  },
+  "conclusion": [
+    "KURUZER is a one-sector, 800-byte named resource loaded by descriptor into the Mission 0-B bump heap.",
+    "Repointing descriptor bytes 9-15 relocates it; the moved resource behaves identically to stock.",
+    "Growing the narration inline does not break the following caption and scene commands on the opening path.",
+    "Growth is bounded by load address + length < $D800 (5,295 bytes at the observed $C350)."
+  ]
+}

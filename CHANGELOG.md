@@ -13,6 +13,15 @@ profiles and runtime research retain their own evidence and validation notes in
 - Proportional VWF text layout and cell compiler, native English runtime
   generator, and the authored Oedo pixel-font tooling.
 - Opt-in Mission 0 external `$7B` English pool pilot and resource-linker model.
+- Named-resource descriptor parsing with source-guarded Mission 0-B loader and
+  heap contract, `relink_named_resource` for owned end-of-Track-2 sectors, a
+  `KURUZER` rebuild model, the diagnostic `build-relocation-test` command, and
+  the read-only `mesen_named_resource_heap_probe.lua`.
+
+### Fixed
+
+- `cyber-oedo clonecd-cue` crashed because its `main()` ignored the argument
+  list passed by the unified CLI.
 - Card-RAM cache, resource-lifetime, same-room re-entry, transition
   state-machine, and VRAM-restore research modules with Mesen capture scripts.
 - Fail-closed ADPCM code-cave ownership checks; ADPCM performance profiles are
