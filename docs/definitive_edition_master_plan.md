@@ -44,7 +44,7 @@ Judge text in motion with voice playback, portraits, pauses, menus, and transiti
 
 Release architecture:
 - outer marker 27 28 retained;
-- English-mode signature 7D 45;
+- authored dialogue uses proportional VWF cells (signature 7D 56); fixed two-glyph mode (signature 7D 45) is the fallback for dynamic text — see `definitive_vwf_runtime.md`;
 - one byte per 8x16 English glyph;
 - 22 ordinary English columns across the existing approximately 176-pixel dialogue field;
 - three visible rows;

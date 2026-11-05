@@ -8,6 +8,16 @@ profiles and runtime research retain their own evidence and validation notes in
 
 ### Added
 
+- Definitive Edition script compiler, control anchors, and final-dialogue
+  insertion planning with authenticated workbook/TSV digests.
+- Proportional VWF text layout and cell compiler, native English runtime
+  generator, and the authored Oedo pixel-font tooling.
+- Opt-in Mission 0 external `$7B` English pool pilot and resource-linker model.
+- Card-RAM cache, resource-lifetime, same-room re-entry, transition
+  state-machine, and VRAM-restore research modules with Mesen capture scripts.
+- Fail-closed ADPCM code-cave ownership checks; ADPCM performance profiles are
+  quarantined.
+- Windows / Python 3.13 job in pull-request CI.
 - Installable Python package metadata in `pyproject.toml`.
 - Unified `cyber-oedo` command and `python -m cyber_oedo` entry point.
 - `cyber-oedo doctor` environment diagnostics.
