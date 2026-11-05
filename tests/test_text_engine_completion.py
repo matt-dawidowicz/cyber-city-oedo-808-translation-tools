@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from cyber_oedo.runtime.dialogue_load_architecture import TRACK2_START_LBA
 from cyber_oedo.runtime.text_engine_completion import (
     INFORMATION_COMMAND_SEMANTICS,
     INFORMATION_PARSER_COPY_OFFSETS,
@@ -46,7 +47,7 @@ class TextEngineCompletionTests(unittest.TestCase):
         payload = bytearray(0x8000)
         record = bytearray(16)
         record[:10] = b"INVENTRY\x00"
-        record[10:12] = (3).to_bytes(2, "little")
+        record[10:12] = (TRACK2_START_LBA + 3).to_bytes(2, "little")
         record[12] = 2
         record[13:16] = (0x0890).to_bytes(3, "little")
         payload[:16] = record
@@ -55,7 +56,7 @@ class TextEngineCompletionTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         row = rows[0]
         self.assertEqual(row.name, "INVENTRY")
-        self.assertEqual(row.sector, 3)
+        self.assertEqual(row.sector, TRACK2_START_LBA + 3)
         self.assertEqual(row.sector_span, 2)
         self.assertEqual(row.byte_length, 0x0890)
         self.assertEqual(row.payload_offset, 3 * 2048)
@@ -66,7 +67,7 @@ class TextEngineCompletionTests(unittest.TestCase):
         payload = bytearray(0x5000)
         record = bytearray(16)
         record[:10] = b"SHIRYO\x00\x00\x00\x00"
-        record[10:12] = (2).to_bytes(2, "little")
+        record[10:12] = (TRACK2_START_LBA + 2).to_bytes(2, "little")
         record[12] = 1
         record[13:16] = (320).to_bytes(3, "little")
         payload[:16] = record

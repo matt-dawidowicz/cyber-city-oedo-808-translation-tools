@@ -24,19 +24,30 @@ for the technical rationale and the translation policy relative to the OVA.
 | Tier B2 | Complete | indexed record-table loader and state selector |
 | Tier B2.5 | Complete | bank-aware live-snapshot validation tooling |
 | Tier B live certification | In progress | live state, glyph/font, and VDC evidence |
-| Tier B3 | Gated | safe English storage/renderer architecture |
-| Tier C | Future | complete translation compiler and release build |
+| Tier B3 | In progress | English renderer and `$7B` pool proven live on controlled lines only |
+| Tier C | Started | definitive script compiler and resource-linker model; no release build |
+| Load-time work | Research | measured and benchmarked; no speed mutation release-enabled |
 
 The existing `mission0-stock-renderer` build remains a guarded vertical slice,
 not a full translation. It uses the game's stock fullwidth Shift-JIS renderer
 and does not activate the failed Stage-1 wide-text experiment.
 
-A new **non-activated** English-font architecture is now under review. It keeps
-the parser's proven two-byte-glyph contract, reserves collision-free private
-Shift-JIS tokens, and composes two readable 8x16 English glyphs inside each
-existing 16x16 staging cell. It does not revive the unsafe global escape-marker
-scheme. See
-[`docs/english_font_architecture.md`](docs/english_font_architecture.md).
+The Definitive Edition plan
+([`docs/definitive_edition_master_plan.md`](docs/definitive_edition_master_plan.md))
+supersedes the fixed-footprint strategy: approved English may grow, and
+resources are rebuilt and relocated rather than squeezed into Japanese byte
+budgets. Rendering follows
+[`docs/definitive_vwf_runtime.md`](docs/definitive_vwf_runtime.md): authored
+dialogue uses proportional VWF cells (`7D 56`), with the fixed two-glyph mode
+(`7D 45`) as fallback for dynamic text. The packed private-Shift-JIS renderer
+in [`docs/english_font_architecture.md`](docs/english_font_architecture.md) is
+historical/proof-only.
+
+Current live evidence is narrow: VWF English and the external `$7B` dialogue
+pool have each been observed in MesenCE on a controlled opening-narration
+substitution. Certifying a naturally reached Mission 0 conversation is tracked
+in issue #45. ADPCM-containing performance profiles remain hard-quarantined
+because no independently owned code space has been proven for them.
 
 ## What is confirmed
 
@@ -315,29 +326,72 @@ python -m compileall -q cyber_oedo tests benchmarks
 python -m cyber_oedo doctor
 ```
 
-CI runs the maintained suite on Python 3.11 and 3.13 for pull requests, builds
-source/wheel distributions, and smoke-tests the installed wheel outside the
-checkout.
+CI runs the maintained suite on Ubuntu with Python 3.11 and 3.13 and on
+Windows with Python 3.13 for pull requests, builds source/wheel distributions,
+and smoke-tests the installed wheel outside the checkout.
 
 Further documentation:
 
+Plan and policy
+
+- [`docs/definitive_edition_master_plan.md`](docs/definitive_edition_master_plan.md)
 - [`docs/game_architecture_and_translation_strategy.md`](docs/game_architecture_and_translation_strategy.md)
+- [`docs/modernization_roadmap.md`](docs/modernization_roadmap.md)
+- [`docs/data_policy.md`](docs/data_policy.md)
+- [`docs/release_checklist.md`](docs/release_checklist.md)
+
+Translation and localization
+
+- [`docs/localization_style_guide.md`](docs/localization_style_guide.md)
+- [`docs/story_and_continuity.md`](docs/story_and_continuity.md)
+- [`docs/translation_workflow.md`](docs/translation_workflow.md)
+- [`docs/translation_analysis.md`](docs/translation_analysis.md)
+- [`docs/definitive_translation_second_pass.md`](docs/definitive_translation_second_pass.md)
+- [`docs/final_dialogue_insertion_status.md`](docs/final_dialogue_insertion_status.md)
+
+English text engine
+
+- [`docs/definitive_vwf_runtime.md`](docs/definitive_vwf_runtime.md)
+- [`docs/native_english_text_engine.md`](docs/native_english_text_engine.md)
+- [`docs/oedo_pixel_font.md`](docs/oedo_pixel_font.md)
+- [`docs/mission0_pool_pilot.md`](docs/mission0_pool_pilot.md)
+- [`docs/external_pool_runtime_certification.md`](docs/external_pool_runtime_certification.md)
+- [`docs/english_font_architecture.md`](docs/english_font_architecture.md) (historical packed renderer)
+- [`docs/packed_english_m0_runtime.md`](docs/packed_english_m0_runtime.md) (historical packed renderer)
+- [`docs/renderer_freeze_and_relocation.md`](docs/renderer_freeze_and_relocation.md)
+- [`docs/stage1_runtime_failure.md`](docs/stage1_runtime_failure.md)
+
+Game and runtime architecture
+
 - [`docs/tier_a_architecture.md`](docs/tier_a_architecture.md)
 - [`docs/tier_b_runtime.md`](docs/tier_b_runtime.md)
 - [`docs/text_format.md`](docs/text_format.md)
 - [`docs/disc_layout.md`](docs/disc_layout.md)
-- [`docs/build_architecture.md`](docs/build_architecture.md)
-- [`docs/development.md`](docs/development.md)
-- [`docs/modernization_roadmap.md`](docs/modernization_roadmap.md)
-- [`docs/stage1_runtime_failure.md`](docs/stage1_runtime_failure.md)
 - [`docs/text_movement_reverse_engineering.md`](docs/text_movement_reverse_engineering.md)
 - [`docs/gamewide_runtime_architecture.md`](docs/gamewide_runtime_architecture.md)
 - [`docs/text_engine_coverage.md`](docs/text_engine_coverage.md)
 - [`docs/text_engine_completion.md`](docs/text_engine_completion.md)
 - [`docs/whole_game_reverse_engineering.md`](docs/whole_game_reverse_engineering.md)
-- [`docs/localization_style_guide.md`](docs/localization_style_guide.md)
-- [`docs/english_font_architecture.md`](docs/english_font_architecture.md)
-- [`docs/packed_english_m0_runtime.md`](docs/packed_english_m0_runtime.md)
-- [`docs/cd_load_optimization.md`](docs/cd_load_optimization.md)
+- [`docs/auxiliary_shadow_filter.md`](docs/auxiliary_shadow_filter.md)
+
+Load time and performance
+
 - [`docs/fast_load_architecture.md`](docs/fast_load_architecture.md)
+- [`docs/cd_load_optimization.md`](docs/cd_load_optimization.md)
 - [`docs/dialogue_residency_fastpath.md`](docs/dialogue_residency_fastpath.md)
+- [`docs/performance_audit.md`](docs/performance_audit.md)
+- [`docs/benchmark_consolidation_20260909.md`](docs/benchmark_consolidation_20260909.md)
+
+Tooling and builds
+
+- [`docs/architecture.md`](docs/architecture.md)
+- [`docs/package_layout.md`](docs/package_layout.md)
+- [`docs/build_architecture.md`](docs/build_architecture.md)
+- [`docs/human_test_build.md`](docs/human_test_build.md)
+- [`docs/contracts.md`](docs/contracts.md)
+- [`docs/tool_reference.md`](docs/tool_reference.md)
+- [`docs/development.md`](docs/development.md)
+- [`docs/validation_results.md`](docs/validation_results.md)
+
+Dated live-test and P0 evidence logs are kept alongside these in `docs/`
+(`mesen_*`, `p0_*`, and `no_new_features_engine_polish_2026_10_16.md`).

@@ -16,8 +16,13 @@ change authenticated game bytes merely for architectural neatness.
 | Tier B2 | Complete | Indexed table loader and state-selector proof |
 | Tier B2.5 | Complete | Bank-aware frozen live-snapshot validator |
 | Tier B live certification | In progress | Runtime state, glyph and VDC evidence |
-| Tier B3 | Gated | Translation-safe runtime/storage architecture |
-| Tier C | Future | Complete compiler, relocation and release build |
+| Tier B3 | In progress | VWF renderer and `$7B` pool live on controlled lines; natural-play certification pending (#45) |
+| Tier C | Started | Definitive script compiler and resource-linker model; no release build |
+| Load-time work | Research | Measured; no speed mutation release-enabled; ADPCM profiles quarantined |
+
+The controlling translation and engine plan is
+`definitive_edition_master_plan.md`, with rendering specified by
+`definitive_vwf_runtime.md`.
 
 ## Maintenance track
 
@@ -70,8 +75,8 @@ reverse engineering is active; avoid promising broad compatibility aliases.
 
 Use Ruff for generic Python correctness/style checks and unit tests for
 project-specific invariants. CI should test the minimum supported Python and a
-current Python on every pull request, with the Windows/Linux matrix available
-for release or manual validation.
+current Python on Ubuntu plus one Windows job on every pull request, with the
+full Windows/Linux matrix available for release or manual validation.
 
 ## Reverse-engineering track
 

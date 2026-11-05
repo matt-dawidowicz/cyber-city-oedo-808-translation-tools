@@ -11,6 +11,7 @@
 
 local CPU = emu.cpuType.pce
 local MEM = emu.memType.pceMemory
+local DP = 0x2000
 
 local frame = 0
 local logFile = nil
@@ -54,6 +55,16 @@ end
 
 local function r16(address)
   return emu.read16(address, MEM, false)
+end
+
+local function dp8(address)
+  return r8(DP + (address & 0xFF))
+end
+
+local function dp16(address)
+  local lo = dp8(address)
+  local hi = dp8(address + 1)
+  return lo | (hi << 8)
 end
 
 local function cpu()
@@ -113,7 +124,7 @@ local function describe_pointer(address)
   if not address then
     return ""
   end
-  local pointer = r16(address)
+  local pointer = dp16(address)
   local b0 = r8(pointer)
   local b1 = r8((pointer + 1) & 0xFFFF)
   local b2 = r8((pointer + 2) & 0xFFFF)
@@ -137,8 +148,8 @@ local function hit(target)
     c.x,
     c.y,
     c.sp,
-    r8(0x002F),
-    r8(0x0030),
+    dp8(0x2F),
+    dp8(0x30),
     r8(0x37F1),
     r8(0x2228),
     r8(0x222D),
@@ -150,6 +161,7 @@ end
 open_log()
 log("Cyber City Oedo 808 game-wide text-engine capture armed.")
 log("Read-only instrumentation: YES")
+log("HuC6280 direct-page reads use physical $2000-$20FF in Mesen pceMemory.")
 
 for _, target in ipairs(targets) do
   emu.addMemoryCallback(

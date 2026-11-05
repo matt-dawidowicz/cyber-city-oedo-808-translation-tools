@@ -35,6 +35,9 @@ dependencies = [
 graphics = [
     "Pillow>=10",
 ]
+editorial = [
+    "openpyxl>=3.1",
+]
 dev = [
     "Pillow>=10",
     "build>=1.2",

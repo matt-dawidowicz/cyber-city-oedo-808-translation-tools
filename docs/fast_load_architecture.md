@@ -2,6 +2,206 @@
 
 Status: reverse engineering / prototype design. No speed mutation is release-enabled.
 
+## Live bartender benchmark — MesenCE 2.2.1
+
+A fresh automated replay was run against the authenticated original disc under
+MesenCE 2.2.1 + Super System Card 3.0, loading the retained
+`cyber_city_oedo_bartender_probe.mss` state and injecting controller input
+through Mesen's `inputPolled` callback.
+
+### Exploration -> bartender dialogue
+
+The cold interaction measured:
+
+| event | local frame | elapsed |
+|---|---:|---:|
+| Button I injected | 60 | 0 |
+| CD_FADE mode $0C | 61 | +0.017 s |
+| bar 30-VSync loop begins | 92 | +0.533 s |
+| bar 30-VSync loop ends | 122 | +1.033 s |
+| $1425 dialogue loader begins | 147 | +1.450 s |
+| first dialogue parser execution | 517 | +7.617 s |
+
+The measured loader-to-parser window is **370 frames / 6.167 s**.
+
+Blocking operations inside that window:
+
+| operation | frames | seconds |
+|---|---:|---:|
+| CD_READ $1425, 1 sector -> $8000 | 67 | 1.117 |
+| CD_READ $1426, 1 sector -> $29D0 | 10 | 0.167 |
+| cold-only CD_READ $10DD, 1 sector | 27 | 0.450 |
+| AD_TRANS $1292, 4 blocks | 26 | 0.433 |
+| CD_READ $1441, 2 sectors -> $9000 | 24 | 0.400 |
+| AD_TRANS $1443, 4 blocks -> ADPCM $E000 | 13 | 0.217 |
+| CD_READ $1458, $2020 bytes -> VRAM $4000 | 96 | 1.600 |
+
+Those calls account for **263 frames / 4.383 s**. The same run recorded
+**71 explicit EX_VSYNC calls** during the loader window; 64 consecutive calls
+come from the routine returning to $7B80 and consume about **1.067 s** by
+themselves. Direct transfer time plus explicit VSync gating therefore explains
+334/370 frames; only about **36 frames / 0.600 s** remain for other CPU/setup
+work.
+
+The bar runtime overlay is not the same copy as the movement overlay containing
+the $40DB 120-frame loop. The live bar code performs CD_FADE mode $0C at $421C,
+then later executes a **30-frame** EX_VSYNC loop at $4213-$421A. Therefore the
+120-frame wait must not be generalized to every exploration -> dialogue
+transition.
+
+### Resident module and speaker-local cache benchmarks
+
+Two independent warm-entry cache experiments have now been replayed against the
+bartender route.
+
+**Resident dialogue module.** The existing `$8000/$8003` JMP-entrypoint check
+was made functional so a resident module branches around the `$1425/$1426`
+reload. Both module reads disappear. The first parser hit moves from frame 517
+to frame 479, a **38-frame / 0.633-second** improvement. On the second
+interaction the self-modified operand bytes `$8617/$8618` begin as `$08/$96`;
+the reload is still skipped, the parser is reached correctly, and normal module
+initialization rewrites them to `$F0/$04`. The warm path improves by roughly
+**34 frames / 0.567 seconds** versus stock.
+
+The saving is smaller than the removed 77-frame module-read duration because
+the following optical request inherits part of the seek cost that the module
+read previously absorbed. This confirms that deleting one read does not imply
+an equal end-to-end saving.
+
+**Speaker-local retention.** NOPing the shipping command-0/command-5 invalidation
+of selector `$8FDE` allows the existing two-sector `$1441` speaker-local cache
+to survive the selective bar return. The first interaction still reads `$1441`;
+the second does not. Warm loader-to-parser time improves from **342 frames /
+5.700 seconds** to **330 frames / 5.500 seconds**, a **12-frame / 0.200-second**
+saving.
+
+These results are independently valid. A combined resident-module +
+speaker-retention harness still needs a bank-correct way to install the
+speaker-invalidation patch into the already-resident module in the retained
+save state; the first combined Lua attempt modified the wrong backing memory
+and therefore is not used as timing evidence.
+### Live portrait + ADPCM Card-RAM cache benchmark
+
+A MesenCE 2.2.1 bartender replay now validates the two largest remaining
+recurring entry-side cache candidates against the stock parser-ready state.
+
+| configuration | I press -> parser | saving vs stock |
+|---|---:|---:|
+| stock | 457 f / 7.617 s | — |
+| portrait cached in Card RAM | 362 f / 6.033 s | **95 f / 1.583 s** |
+| portrait + both observed ADPCM blocks cached | 336 f / 5.600 s | **121 f / 2.017 s** |
+
+The portrait cache uses banks `$68/$69` and a HuC6280 `TIA` RAM-to-VDC copy
+with temporary MPR mappings. At parser-ready, the complete 64 KiB VRAM image
+is byte-for-byte identical to stock (SHA-256
+`c336c787fd110c930eeb2584c9b166b93d03e9fdbd5a5e93abc30822283411b6`).
+
+The ADPCM layer caches the two observed 8 KiB sources separately:
+
+- `$1292` -> Card RAM `$6A` -> ADPCM `$0000`;
+- `$1443` -> Card RAM `$6B` -> ADPCM `$E000`.
+
+Each block is mapped at logical `$A000` and written with the existing System
+Card `AD_WRITE $E039` local-memory path. Adding ADPCM caching on top of the
+portrait cache saves another **26 frames / 0.433 s**. The complete 64 KiB
+ADPCM RAM image at parser-ready is also byte-for-byte identical to stock
+(SHA-256 `ca7f25e8912c6ea8e7a950c608910c9082a76bdb7c6057b4e655d288169df31b`).
+
+This proves the copy mechanisms and state equivalence in the Mesen benchmark
+environment. It does **not** yet provide a permanent preload lifecycle or
+release-safe game-code patch; Card-RAM ownership, preload timing, and broader
+portrait/voice coverage remain release gates.
+### Warm bartender interaction
+
+After returning to the bar, the identical interaction was triggered again.
+The warm loader ran from frame 1617 to 1959: **342 frames / 5.700 s**.
+
+The cold-only $10DD H_BARTEN resource read disappeared. The recurring module,
+speaker-local, ADPCM, and portrait operations remained. The 28-frame difference
+between the cold 6.167 s and warm 5.700 s measurements is essentially the
+removed $10DD read. Existing event-resource caching therefore works, but it
+does not attack the dominant recurring costs.
+
+### Dialogue -> bar restore
+
+On leaving the dialogue:
+
+| event / operation | measured time |
+|---|---:|
+| CD_FADE mode $0E to fade-state clear | 127 frames / 2.117 s |
+| synchronous $41EC fade-wait subset | 82 frames / 1.367 s |
+| CD_READ $228E, 7 sectors | 35 frames / 0.583 s |
+| CD_READ $22DE, 3 sectors | 25 frames / 0.417 s |
+| CD_READ $22E8, $EE00 bytes -> VRAM | **551 frames / 9.183 s** |
+
+From the mode-$0E fade request to completion of the core scene restore is
+**793 frames / 13.217 s**.
+
+The $22E8 operation is the dominant single cost. Mesen's SCSI trace shows it
+issues only a 30-sector optical read with a modeled 365 ms seek, but the BIOS
+call remains blocked for 9.183 s. Instrumenting VDC I/O during this one call
+recorded **66,442 VDC-register writes**: 2,206 register-select writes, 32,118
+data-low writes, and 32,118 data-high writes. It contains zero EX_VSYNC calls.
+
+Thus the nine-second cost is primarily a CPU/System-Card-driven transfer into
+VDC/VRAM, not optical seek latency. This substantially strengthens the case for
+selective dialogue-damage restoration or a RAM/VRAM fast path instead of
+reloading the full $EE00-byte exploration image.
+
+### Live VRAM dirty diff and two-span restore
+
+A deterministic no-dialogue control from the same bartender save state changed
+**zero** VRAM bytes over the same 835-frame interval. The dialogue replay changed
+33,163 of 65,536 VRAM bytes before the stock restore, so the changes are
+conversation/transition-induced rather than ambient room animation.
+
+The stock `$22E8` call uses destination word `$0900`, i.e. VRAM byte `$1200`,
+and writes `$EE00` bytes through the end of VRAM. Of the 33,163 dirty bytes,
+938 are below `$1200` and are intentionally not repaired by this stock call.
+The stock call repairs the remaining **32,225 dirty bytes** while blindly
+rewriting **60,928 bytes**.
+
+Sector-level diffing shows eight of the 30 source sectors are completely
+untouched. The live dirty set inside the stock restore region is covered by two
+compact source/destination spans:
+
+| source | VRAM bytes | transfer length |
+|---|---|---:|
+| `$22E8...` | `$1200-$A01F` | `$8E20` / 36,384 bytes |
+| `$2301...` | `$DA00-$F3FF` | `$1A00` / 6,656 bytes |
+
+A runtime prototype reused the game's own `$4459` generic VRAM loader and the
+real System Card CD_READ path for those two spans. It did not use instant Lua
+VRAM writes for the measured transfer.
+
+| restore | frames | seconds |
+|---|---:|---:|
+| stock `$EE00` transfer | 551 | 9.183 |
+| selective span 1 | 333 | 5.550 |
+| selective span 2 | 79 | 1.317 |
+| selective total | **412** | **6.867** |
+| saving | **139** | **2.317** |
+
+The two-span candidate transfers 43,040 bytes, skipping 17,888 bytes / 29.36%
+of the stock transfer. More importantly, the resulting complete 64 KiB VRAM
+image is **byte-for-byte identical** to the stock image immediately after the
+`$22E8` restore, and the bar renders correctly after return.
+
+This proves a conservative selective restore is viable. It is still benchmark
+code rather than a release patch: the next implementation step is to encode the
+second loader call in the game overlay and then validate other rooms/dialogue
+types, because their dirty spans may differ from the bartender/bar case.
+
+That implementation step is now complete as a source-guarded benchmark mutation.
+The patched disc itself redirects the stock bar restore through a small trampoline,
+shortens the original descriptor to `$8E20`, and issues the second `$2301/$1A00`
+transfer through the stock `$4459` loader. A clean MesenCE replay with **no Lua
+memory mutation** reproduced the same 333 + 79 frame timings, returned to the bar
+normally, and produced a complete post-restore VRAM SHA-256 of
+`c360d332d1afd276078960d4acc78f6ce681ad74df2e7b80bb1de6ea0fbae566`,
+identical to stock. The remaining release gates are broader room/dialogue coverage
+and ownership certification for the currently zero-filled trampoline area.
+
 ## Why the pauses approach ten seconds
 
 The old profiler watched CD_READ only. It therefore missed ADPCM optical
@@ -121,14 +321,15 @@ CD_READ timings as if they were independent costs.
 
 ### A3. Static scene-transition call structure
 
-The authenticated movement overlay separates the explicit wait gate from the
-scene orchestration entry:
+The authenticated movement overlay proves two different control-flow paths.
 
-    $40DB-$40E8  exploration audio transition
-                  CD_FADE mode $0C + fixed 120-frame EX_VSYNC loop
+On exploration entry, $4003 calls $40E9 for scene/room setup. On exploration
+exit, $402B calls $40B1, and $40B1 immediately calls $40DB, which performs
+CD_FADE mode $0C plus the fixed 120-frame EX_VSYNC loop. The exit path later
+returns from the exploration module at $403C.
 
-    $40E9...      scene/room orchestration
-                  descriptor selection, runtime setup, and resource-loader calls
+Therefore $40E9 is not a phase between the exit wait and dialogue loading;
+its adjacency after $40DB-$40E8 in memory was misleading.
 
 The blocking CD_READ helpers live at `$423B-$4261` (local memory) and
 `$4262-$428D` (VRAM). Their code is address-adjacent to the guarded
@@ -136,10 +337,15 @@ The blocking CD_READ helpers live at `$423B-$4261` (local memory) and
 sequential phase. Existing profiling observes loader returns while scene setup
 is still pending.
 
-Therefore two conclusions are safe:
+Therefore three conclusions are safe:
 
-- the 120-frame wait ends before scene orchestration begins;
+- the exploration exit path directly executes the 120-frame wait;
+- $40E9 is an entry/setup routine rather than the next exit-to-dialogue phase;
 - the CD_READ wrappers contain no explicit EX_VSYNC delay.
+
+The remaining uncertainty is the handoff after the exploration module returns:
+static code alone does not prove that the same interaction immediately reaches
+the Mission 0 $1425 dialogue loader.
 
 But setup time and loader time must not be double-counted as separate serial
 phases. The maintained diagnostic is:
@@ -147,6 +353,40 @@ phases. The maintained diagnostic is:
     cyber-oedo analyze-scene-transition <track2-payload>
 
 No speed mutation is enabled by this analyzer.
+
+### A4. Direction-specific transition state model
+
+The two visible transition directions have different fixed gates and must not
+be collapsed into one additive latency budget.
+
+For exploration -> dialogue, the authenticated $402B -> $40B1 -> $40DB
+120-frame wait belongs to a different movement-overlay copy. The live bartender
+bar overlay instead uses a measured 30-frame wait. These timings must remain
+overlay-specific and the 120-frame wait must not be added to the bartender's
+5.7-6.2-second loader measurement.
+
+For dialogue -> exploration, command 2 requests the approximately 2.5-second
+mode-$0E ADPCM fade and the outer `$41EC` state gate waits for completion.
+That fade belongs to the opposite direction and must not be added to the
+exploration -> dialogue critical path.
+
+The maintained diagnostic is:
+
+    cyber-oedo describe-transition-state-machine
+
+The v2 Mesen transition profiler now carries a dedicated ordering proof. It
+arms on the exploration transition path at `$402B`, then records the
+`$40DB` wait, the exploration module return at `$403C`, the `$1425`
+dialogue byte-loader invocation, and `$9543` (first parser execution). A
+single `ORDER_PROOF_RESULT` line reports whether the exact observed order was:
+
+    $402B -> $40DB -> $403C RTS -> $1425 loader -> $9543 parser
+
+It also reports visible frames from transition exit to parser, wait-to-loader
+frames, and loader-to-parser frames. Results from that movement-overlay path
+must be interpreted separately from the live bartender/bar benchmark.
+
+This model is descriptive only; all fast paths remain release-disabled.
 
 ### B. Short transition teardown
 
@@ -168,8 +408,28 @@ test the additional 192 KiB RAM as a read-through cache.
 After one preload, repeated interactions could replace module and speaker CD
 reads with RAM copies and cache selected portraits for RAM-to-VRAM copies.
 
-The complete bar working set is 110,656 bytes, which occupies 14 packed 8 KiB
-banks and leaves ten Card RAM banks (81,920 bytes) available.
+The original $1425-$1452 core plus two portraits was previously described as a
+14-bank capacity floor. Live bartender profiling showed that the route also
+uses the out-of-core 8 KiB ADPCM source at $1292. Including that required
+source raises the complete bartender byte-capacity floor to **15 banks**.
+
+A stricter cache planner now models the game's proven 8 KiB local-memory
+AD_WRITE source window. Seven active ADPCM source blocks are exactly 8 KiB
+each and are therefore most useful when each occupies one whole Card-RAM bank.
+The 0x0F51-byte module plus all eight 4 KiB speaker-local blocks then require
+five more banks. This gives a **12-bank AD_WRITE-friendly core**.
+
+The live bartender route additionally requires one dedicated bank for $1292.
+With that bank included, adding two 0x2020-byte portraits requires:
+
+- three more banks when RAM-to-VRAM copying may split at bank boundaries:
+  **16 banks total**, eight banks / 65,536 bytes left;
+- four more banks when each portrait receives an independent two-bank
+  allocation: **17 banks total**, seven banks / 57,344 bytes left.
+
+The 15-bank figure is now the pure byte-capacity floor for the complete
+bartender working set; the execution-friendly layouts intentionally use more
+banks to keep each 8 KiB ADPCM source directly consumable by AD_WRITE.
 
 The previous working note misidentified BIOS entry $E03F as AD_WRITE. The
 System Card jump table actually places AD_WRITE at $E039 and AD_CPLAY at
@@ -193,6 +453,120 @@ the BIOS preserves/uses the caller's mapping as expected, this removes the
 extra ordinary-CD-RAM staging copy entirely. If it does not, bank $87 remains
 a candidate 8 KiB staging bank, subject to its separate lifetime gate.
 
+A further static constraint is now explicit: the raw contiguous disc extent
+$1425-$1452 is not itself the ideal in-RAM representation. Several 8 KiB
+ADPCM blocks begin two sectors into an 8 KiB bank when that extent is copied
+verbatim. Those blocks would straddle Card-RAM banks. For direct reuse of the
+existing one-window $A000 AD_WRITE path, the cache should therefore be
+**repacked by logical resource**, not treated as a byte-for-byte mirror of the
+disc extent. The contiguous disc layout is still valuable for preload seek
+locality; the in-RAM execution layout is a separate problem.
+
+### C2. Module versus speaker-local lifetime risk
+
+The two residency experiments should not be treated as equally strong.
+
+The dialogue module occupies logical $8000-$8F50. The known main exploration
+scene-local reloads target $4000-$77FF and $9000-$A7FF, so **none of the known
+scene-local writes overlaps the module body in logical CPU address space**.
+
+The speaker-local cache is different: the 3-sector exploration load beginning
+at logical $9000 covers $9000-$A7FF and therefore completely covers the
+dialogue speaker-local window $9000-$9FFF.
+
+This still does not prove physical clobber. HuC6280 MPR mappings may differ
+between the dialogue and exploration overlays, so equal logical addresses do
+not imply equal CD-RAM banks. But it changes the static risk assessment:
+
+- resident-module reuse has no known logical scene-write conflict;
+- speaker-local reuse has a complete logical overlap and therefore requires
+  especially strong MPR/physical-RAM lifetime proof.
+
+The benchmarks remain independent for exactly this reason.
+
+### C3. Same-room re-entry state
+
+The source-guarded scene-entry routine exposes a useful asymmetry for dialogue
+returns. `$3702` already acts as a position-preservation policy: when it is
+nonzero, the routine does not reload player X/Y at `$2760-$2763`.
+
+Other room-entry state is reinstalled unconditionally by that routine:
+
+- room feature byte -> `$264C`;
+- object-source pointer -> `$277E/$277F`;
+- interaction-table pointer -> `$2779/$277A`;
+- two room-loader parameter pairs -> zero page `$1E/$1F` and
+  `$421E/$421F`.
+
+Separately, the guarded object initializer rebuilds 16-byte live object state
+from compact scene records, and the occupancy-rectangle subsystem has an
+explicit count-reset/populate path. This means a future dialogue->same-room
+fast return must decide whether live object/occupancy/camera state is meant to
+survive rather than simply skipping the stock setup wholesale.
+
+The maintained diagnostic is:
+
+    cyber-oedo analyze-same-room-reentry <track2-payload>
+
+Static evidence does not yet prove which of those initialization routines are
+actually entered on every dialogue return. That remains a live phase-boundary
+gate, but the state that would be destroyed or preserved is now mapped.
+
+### C4. Physical MPR geometry of the speaker-cache risk
+
+The logical overlap can be narrowed further without assuming a runtime MPR
+value. HuC6280 logical `$8000-$9FFF` is one MPR4 window. In the proven dialogue
+layout, MPR4 maps physical page `$85`:
+
+- module: page-$85 offsets `0x0000-0x0F50`;
+- BSS: offsets `0x0F51-0x0FFF`;
+- speaker-local block: offsets `0x1000-0x1FFF`.
+
+The exploration 3-sector load to `$9000-$A7FF` splits exactly at the MPR
+boundary:
+
+- `$9000-$9FFF`: 4 KiB through MPR4, page offsets `0x1000-0x1FFF`;
+- `$A000-$A7FF`: 2 KiB through MPR5, page offsets `0x0000-0x07FF`.
+
+Therefore:
+
+- if exploration MPR4 is `$85`, the first 4 KiB overwrites the speaker-local
+  half. This alone does not prove the module body survives;
+- if exploration MPR5 is `$85`, the following 2 KiB aliases page-$85 offsets
+  `0x0000-0x07FF` and overwrites the resident dialogue module;
+- physical page `$85` survives unchanged only if neither participating MPR
+  maps the page during its corresponding write (or independent before/after
+  source hashes prove equivalence).
+
+The missing proof is **both MPR4 and MPR5** at the `$22DE` load,
+plus the immutable module/speaker checksums. Logical non-overlap alone
+cannot certify resident-module lifetime.
+
+### C5. Static MPR and same-room call-reference diagnostics
+
+Two additional diagnostics narrow the remaining runtime gates without treating
+raw byte matches as instruction-boundary proof.
+
+`analyze-resource-lifetime --payload <track2-payload>` now linearly decodes
+the authenticated scene/room setup and scene-loader code regions and reports
+only decoded `TAM`/`TMA` operations that touch MPR4 or MPR5. An exploration
+MPR4 value is called statically resolved only if every decoded MPR4 write in
+those guarded regions is an immediately adjacent, identical `LDA #imm; TAM`
+sequence. Otherwise the report deliberately leaves physical bank identity
+unresolved and retains the live-MPR/checksum gate.
+
+`analyze-same-room-reentry <track2-payload>` now also decodes direct
+`JSR`/`JMP` references from the authenticated scene-orchestration region to
+the known entry-selection, object-initialization, collision-registry, and
+camera routines. This distinguishes a routine merely existing in the overlay
+from scene orchestration actually containing a direct reference to it. Indirect
+or data-driven dispatch remains a separate runtime/static-control-flow question.
+
+These diagnostics do not make the speaker-retention or same-room fast-return
+benchmarks release-safe by themselves. They reduce the remaining proof to
+specific unresolved mappings/call paths rather than broad architectural
+uncertainty.
+
 ### D. Independent benchmark matrix
 
 Four source-guarded mutations now exist independently so timing changes can be
@@ -202,8 +576,9 @@ attributed instead of bundled together:
    the stock loader epilogue on a cache hit;
 2. **speaker-local retention only** - preserve $8FDE across command-0/command-5
    teardown so the stock two-sector speaker cache can remain valid;
-3. **short exploration wait only** - reduce the explicit 120-frame loop to a
-   selected 1-120 frame value (8 frames is the current conservative benchmark);
+3. **short exploration wait only** - benchmark reducing the explicit 120-frame
+   loop to a selected 1-120 frame value (8 frames is the current conservative
+   candidate), while keeping the runtime-order proof gate explicit;
 4. **combined fast-load stack** - resident module + retained speaker cache +
    8-frame exploration wait + the separate immediate-audio-teardown benchmark.
 
@@ -236,6 +611,40 @@ sectors of payload while eliminating 80 skipped sectors of source span. It does
 not by itself prove a specific seek-time saving; that still requires live timing
 and an owned destination extent.
 
+### E3. Static selective-VRAM restore ceiling
+
+The renderer now gives a useful bound even before a live dirty-range capture.
+
+The portrait destination is fixed at VRAM words `$4000-$500F`, or 8,224 bytes.
+All portrait variants reuse that same address family.
+
+The dialogue text grid has 36 slots. Each slot is allocated at:
+
+    $6D00 + cell_index * $40 words
+
+The guarded VDC writer at `$5772` emits sixteen words per call and the setup
+path invokes it twice, so one rendered cell actually writes 32 words / 64
+bytes. Across all 36 slots, the sparse glyph-pattern writes therefore total
+only 2,304 bytes. Their address envelope is `$6D00-$75DF`.
+
+Thus portrait plus all sparse glyph writes total 10,528 bytes, and even treating
+the complete glyph envelope as one contiguous restore keeps portrait+glyph
+restoration below roughly 22% of the stock 60,928-byte scene transfer.
+
+The live bartender capture shows why this static figure must not be interpreted
+as total transition damage. The actual conversation/transition path dirties
+33,163 VRAM bytes, including large regions outside the statically bounded
+portrait and glyph writers. BAT/display/setup activity therefore contributes
+substantial additional damage.
+
+For the bar case, live profiling has now produced and benchmarked an exact
+conservative two-span restore. The static renderer bound remains useful for
+attribution, but the **live diff is authoritative for patch planning**.
+
+Run:
+
+    cyber-oedo analyze-static-vram-bound
+
 ### F. Scene graphics
 
 Separately, make the 7-sector, 3-sector, and 60,928-byte exploration scene
@@ -260,3 +669,69 @@ No acceleration reaches the normal English build until exact before/after
 timing, MPR/cache lifetime, RAM/VRAM/ADPCM equivalence, audio state, scene
 re-entry, save/load, mission transitions, EDC/ECC, clean boot, and sustained
 playtest all pass.
+
+## Integrated bartender fast-load stack
+
+The independently proven experiments are now expressed as one fail-closed
+route-specific cache lifecycle in `cyber_oedo/runtime/fast_load_stack.py`.
+
+For the **actual live bartender route**, the minimal useful allocation is much
+smaller than the broad all-speaker plan:
+
+| banks | contents |
+|---|---|
+| `$68-$69` | bartender portrait (8,224 bytes) |
+| `$6A` | ADPCM source `$1292` |
+| `$6B` | ADPCM source `$1443` |
+| `$6C` | dialogue module + bartender local block + 175 bytes metadata slack |
+| `$6D-$72` | 43,040-byte two-span same-room scene snapshot |
+
+This occupies **11 of the 24 Super System Card RAM banks**, leaving 13 banks
+unallocated. The metadata fits in the natural 0xAF-byte slack after the
+0x0F51-byte module plus 0x1000-byte bartender-local block in bank `$6C`.
+
+The lifecycle is fail-closed:
+
+1. validate cache magic/version, scene id, and per-resource tags;
+2. fill missing resources through ordinary local-memory CD reads;
+3. use the live-proven Card-RAM -> VDC TIA portrait path and Card-RAM ->
+   ADPCM `AD_WRITE $E039` path on hits;
+4. validate the resident dialogue module with both JMP entrypoints plus an
+   immutable module signature before skipping its optical reload;
+5. snapshot only the two live-diff-authoritative exploration VRAM spans before
+   dialogue;
+6. restore those spans from Card RAM on dialogue return;
+7. if any tag or snapshot is invalid, fall back to the stock/source-guarded
+   optical path rather than trusting stale RAM.
+
+The Card-RAM -> VDC restore code generator is maintained in
+`cyber_oedo/runtime/card_ram_scene_restore.py`. It emits six bank-bounded TIA
+routines for the exact bar spans. That write direction is already supported by
+the portrait-cache runtime proof. The inverse VRAM -> Card-RAM snapshot is still
+a live gate: the candidate uses VDC MARR/VRR plus TAI, but the VDC read-latch
+and possible dummy-read behavior must be measured before that half is called
+proven.
+
+### Remaining setup VSync gate
+
+The Mission 0 B overlay contains a counter-gated `JSR $E07B` at `$7B7D`.
+Live profiling previously observed 64 calls through this setup path during the
+bartender loader window. Static code shows this is **not** the bar's separate
+30-frame transition delay: it decrements counter `$44`, VSyncs only when the
+counter reaches zero, then reloads `$44` from `$02`.
+
+A source-guarded benchmark now NOPs only that one call. It remains
+release-disabled until a clean runtime replay proves parser state, animation,
+audio, and VRAM equivalence. No one-second saving is assumed merely from the
+historical call count.
+
+### Audio teardown
+
+The bartender return model now uses the measured mode-$0E fade-clear duration:
+**127 frames / 2.117 seconds**. The older approximately 2.5-second figure is
+retained only as historical API behavior.
+
+The existing fast-fade benchmark replaces command 2 with `AD_STOP` followed
+by the game's stock command-5 immediate cleanup. This remains an A/B timing
+experiment, not release policy; later voice playback and CD-DA continuity must
+pass before promotion.

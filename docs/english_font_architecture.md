@@ -1,5 +1,11 @@
 # English font and packed-glyph architecture
 
+> **Status:** historical compatibility/proof architecture. The release dialogue
+> target is now the native one-byte English engine in
+> [`native_english_text_engine.md`](native_english_text_engine.md). The packed
+> renderer remains useful for experiments and fallback validation, but it should
+> not constrain final prose or release storage design.
+
 ## Goal
 
 Replace difficult-to-read fullwidth English with a deliberate high-legibility
