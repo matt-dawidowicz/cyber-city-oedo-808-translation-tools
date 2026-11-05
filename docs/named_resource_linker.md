@@ -1,7 +1,8 @@
 # Named-resource linker and KURUZER relocation
 
 Status: Mission 0-B loader contract statically proven and source-guarded;
-`KURUZER` move and growth live-tested in MesenCE 2.2.1 through the opening.
+`KURUZER` move, growth, and draft English narration live-tested in MesenCE
+2.2.1 through the opening.
 Diagnostic only — no release profile enables relocation yet.
 
 This is the first step of the Definitive Edition resource linker: a rebuilt
@@ -91,11 +92,35 @@ Screenshots at fixed frames:
 So the commands after the narration in `KURUZER` do not depend on fixed
 offsets that the growth would have shifted, at least along the opening path.
 
+### English narration through the stock renderer
+
+The `english` mode compiles a UTF-8 narration file into fullwidth Shift-JIS
+for the stock renderer: three 11-cell rows per page, the original nine `40`
+controls kept and more added as needed. Lines break at spaces, after hyphens
+and em dashes, and at translator-placed soft hyphens (U+00AD). Curly quotes
+and the em dash (drawn as Shift-JIS `―`) are accepted; straight `"` is not.
+
+Tested with the July 28 review-package draft (`T00585`, not the approved
+Definitive text; SHA-256 of the marked-up text
+`d597eb29…aa5cf`): 88 lines, 30 pages, a 1,858-byte record, and a 1,962-byte
+`KURUZER` loaded at `$C350` (heap after `$CAEA`, no compaction). Every page
+renders in English, and from frame 9,000 the screen is byte-identical to the
+original's Old City street.
+
+Runtime behaviour of `40` in this window: it waits for the button and starts
+a new row; the three-row window scrolls rather than clearing. A page's short
+final line therefore never runs into the next page's first word.
+
+English shorter than ten pages is rejected because the page compiler never
+removes source page controls; that rule will need revisiting for the release
+text engine.
+
 ## Build commands
 
 ```bash
 cyber-oedo build-relocation-test source.ccd out-move --mode move
 cyber-oedo build-relocation-test source.ccd out-grow --mode grow
+cyber-oedo build-relocation-test source.ccd out-en --mode english --english-text narration.txt
 ```
 
 Each build authenticates the source set, changes exactly two sectors
@@ -108,5 +133,5 @@ EDC/ECC, verifies the whole image, and writes `relocation_manifest.json`.
 - Whether any later scene reloads `KURUZER` (cache eviction, save/reload).
 - Real hardware seek behaviour; the end-of-disc placement costs ~0.7 s in
   Mesen and should move to a better optical position once layout is planned.
-- English narration through the release text engine; this test grows the
-  Japanese narration only.
+- English narration through the release VWF text engine; the English test
+  uses the stock fullwidth renderer and a draft translation.

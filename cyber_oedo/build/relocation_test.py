@@ -10,11 +10,16 @@ Two diagnostic modes, neither release-enabled:
     The narration must show both copies and the following location caption
     and scene must still run, proving later commands do not depend on fixed
     offsets inside the resource.
+``english``
+    Relink KURUZER with English narration from a UTF-8 text file, compiled
+    for the stock fullwidth renderer (three 11-cell lines per page, page
+    breaks added as needed).  The text file is never stored in the repository.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import pathlib
 import shutil
@@ -35,10 +40,11 @@ from cyber_oedo.resources.kuruzer import (
     authenticate_kuruzer,
     doubled_narration_record,
     rebuild_kuruzer,
+    stock_english_narration_record,
 )
 
 BUILD_PROFILE = "kuruzer-relocation-test"
-MODES = ("move", "grow")
+MODES = ("move", "grow", "english")
 TRACK2_PAYLOAD_SHA256 = "0817cfa03fedc7b33c52f9bd9423b41480fa385cff3693262732b8768e7ca223"
 
 
@@ -46,16 +52,23 @@ def output_stem(mode: str) -> str:
     return f"Cyber City Oedo 808 - Kemono no Alignment (Japan) [KURUZER {mode} test]"
 
 
-def kuruzer_relink(payload: bytes, mode: str):
+def kuruzer_relink(payload: bytes, mode: str, english_text: str | None = None):
     """Return the relink plan for *mode* against an authenticated payload."""
 
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
+    if (mode == "english") != (english_text is not None):
+        raise ValueError("English text is required for, and only for, english mode")
     descriptor = find_descriptor(parse_mission0_b_descriptors(payload), KURUZER_NAME)
     start = descriptor.resource_payload_offset
     resource = payload[start : start + descriptor.byte_length]
     authenticate_kuruzer(resource)
-    data = resource if mode == "move" else rebuild_kuruzer(resource, doubled_narration_record(resource))
+    if mode == "move":
+        data = resource
+    elif mode == "grow":
+        data = rebuild_kuruzer(resource, doubled_narration_record(resource))
+    else:
+        data = rebuild_kuruzer(resource, stock_english_narration_record(resource, english_text))
     return relink_named_resource(
         payload, descriptor, data, load_address=KURUZER_OBSERVED_LOAD_ADDRESS
     )
@@ -65,9 +78,13 @@ def build_relocation_test(
     source_ccd: pathlib.Path,
     output_directory: pathlib.Path,
     mode: str,
+    english_text_path: pathlib.Path | None = None,
 ) -> pathlib.Path:
     """Build one guarded test disc in a staged directory, published atomically."""
 
+    english_text = None
+    if english_text_path is not None:
+        english_text = english_text_path.read_text(encoding="utf-8").strip()
     stem = output_stem(mode)
     output_directory = output_directory.resolve()
     if output_directory.exists():
@@ -88,7 +105,7 @@ def build_relocation_test(
         if payload_sha != TRACK2_PAYLOAD_SHA256:
             raise ValueError(f"Track 2 payload hash mismatch: {payload_sha}")
         payload = payload_path.read_bytes()
-        relink = kuruzer_relink(payload, mode)
+        relink = kuruzer_relink(payload, mode, english_text)
 
         reports = apply_payload_patches(
             output_paths[".img"], relink.patches,
@@ -116,6 +133,9 @@ def build_relocation_test(
             "relinked_relative_sector": relink.relative_sector,
             "relinked_span": linked.sector_span,
             "relinked_length": linked.byte_length,
+            "english_text_sha256": (
+                hashlib.sha256(english_text.encode("utf-8")).hexdigest() if english_text else None
+            ),
             "observed_load_address": f"0x{KURUZER_OBSERVED_LOAD_ADDRESS:04X}",
             "descriptor_tail": relink.descriptor_tail.hex(" ").upper(),
             "changed_absolute_lbas": list(comparison.changed_lbas),
@@ -143,6 +163,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("source_ccd", type=pathlib.Path)
     parser.add_argument("output_directory", type=pathlib.Path)
     parser.add_argument("--mode", choices=MODES, required=True)
+    parser.add_argument(
+        "--english-text", type=pathlib.Path,
+        help="UTF-8 narration for english mode; U+00AD marks optional hyphenation points",
+    )
     return parser
 
 
@@ -150,7 +174,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        output = build_relocation_test(args.source_ccd, args.output_directory, args.mode)
+        output = build_relocation_test(
+            args.source_ccd, args.output_directory, args.mode, args.english_text
+        )
     except (OSError, ValueError) as error:
         parser.error(str(error))
     print(f"output_ccd={output}")

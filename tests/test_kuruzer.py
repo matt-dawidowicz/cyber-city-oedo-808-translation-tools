@@ -5,6 +5,7 @@ import unittest
 from unittest import mock
 
 from cyber_oedo.resources import kuruzer
+from cyber_oedo.text.extract_dialogue import parse_record
 
 BODY = b"\x81\x75\x89\xb4\x40\x82\xcc\x96\xbc"
 NARRATION = kuruzer.DIALOGUE_MARKER + BODY + b"\x00"
@@ -64,6 +65,56 @@ class RebuildTests(unittest.TestCase):
         with authentic():
             record = kuruzer.doubled_narration_record(RESOURCE)
         self.assertEqual(record, kuruzer.DIALOGUE_MARKER + body + b"\x40" + body + b"\x00")
+
+
+
+class StockEnglishTests(unittest.TestCase):
+    def test_wrap_breaks_after_dashes_and_marked_soft_hyphens(self) -> None:
+        lines = kuruzer.wrap_stock_lines("outlaw cyber­criminals Rose Rash’—chasing him")
+        self.assertEqual(lines, ("outlaw", "cyber-", "criminals", "Rose Rash’—", "chasing him"))
+
+    def test_soft_hyphen_is_invisible_when_the_word_fits(self) -> None:
+        self.assertEqual(kuruzer.wrap_stock_lines("re­cog"), ("recog",))
+
+    def test_unmarked_long_word_keeps_a_readable_fragment(self) -> None:
+        lines = kuruzer.wrap_stock_lines("cybercriminals")
+        self.assertEqual(lines, ("cybercrim-", "inals"))
+        self.assertTrue(all(len(line) <= 11 for line in lines))
+
+    def _page_only_source(self):
+        source = (
+            kuruzer.DIALOGUE_MARKER
+            + b"\x82\xa0\x40" * kuruzer.SOURCE_PAGE_BREAKS
+            + b"\x82\xa0\x00"
+        )
+        resource = (
+            b"H" * kuruzer.NARRATION_START
+            + source
+            + b"T" * (kuruzer.KURUZER_LENGTH - kuruzer.NARRATION_START - len(source))
+        )
+        patcher = mock.patch.multiple(
+            kuruzer,
+            KURUZER_SHA256=hashlib.sha256(resource).hexdigest(),
+            NARRATION_END=kuruzer.NARRATION_START + len(source),
+        )
+        return resource, patcher
+
+    def test_english_record_adds_page_controls_and_keeps_terminator(self) -> None:
+        text = " ".join(["word"] * 120)
+        resource, patcher = self._page_only_source()
+        with patcher:
+            record = kuruzer.stock_english_narration_record(resource, text)
+        pages = -(-len(kuruzer.wrap_stock_lines(text)) // 3)
+        self.assertGreater(pages, kuruzer.SOURCE_PAGE_BREAKS + 1)
+        self.assertTrue(record.startswith(kuruzer.DIALOGUE_MARKER))
+        self.assertTrue(record.endswith(b"\x00"))
+        parsed = parse_record(record, len(kuruzer.DIALOGUE_MARKER), limit=len(record))
+        self.assertEqual(parsed.controls, (kuruzer.PAGE_CONTROL,) * (pages - 1))
+
+    def test_english_shorter_than_source_pages_is_rejected(self) -> None:
+        resource, patcher = self._page_only_source()
+        with patcher, self.assertRaisesRegex(kuruzer.KuruzerError, "must not remove"):
+            kuruzer.stock_english_narration_record(resource, "Too short.")
 
 
 if __name__ == "__main__":

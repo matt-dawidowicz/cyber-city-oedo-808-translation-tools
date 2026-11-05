@@ -37,7 +37,11 @@
       "move": {"lba": "0xAEA6", "length": "0x0320", "load_address": "0xC350", "heap_after": "0xC660", "compactions": 0,
                "screens_identical_to_original_from_frame": 5000},
       "grow": {"lba": "0xAEA6", "length": "0x05D6", "load_address": "0xC350", "heap_after": "0xC916", "compactions": 0,
-               "screens_identical_to_original_from_frame": 8000}
+               "screens_identical_to_original_from_frame": 8000},
+      "english_stock_fullwidth_july_draft": {"lba": "0xAEA6", "length": "0x07AA", "load_address": "0xC350",
+               "heap_after": "0xCAEA", "compactions": 0, "pages": 30,
+               "english_text_sha256": "d597eb2910d55d48ba3f276e9b96acf0d00b1e559488643597746c96d60aa5cf",
+               "screens_identical_to_original_from_frame": 9000}
     }
   },
   "conclusion": [

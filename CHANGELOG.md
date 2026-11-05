@@ -15,8 +15,11 @@ profiles and runtime research retain their own evidence and validation notes in
 - Opt-in Mission 0 external `$7B` English pool pilot and resource-linker model.
 - Named-resource descriptor parsing with source-guarded Mission 0-B loader and
   heap contract, `relink_named_resource` for owned end-of-Track-2 sectors, a
-  `KURUZER` rebuild model, the diagnostic `build-relocation-test` command, and
-  the read-only `mesen_named_resource_heap_probe.lua`.
+  `KURUZER` rebuild model, the diagnostic `build-relocation-test` command
+  (`move`, `grow`, and `english` stock-fullwidth narration modes), and the
+  read-only `mesen_named_resource_heap_probe.lua`.
+- Stock fullwidth encoding accepts curly quotes and the em dash; narration
+  wrapping honours soft hyphens (U+00AD).
 
 ### Fixed
 

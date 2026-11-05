@@ -36,6 +36,14 @@ class DialogueRelocationTests(unittest.TestCase):
             + b"\x00"
         )
 
+    def test_typographic_marks_use_two_byte_glyphs(self) -> None:
+        """Curly quotes and the em dash encode; straight quotes stay rejected."""
+
+        encoded = ascii_to_fullwidth_sjis("“A’—B”")
+        self.assertEqual(encoded, bytes.fromhex("8167 8260 8166 815C 8261 8168"))
+        with self.assertRaises(ValueError):
+            ascii_to_fullwidth_sjis('"')
+
     def test_page_plan_preserves_existing_control(self) -> None:
         """Compile English without introducing an experimental escape."""
 
