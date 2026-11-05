@@ -77,7 +77,7 @@ class PackageArchitectureTests(unittest.TestCase):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "apply_payload_patches":
-                    definitions.append(str(path.relative_to(ROOT)))
+                    definitions.append(path.relative_to(ROOT).as_posix())
         self.assertEqual(["cyber_oedo/disc/patching.py"], definitions)
 
 
