@@ -196,8 +196,9 @@ def apply_payload_patches(
             temporary, ordered, start_lba=start_lba, sector_count=sector_count
         )
         # Read back each affected sector before publishing; a short or corrupt
-        # write must never replace the last good image.
-        with temporary.open("rb") as staged:
+        # write must never replace the last good image.  The handle is opened
+        # writable because Windows rejects fsync on a read-only descriptor.
+        with temporary.open("r+b") as staged:
             for report in reports:
                 staged.seek(report.absolute_lba * RAW_SECTOR_SIZE)
                 rebuilt = staged.read(RAW_SECTOR_SIZE)

@@ -17,14 +17,21 @@ concurrency:
 jobs:
   pull-request:
     if: github.event_name != 'workflow_dispatch'
-    name: Ubuntu / Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os:
+          - ubuntu-latest
         python-version:
           - "3.11"
           - "3.13"
+        include:
+          # Primary operator platform; catches Windows-only file-handle and
+          # path-separator regressions on every pull request.
+          - os: windows-latest
+            python-version: "3.13"
 
     steps:
       - name: Check out repository
@@ -62,7 +69,7 @@ jobs:
       - name: Retain built distributions
         uses: actions/upload-artifact@v7
         with:
-          name: python-distributions-${{ matrix.python-version }}
+          name: python-distributions-${{ matrix.os }}-${{ matrix.python-version }}
           path: dist/*
           if-no-files-found: error
           retention-days: 7
