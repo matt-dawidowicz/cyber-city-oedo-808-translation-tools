@@ -125,7 +125,7 @@ def build_cue(ccd_path: Path, output_path: Path) -> None:
     )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     """Generate a CUE descriptor alongside a supplied CloneCD descriptor."""
 
     argument_parser = argparse.ArgumentParser(description=__doc__)
@@ -133,7 +133,7 @@ def main() -> int:
     argument_parser.add_argument(
         "output", type=Path, help="new .cue file; must not exist"
     )
-    args = argument_parser.parse_args()
+    args = argument_parser.parse_args(argv)
     if args.output.exists():
         argument_parser.error(f"refusing to overwrite existing output: {args.output}")
     build_cue(args.ccd, args.output)

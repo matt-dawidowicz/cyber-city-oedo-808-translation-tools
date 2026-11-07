@@ -49,7 +49,14 @@ bytes from entering a playable image.
 This is a structural contract. A newly generated image still requires emulator
 testing before it can be called release-ready.
 
-## Current `KURUZER` evidence
+## Historical `KURUZER` evidence
+
+> **Superseded (2026-11-04).** `KURUZER` is a one-sector, 800-byte named
+> resource loaded by descriptor (LBA `$10F1`, length `0x320`) into the
+> Mission 0-B resource heap, and it has been relocated and grown live. See
+> `named_resource_linker.md` and
+> `docs/evidence/kuruzer_named_resource_relink_2026_11_04.json`. The
+> eight-sector reading below is kept as history.
 
 The opening narration is the first record in the named `KURUZER` resource:
 

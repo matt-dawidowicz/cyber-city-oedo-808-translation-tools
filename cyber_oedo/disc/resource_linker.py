@@ -6,6 +6,11 @@ and emits descriptor-field replacements separately from raw resource bytes.
 
 The first supported descriptor shape is the common 16-byte named-resource
 table: name[10], u16 sector, u8 sector_span, u24 byte_length.
+
+``relink_named_resource`` turns one rebuilt resource into source-guarded
+payload patches: the bytes go into authenticated all-zero sectors inside the
+linker's own window at the end of Track 2, and only the descriptor's LBA,
+span and length change.  The original sectors are left untouched.
 """
 
 from __future__ import annotations
@@ -14,7 +19,22 @@ import math
 from dataclasses import dataclass
 from typing import Iterable
 
+from cyber_oedo.disc.cdrom_mode1 import PayloadPatch
+from cyber_oedo.disc.game_layout import TRACK2_START_LBA
+from cyber_oedo.disc.named_resources import (
+    RESOURCE_HEADER_BYTES,
+    NamedResourceDescriptor,
+    descriptor_references,
+    max_resource_length,
+)
+
 SECTOR_BYTES = 2048
+
+# Track 2 relative sectors 41049-41198 are authenticated zero fill.  Other
+# experiments already claim 41049-41068 (English pool and VWF cells) and 41190
+# (PR #53 ADPCM sidecar), so relinked resources own this window only.
+LINK_WINDOW_START_RELATIVE = 41120
+LINK_WINDOW_END_RELATIVE = 41190
 
 
 class ResourceLinkError(ValueError):
@@ -143,3 +163,91 @@ def build_resource_blob(
         occupied.append((start, (row.end_sector - start_sector) * SECTOR_BYTES, row.name))
         blob[start:end] = row.data
     return bytes(blob)
+
+
+@dataclass(frozen=True, slots=True)
+class NamedResourceRelink:
+    """Guarded patches that move one named resource to new sectors."""
+
+    descriptor: NamedResourceDescriptor
+    linked: LinkedResource
+    descriptor_tail: bytes
+    patches: tuple[PayloadPatch, ...]
+
+    @property
+    def relative_sector(self) -> int:
+        return self.linked.start_sector - TRACK2_START_LBA
+
+
+def relink_named_resource(
+    payload: bytes | memoryview,
+    descriptor: NamedResourceDescriptor,
+    data: bytes,
+    *,
+    load_address: int,
+    window_start_relative: int = LINK_WINDOW_START_RELATIVE,
+    window_end_relative: int = LINK_WINDOW_END_RELATIVE,
+) -> NamedResourceRelink:
+    """Place *data* in owned zero sectors and repoint *descriptor* at it.
+
+    *load_address* is the heap address the resource is observed to load at;
+    the rebuilt length must stay below the loader's ``$D800`` bound from there.
+    The 16-byte resource header must be unchanged because it is part of the
+    loaded image even though the loader strips it.
+    """
+
+    if not window_start_relative < window_end_relative:
+        raise ResourceLinkError("link window is empty")
+    if window_start_relative < LINK_WINDOW_START_RELATIVE or window_end_relative > LINK_WINDOW_END_RELATIVE:
+        raise ResourceLinkError("link window extends outside the owned linker window")
+    source_start = descriptor.resource_payload_offset
+    header = bytes(payload[source_start : source_start + RESOURCE_HEADER_BYTES])
+    if data[:RESOURCE_HEADER_BYTES] != header:
+        raise ResourceLinkError(f"{descriptor.name}: rebuilt resource changes its 16-byte header")
+    limit = max_resource_length(load_address)
+    if len(data) > limit:
+        raise ResourceLinkError(
+            f"{descriptor.name}: {len(data)} bytes exceeds the {limit}-byte heap bound "
+            f"at ${load_address:04X}"
+        )
+
+    linked = link_resources(
+        (
+            ResourceObject(
+                descriptor.name,
+                data,
+                original_sector=descriptor.absolute_lba,
+                original_span=descriptor.span,
+            ),
+        ),
+        start_sector=TRACK2_START_LBA + window_start_relative,
+    )[0]
+    if linked.end_sector > TRACK2_START_LBA + window_end_relative:
+        raise ResourceLinkError(f"{descriptor.name}: rebuilt resource overflows the link window")
+
+    target = range(linked.start_sector, linked.end_sector)
+    blob_start = (linked.start_sector - TRACK2_START_LBA) * SECTOR_BYTES
+    blob_size = linked.sector_span * SECTOR_BYTES
+    if any(payload[blob_start : blob_start + blob_size]):
+        raise ResourceLinkError(f"{descriptor.name}: target sectors are not authenticated zero fill")
+    references = descriptor_references(payload, target)
+    if references:
+        raise ResourceLinkError(f"{descriptor.name}: target sectors are already named by {references}")
+
+    tail = bytes((linked.start_sector >> 16,)) + descriptor_fields(linked)
+    blob = build_resource_blob((linked,), start_sector=linked.start_sector)
+    patches = (
+        PayloadPatch(
+            blob_start,
+            bytes(blob_size),
+            blob,
+            f"{descriptor.name} relinked to LBA 0x{linked.start_sector:04X}",
+        ),
+        PayloadPatch(
+            descriptor.mutable_tail_offset,
+            descriptor.raw[9:],
+            tail,
+            f"{descriptor.name} descriptor LBA/span/length",
+        ),
+    )
+    return NamedResourceRelink(descriptor, linked, tail, patches)

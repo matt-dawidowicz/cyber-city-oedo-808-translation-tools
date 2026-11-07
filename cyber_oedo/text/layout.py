@@ -18,11 +18,23 @@ PAGE_CONTROL = 64
 STOCK_LINE_WIDTH = 11
 
 
+# Typographic marks that exist as two-byte Shift-JIS glyphs.  The em dash is
+# drawn with U+2015, the Shift-JIS horizontal bar.
+TYPOGRAPHIC_SJIS = {
+    "“": "“",
+    "”": "”",
+    "‘": "‘",
+    "’": "’",
+    "—": "―",
+}
+
+
 def ascii_to_fullwidth_sjis(text: str) -> bytes:
     """Encode printable ASCII through the stock two-byte glyph path.
 
     Args:
-        text: Printable ASCII text. Spaces become ideographic spaces.
+        text: Printable ASCII text plus the curly quotes and em dash in
+            ``TYPOGRAPHIC_SJIS``. Spaces become ideographic spaces.
 
     Returns:
         Strict Shift-JIS bytes containing no single-byte ASCII glyphs.
@@ -45,6 +57,8 @@ def ascii_to_fullwidth_sjis(text: str) -> bytes:
             converted.append("−")
         elif character == "'":
             converted.append("’")
+        elif character in TYPOGRAPHIC_SJIS:
+            converted.append(TYPOGRAPHIC_SJIS[character])
         elif 33 <= codepoint <= 126:
             converted.append(chr(codepoint + 65248))
         else:
