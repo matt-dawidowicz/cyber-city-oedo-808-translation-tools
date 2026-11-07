@@ -353,6 +353,7 @@ English text engine
 
 - [`docs/definitive_vwf_runtime.md`](docs/definitive_vwf_runtime.md)
 - [`docs/named_resource_linker.md`](docs/named_resource_linker.md)
+- [`docs/event_script_format.md`](docs/event_script_format.md)
 - [`docs/native_english_text_engine.md`](docs/native_english_text_engine.md)
 - [`docs/oedo_pixel_font.md`](docs/oedo_pixel_font.md)
 - [`docs/mission0_pool_pilot.md`](docs/mission0_pool_pilot.md)
