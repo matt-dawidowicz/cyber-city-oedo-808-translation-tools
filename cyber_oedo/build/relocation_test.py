@@ -58,13 +58,16 @@ def output_stem(mode: str, resource: str = KURUZER_NAME) -> str:
     return f"Cyber City Oedo 808 - Kemono no Alignment (Japan) [{resource} {mode} test]"
 
 
-def event_relink(payload: bytes, resource_name: str, load_address: int):
+def event_relink(
+    payload: bytes, resource_name: str, load_address: int, *, page_break: bool = True
+):
     """Relink *resource_name* with every dialogue record doubled."""
 
     descriptor = find_descriptor(parse_mission0_b_descriptors(payload), resource_name)
     start = descriptor.resource_payload_offset
     resource = payload[start : start + descriptor.byte_length]
-    data = rebuild_event_resource(resource, doubled_dialogue(parse_event_resource(resource)))
+    layout = parse_event_resource(resource)
+    data = rebuild_event_resource(resource, doubled_dialogue(layout, page_break=page_break))
     return relink_named_resource(payload, descriptor, data, load_address=load_address)
 
 
@@ -98,6 +101,7 @@ def build_relocation_test(
     *,
     resource_name: str = KURUZER_NAME,
     load_address: int | None = None,
+    page_break: bool = True,
 ) -> pathlib.Path:
     """Build one guarded test disc in a staged directory, published atomically."""
 
@@ -127,7 +131,7 @@ def build_relocation_test(
             raise ValueError(f"Track 2 payload hash mismatch: {payload_sha}")
         payload = payload_path.read_bytes()
         if mode == "double-dialogue":
-            relink = event_relink(payload, resource_name, load_address)
+            relink = event_relink(payload, resource_name, load_address, page_break=page_break)
         else:
             relink = kuruzer_relink(payload, mode, english_text)
 
@@ -196,6 +200,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--load-address", type=lambda value: int(value, 0),
         help="observed heap load address for double-dialogue mode, e.g. 0xC660",
     )
+    parser.add_argument(
+        "--no-page-break", action="store_true",
+        help="double-dialogue: run the two copies on without a button wait",
+    )
     return parser
 
 
@@ -206,6 +214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         output = build_relocation_test(
             args.source_ccd, args.output_directory, args.mode, args.english_text,
             resource_name=args.resource, load_address=args.load_address,
+            page_break=not args.no_page_break,
         )
     except (OSError, ValueError) as error:
         parser.error(str(error))

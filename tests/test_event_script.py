@@ -106,6 +106,13 @@ class EventParseTests(unittest.TestCase):
         relinked = event.parse_event_resource(rebuilt)
         self.assertEqual(len(relinked.dialogue), 4)
 
+    def test_run_on_doubling_has_no_page_wait(self) -> None:
+        start = self.marks["a"]
+        paged = event.doubled_dialogue(self.layout)[start]
+        run_on = event.doubled_dialogue(self.layout, page_break=False)[start]
+        self.assertEqual(paged, b"\x27\x28" + GLYPH * 2 + b"\x40" + GLYPH * 2 + b"\x00")
+        self.assertEqual(run_on, b"\x27\x28" + GLYPH * 4 + b"\x00")
+
 
 class EventParseErrorTests(unittest.TestCase):
     def test_unknown_opcode_fails_closed(self) -> None:

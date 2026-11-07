@@ -307,13 +307,18 @@ def rebuild_event_resource(resource: bytes, replacements: dict[int, bytes]) -> b
     return resource[:RESOURCE_HEADER_BYTES] + replace_dialogue(layout, replacements)
 
 
-def doubled_dialogue(layout: EventLayout) -> dict[int, bytes]:
-    """Diagnostic replacements: every record's body twice, page-separated."""
+def doubled_dialogue(layout: EventLayout, *, page_break: bool = True) -> dict[int, bytes]:
+    """Diagnostic replacements: every record's body twice.
 
+    With *page_break* the copies are separated by a ``40`` button wait;
+    without it they run on, so fixed-frame controller input stays in step.
+    """
+
+    separator = b"\x40" if page_break else b""
     out = {}
     for span in layout.dialogue:
         body = layout.body[span.start + 2 : span.end - 1]
-        out[span.start] = bytes((DIALOGUE, DIALOGUE_SECOND)) + body + b"\x40" + body + b"\0"
+        out[span.start] = bytes((DIALOGUE, DIALOGUE_SECOND)) + body + separator + body + b"\0"
     return out
 
 

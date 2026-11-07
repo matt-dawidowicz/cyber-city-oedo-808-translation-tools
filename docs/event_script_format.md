@@ -84,6 +84,27 @@ second VALUE is an immediate, and fails closed when it is a variable.
   re-parsing reproduces every offset's target command, every record position
   and the tail.
 
+## Live evidence (MesenCE 2.2.1, 2026-11-07)
+
+`build-relocation-test --mode double-dialogue --resource ZAKO0001
+--load-address 0xC660` relinks the street watcher's resource with every record
+doubled (2,092 bytes with page waits; 2,073 with `--no-page-break`) into the
+linker window at LBA `$AEA6`. It loads at `$C660` with no heap compaction.
+
+- **Greeting, Move, second visit:** the doubled greeting shows on both visits;
+  the street and return screens are byte-identical to the original from frame
+  17,760 to 23,300. The greeting precedes every offset in the script, so this
+  run alone proves relocation and growth, not relinking.
+- **Talk, Look, Ask** (run-on doubling so fixed-frame input stays in step):
+  every response matches the original's line, doubled — "何か用かい？",
+  "ごく普通の、旧市街に住む男だ。", "さあね、知らないけど" — and the menu
+  screens at frames 16,800, 17,600 and 18,600 are byte-identical. Each of
+  those lines sits inside a rotating-choice block reached through an entry
+  offset, and each block exits with a GOTO; all three kinds were rewritten
+  because they follow the grown greeting.
+
+IF offsets were rewritten but not executed on this route.
+
 ## Not yet established
 
 - Other overlays: Missions 1-8 likely share the interpreter, but their copies
