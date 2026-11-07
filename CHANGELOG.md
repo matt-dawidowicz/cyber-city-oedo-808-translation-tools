@@ -20,6 +20,11 @@ profiles and runtime research retain their own evidence and validation notes in
   read-only `mesen_named_resource_heap_probe.lua`.
 - Stock fullwidth encoding accepts curly quotes and the em dash; narration
   wrapping honours soft hyphens (U+00AD).
+- Decoded Mission 0-B event-script format (`cyber_oedo.script.event`): entry
+  and label tables, all 27 commands, expressions, and relinking of IF/GOTO
+  offsets, rotating-choice block lengths and entry offsets when dialogue
+  records change size. `build-relocation-test --mode double-dialogue` applies
+  it to any event resource.
 
 ### Fixed
 

@@ -1,6 +1,6 @@
-"""Build KURUZER resource-relocation test discs for emulator certification.
+"""Build named-resource relocation test discs for emulator certification.
 
-Two diagnostic modes, neither release-enabled:
+Diagnostic modes, none release-enabled:
 
 ``move``
     Relink the unchanged 800-byte KURUZER resource into the owned linker
@@ -14,6 +14,11 @@ Two diagnostic modes, neither release-enabled:
     Relink KURUZER with English narration from a UTF-8 text file, compiled
     for the stock fullwidth renderer (three 11-cell lines per page, page
     breaks added as needed).  The text file is never stored in the repository.
+``double-dialogue``
+    Relink any Mission 0-B event resource (``--resource``) with every dialogue
+    record played twice, rewriting all IF/GOTO offsets, rotating-choice block
+    lengths and entry-table offsets through ``cyber_oedo.script.event``.
+    ``--load-address`` is the heap address observed for that resource.
 """
 
 from __future__ import annotations
@@ -34,6 +39,7 @@ from cyber_oedo.disc.game_layout import TRACK2_SECTOR_COUNT, TRACK2_START_LBA
 from cyber_oedo.disc.named_resources import find_descriptor, parse_mission0_b_descriptors
 from cyber_oedo.disc.patching import apply_payload_patches
 from cyber_oedo.disc.resource_linker import relink_named_resource
+from cyber_oedo.script.event import doubled_dialogue, parse_event_resource, rebuild_event_resource
 from cyber_oedo.resources.kuruzer import (
     KURUZER_NAME,
     KURUZER_OBSERVED_LOAD_ADDRESS,
@@ -44,12 +50,22 @@ from cyber_oedo.resources.kuruzer import (
 )
 
 BUILD_PROFILE = "kuruzer-relocation-test"
-MODES = ("move", "grow", "english")
+MODES = ("move", "grow", "english", "double-dialogue")
 TRACK2_PAYLOAD_SHA256 = "0817cfa03fedc7b33c52f9bd9423b41480fa385cff3693262732b8768e7ca223"
 
 
-def output_stem(mode: str) -> str:
-    return f"Cyber City Oedo 808 - Kemono no Alignment (Japan) [KURUZER {mode} test]"
+def output_stem(mode: str, resource: str = KURUZER_NAME) -> str:
+    return f"Cyber City Oedo 808 - Kemono no Alignment (Japan) [{resource} {mode} test]"
+
+
+def event_relink(payload: bytes, resource_name: str, load_address: int):
+    """Relink *resource_name* with every dialogue record doubled."""
+
+    descriptor = find_descriptor(parse_mission0_b_descriptors(payload), resource_name)
+    start = descriptor.resource_payload_offset
+    resource = payload[start : start + descriptor.byte_length]
+    data = rebuild_event_resource(resource, doubled_dialogue(parse_event_resource(resource)))
+    return relink_named_resource(payload, descriptor, data, load_address=load_address)
 
 
 def kuruzer_relink(payload: bytes, mode: str, english_text: str | None = None):
@@ -79,13 +95,18 @@ def build_relocation_test(
     output_directory: pathlib.Path,
     mode: str,
     english_text_path: pathlib.Path | None = None,
+    *,
+    resource_name: str = KURUZER_NAME,
+    load_address: int | None = None,
 ) -> pathlib.Path:
     """Build one guarded test disc in a staged directory, published atomically."""
 
     english_text = None
     if english_text_path is not None:
         english_text = english_text_path.read_text(encoding="utf-8").strip()
-    stem = output_stem(mode)
+    if (mode == "double-dialogue") != (load_address is not None):
+        raise ValueError("--load-address is required for, and only for, double-dialogue mode")
+    stem = output_stem(mode, resource_name)
     output_directory = output_directory.resolve()
     if output_directory.exists():
         raise ValueError(f"output directory already exists: {output_directory}")
@@ -105,7 +126,10 @@ def build_relocation_test(
         if payload_sha != TRACK2_PAYLOAD_SHA256:
             raise ValueError(f"Track 2 payload hash mismatch: {payload_sha}")
         payload = payload_path.read_bytes()
-        relink = kuruzer_relink(payload, mode, english_text)
+        if mode == "double-dialogue":
+            relink = event_relink(payload, resource_name, load_address)
+        else:
+            relink = kuruzer_relink(payload, mode, english_text)
 
         reports = apply_payload_patches(
             output_paths[".img"], relink.patches,
@@ -125,7 +149,7 @@ def build_relocation_test(
             "build_profile": BUILD_PROFILE,
             "mode": mode,
             "release_enabled": False,
-            "resource": KURUZER_NAME,
+            "resource": relink.descriptor.name,
             "descriptor_payload_offset": f"0x{relink.descriptor.payload_offset:08X}",
             "original_lba": f"0x{relink.descriptor.absolute_lba:04X}",
             "original_length": relink.descriptor.byte_length,
@@ -136,7 +160,7 @@ def build_relocation_test(
             "english_text_sha256": (
                 hashlib.sha256(english_text.encode("utf-8")).hexdigest() if english_text else None
             ),
-            "observed_load_address": f"0x{KURUZER_OBSERVED_LOAD_ADDRESS:04X}",
+            "observed_load_address": f"0x{load_address or KURUZER_OBSERVED_LOAD_ADDRESS:04X}",
             "descriptor_tail": relink.descriptor_tail.hex(" ").upper(),
             "changed_absolute_lbas": list(comparison.changed_lbas),
             "output_img_sha256": comparison.output_sha256,
@@ -167,6 +191,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--english-text", type=pathlib.Path,
         help="UTF-8 narration for english mode; U+00AD marks optional hyphenation points",
     )
+    parser.add_argument("--resource", default=KURUZER_NAME, help="resource for double-dialogue mode")
+    parser.add_argument(
+        "--load-address", type=lambda value: int(value, 0),
+        help="observed heap load address for double-dialogue mode, e.g. 0xC660",
+    )
     return parser
 
 
@@ -175,7 +204,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         output = build_relocation_test(
-            args.source_ccd, args.output_directory, args.mode, args.english_text
+            args.source_ccd, args.output_directory, args.mode, args.english_text,
+            resource_name=args.resource, load_address=args.load_address,
         )
     except (OSError, ValueError) as error:
         parser.error(str(error))
