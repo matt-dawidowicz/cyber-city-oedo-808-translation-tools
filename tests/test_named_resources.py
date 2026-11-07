@@ -48,6 +48,14 @@ class DescriptorDecodeTests(unittest.TestCase):
 
 
 class LoaderContractTests(unittest.TestCase):
+    def test_route_prediction_matches_observed_street_route(self) -> None:
+        addresses = nr.predict_heap_addresses((("INIT", 0x360), ("KURUZER", 0x320), ("ZAKO0001", 0x510)))
+        self.assertEqual(addresses, {"INIT": 0xC000, "KURUZER": 0xC350, "ZAKO0001": 0xC660})
+
+    def test_route_prediction_refuses_to_rely_on_compaction(self) -> None:
+        with self.assertRaisesRegex(nr.NamedResourceError, "ZAKO0001.*heap bound"):
+            nr.predict_heap_addresses((("INIT", 0x360), ("KURUZER", 0x320), ("ZAKO0001", 0x1500)))
+
     def test_heap_bound_matches_loader_comparison(self) -> None:
         self.assertEqual(nr.max_resource_length(0xC350), 0xD800 - 0xC350 - 1)
         with self.assertRaisesRegex(nr.NamedResourceError, "outside the heap"):

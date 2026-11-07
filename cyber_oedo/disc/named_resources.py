@@ -188,3 +188,31 @@ def max_resource_length(load_address: int) -> int:
     if not HEAP_BASE <= load_address < HEAP_LIMIT:
         raise NamedResourceError(f"load address ${load_address:04X} is outside the heap")
     return HEAP_LIMIT - load_address - 1
+
+
+# Load order observed in MesenCE on the opening and street route through the
+# first watcher conversation (tools/mesen_named_resource_heap_probe.lua):
+# INIT at $C000, KURUZER at $C350, ZAKO0001 at $C660, no compaction.
+MISSION0_STREET_ROUTE = ("INIT", "KURUZER", "ZAKO0001")
+
+
+def predict_heap_addresses(
+    route: tuple[tuple[str, int], ...],
+) -> dict[str, int]:
+    """Predict load addresses for ``(name, byte_length)`` in route order.
+
+    Models the bump heap without compaction: each resource loads at the
+    pointer and advances it by ``length - 16``.  Raises if any load would
+    reach the ``$D800`` bound, since relying on compaction is not proven.
+    """
+
+    address = HEAP_BASE
+    addresses: dict[str, int] = {}
+    for name, length in route:
+        if address + length >= HEAP_LIMIT:
+            raise NamedResourceError(
+                f"{name}: {length} bytes at ${address:04X} reaches the ${HEAP_LIMIT:04X} heap bound"
+            )
+        addresses[name] = address
+        address += length - RESOURCE_HEADER_BYTES
+    return addresses

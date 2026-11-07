@@ -13,7 +13,9 @@ from cyber_oedo.disc.resource_linker import (
     build_resource_blob,
     descriptor_fields,
     link_resources,
+    RelinkRequest,
     relink_named_resource,
+    relink_named_resources,
 )
 
 SOURCE_RELATIVE = 747
@@ -139,6 +141,33 @@ class NamedResourceRelinkTests(unittest.TestCase):
                 self.payload, self.descriptor, RESOURCE, load_address=0xC350,
                 window_end_relative=LINK_WINDOW_END_RELATIVE + 1,
             )
+
+    def test_several_resources_link_back_to_back(self) -> None:
+        payload = bytearray(self.payload)
+        second_relative = SOURCE_RELATIVE + 1
+        second_lba = TRACK2_START_LBA + second_relative
+        second = b"ZAKO0001\x00\x05" + bytes(6) + b"\x11" * 3000
+        payload[0x1010:0x1020] = (
+            b"ZAKO0001\x00\x00" + second_lba.to_bytes(2, "little") + b"\x02"
+            + len(second).to_bytes(3, "little")
+        )
+        payload[second_relative * SECTOR_BYTES : second_relative * SECTOR_BYTES + len(second)] = second
+        other = decode_descriptor(bytes(payload[0x1010:0x1020]), 0x1010)
+        first, zako = relink_named_resources(
+            payload,
+            (
+                RelinkRequest(self.descriptor, RESOURCE, 0xC350),
+                RelinkRequest(other, second, 0xC660),
+            ),
+        )
+        self.assertEqual(first.relative_sector, LINK_WINDOW_START_RELATIVE)
+        self.assertEqual(zako.relative_sector, LINK_WINDOW_START_RELATIVE + 1)
+        self.assertEqual(zako.linked.sector_span, 2)
+        self.assertEqual(zako.patches[1].offset, 0x1010 + 9)
+
+    def test_each_request_gets_its_own_heap_check(self) -> None:
+        with self.assertRaisesRegex(ResourceLinkError, "heap bound at \\$D700"):
+            relink_named_resources(self.payload, (RelinkRequest(self.descriptor, RESOURCE, 0xD700),))
 
 
 if __name__ == "__main__":
