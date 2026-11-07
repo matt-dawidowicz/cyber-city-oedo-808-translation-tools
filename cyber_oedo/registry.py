@@ -83,6 +83,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Pipeline",
     ),
     CommandSpec(
+        "build-english-resources-test",
+        "cyber_oedo.build.english_resources_test",
+        "Build a diagnostic disc with English in several event resources.",
+        "Pipeline",
+    ),
+    CommandSpec(
         "export-final-dialogue",
         "cyber_oedo.text.export_final_localization",
         "Export the reviewed final workbook to deterministic dialogue TSV.",

@@ -115,12 +115,37 @@ English shorter than ten pages is rejected because the page compiler never
 removes source page controls; that rule will need revisiting for the release
 text engine.
 
+### Several resources in English along a route (2026-11-07)
+
+`build-english-resources-test --resources KURUZER,ZAKO0001 --english-tsv FILE`
+recompiles every page-only record that has English (`cyber_oedo.text.stock_english`),
+relinks each event script around the new sizes (`event_script_format.md`),
+predicts load addresses from the observed street route
+(`INIT`, `KURUZER`, `ZAKO0001`) with the new lengths, refuses any layout that
+would need heap compaction, and links all rebuilt resources back to back.
+
+With the July draft: `KURUZER` 800 → 1,962 bytes (narration English; the
+location caption has timing controls and stays Japanese) and `ZAKO0001`
+1,296 → 2,536 bytes (all 19 records English), at LBAs `$AEA6` and `$AEA7`.
+MesenCE loads them at the predicted `$C350` and `$CAEA`; the heap ends at
+`$D4C2`, with no compaction. The street is byte-identical to the original at
+frame 9,000. The watcher's greeting, Talk ("Need something?"), Look ("…lives
+in the Old City.") and Ask ("Beats me. I don't know.") responses appear in
+English where the original shows the corresponding Japanese lines; these
+come through rewritten entry offsets and rotating-choice blocks.
+
+The input schedule replays the original Talk/Look/Ask presses 3,000 frames
+later, because the 30-page English narration ends later. `40` page breaks in
+this window do not wait for input, so short NPC lines need the same presses
+as the Japanese.
+
 ## Build commands
 
 ```bash
 cyber-oedo build-relocation-test source.ccd out-move --mode move
 cyber-oedo build-relocation-test source.ccd out-grow --mode grow
 cyber-oedo build-relocation-test source.ccd out-en --mode english --english-text narration.txt
+cyber-oedo build-english-resources-test source.ccd out-street --english-tsv english.tsv --resources KURUZER,ZAKO0001
 ```
 
 Each build authenticates the source set, changes exactly two sectors

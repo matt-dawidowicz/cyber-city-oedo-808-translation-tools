@@ -14,7 +14,6 @@ offset relative to the resource start is not yet statically proven.  The
 from __future__ import annotations
 
 import hashlib
-import re
 
 from cyber_oedo.text.layout import (
     STOCK_LINE_WIDTH,
@@ -22,6 +21,7 @@ from cyber_oedo.text.layout import (
     PageBreakPlan,
     PageGeometry,
 )
+from cyber_oedo.text.stock_english import wrap_stock_lines
 
 KURUZER_NAME = "KURUZER"
 KURUZER_LENGTH = 0x320
@@ -38,14 +38,6 @@ TERMINATOR = 0x00
 SOURCE_PAGE_BREAKS = 9
 # The opening narration window shows three 11-cell rows per page.
 NARRATION_GEOMETRY = PageGeometry(width=STOCK_LINE_WIDTH, maximum_lines=3)
-SOFT_HYPHEN = "­"
-# Break opportunities: after a hyphen, an em dash, or a translator's soft
-# hyphen (U+00AD), which shows as "-" only when the line breaks there.
-_BREAK_AFTER = re.compile("[^—­-]*[—­-]|[^—­-]+")
-# A forced break inside an unmarked long word leaves at least this many letters.
-_MIN_FRAGMENT = 5
-
-
 class KuruzerError(ValueError):
     """Raised when KURUZER bytes or a replacement record are not acceptable."""
 
@@ -104,44 +96,6 @@ def doubled_narration_record(resource: bytes) -> bytes:
         raise KuruzerError("KURUZER narration differs from the authenticated source")
     body = record[len(DIALOGUE_MARKER) : -1]
     return DIALOGUE_MARKER + body + bytes((PAGE_CONTROL,)) + body + bytes((TERMINATOR,))
-
-
-def wrap_stock_lines(text: str, width: int = STOCK_LINE_WIDTH) -> tuple[str, ...]:
-    """Wrap English for the fixed-cell stock renderer.
-
-    Lines break at spaces, after a hyphen or em dash, or at a soft hyphen.
-    A word longer than a whole line with no marked break is hyphenated as a
-    last resort, filling the current line without leaving a tiny fragment.
-    """
-
-    if not text or text.strip() != text or "  " in text:
-        raise KuruzerError("narration must be single-spaced without outer space")
-    lines: list[str] = []
-    current = ""
-    soft_pending = False
-    for word in text.split(" "):
-        for index, raw_piece in enumerate(_BREAK_AFTER.findall(word)):
-            soft = raw_piece.endswith(SOFT_HYPHEN)
-            piece = raw_piece.rstrip(SOFT_HYPHEN)
-            separator = " " if index == 0 and current else ""
-            needed = len(piece) + (1 if soft else 0)
-            if len(current) + len(separator) + needed <= width:
-                current += separator + piece
-                soft_pending = soft
-                continue
-            if current:
-                lines.append(current + ("-" if soft_pending and not separator else ""))
-            current = ""
-            while len(piece) > width:
-                cut = width - 1
-                if len(piece) - cut < _MIN_FRAGMENT:
-                    cut = max(_MIN_FRAGMENT, len(piece) - _MIN_FRAGMENT)
-                lines.append(piece[:cut] + "-")
-                piece = piece[cut:]
-            current = piece
-            soft_pending = soft
-    lines.append(current)
-    return tuple(line for line in lines if line)
 
 
 def stock_english_narration_record(resource: bytes, text: str) -> bytes:

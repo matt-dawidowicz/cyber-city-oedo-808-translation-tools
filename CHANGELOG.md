@@ -25,6 +25,11 @@ profiles and runtime research retain their own evidence and validation notes in
   offsets, rotating-choice block lengths and entry offsets when dialogue
   records change size. `build-relocation-test --mode double-dialogue` applies
   it to any event resource.
+- `relink_named_resources` links several rebuilt resources in one pass;
+  `predict_heap_addresses` checks a route's load order without compaction;
+  `cyber_oedo.text.stock_english` compiles any page-only record; and
+  `build-english-resources-test` builds multi-resource English discs from a
+  `payload_offset`/`english` TSV.
 
 ### Fixed
 
